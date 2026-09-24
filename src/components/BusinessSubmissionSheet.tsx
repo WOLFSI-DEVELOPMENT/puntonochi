@@ -1,0 +1,169 @@
+import { useState, FormEvent, ReactNode } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { Camera, Check, Clock3, ImagePlus, LoaderCircle, MapPin, Phone, Plus, Store, Tag, Trash2, X } from 'lucide-react';
+import { apiFetch } from '../api';
+
+const categories = ['Restaurante', 'Cafetería', 'Hotel', 'Farmacia', 'Tienda', 'Servicios', 'Otro'];
+const costs = [1, 2, 3, 4];
+
+type BusinessPhoto = { name: string; url: string; file: File };
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = () => reject(new Error(`No se pudo leer ${file.name}.`));
+    reader.readAsDataURL(file);
+  });
+}
+
+export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('Restaurante');
+  const [description, setDescription] = useState('');
+  const [address, setAddress] = useState('');
+  const [phone, setPhone] = useState('');
+  const [hours, setHours] = useState('');
+  const [cost, setCost] = useState(2);
+  const [email, setEmail] = useState('');
+  const [photos, setPhotos] = useState<BusinessPhoto[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const [photoError, setPhotoError] = useState('');
+  const [submitError, setSubmitError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadedPhotoCount, setUploadedPhotoCount] = useState(0);
+
+  const addPhotos = (files: FileList | null) => {
+    if (!files) return;
+    setPhotoError('');
+    const accepted: BusinessPhoto[] = [];
+    for (const file of Array.from(files)) {
+      if (!file.type.startsWith('image/')) {
+        setPhotoError('Elige archivos de imagen.');
+      } else if (file.size > MAX_PHOTO_BYTES) {
+        setPhotoError(`${file.name} supera el límite de 5 MB.`);
+      } else if (photos.length + accepted.length < 8) {
+        accepted.push({ name: file.name, url: URL.createObjectURL(file), file });
+      }
+    }
+    setPhotos((current) => [...current, ...accepted].slice(0, 8));
+  };
+
+  const addTag = () => {
+    const tag = tagInput.trim();
+    if (tag && !tags.includes(tag)) setTags((current) => [...current, tag]);
+    setTagInput('');
+  };
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setUploadedPhotoCount(0);
+    setSubmitError('');
+    try {
+      const created = await apiFetch('/api/business-applications', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, category, description, address, phone, hours, cost, email, tags }),
+      });
+      const createdBody = await created.json();
+      if (!created.ok) throw new Error(createdBody.error || 'No se pudo guardar la solicitud.');
+      for (const photo of photos) {
+        const uploaded = await apiFetch(`/api/business-applications/${createdBody.id}/photos`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileName: photo.name, mimeType: photo.file.type, base64: await fileToBase64(photo.file) }),
+        });
+        const uploadedBody = await uploaded.json();
+        if (!uploaded.ok) throw new Error(uploadedBody.error || `No se pudo subir ${photo.name}.`);
+        setUploadedPhotoCount((count) => count + 1);
+      }
+      const finalized = await apiFetch(`/api/business-applications/${createdBody.id}/submit`, { method: 'POST' });
+      const finalizedBody = await finalized.json();
+      if (!finalized.ok) throw new Error(finalizedBody.error || 'No se pudo enviar la solicitud.');
+      setSubmitted(true);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'No se pudo enviar la solicitud. Inténtalo de nuevo.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      <motion.button aria-label="Cerrar formulario" className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+      <motion.section role="dialog" aria-modal="true" aria-label="Registra tu negocio" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 280 }} className="fixed inset-x-0 bottom-0 z-[71] mx-auto flex max-h-[94dvh] w-full max-w-[680px] flex-col overflow-hidden rounded-t-[32px] bg-[#202124] text-white shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-white/[0.07] px-5 pb-4 pt-3">
+          <div className="mx-auto absolute left-1/2 top-2 h-1.5 w-12 -translate-x-1/2 rounded-full bg-white/20" />
+          <div className="pt-2"><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">PuntoNochi · Negocios</p><h2 className="mt-1 text-xl font-bold">{submitted ? 'Solicitud recibida' : 'Presenta tu negocio'}</h2></div>
+          <button type="button" onClick={onClose} aria-label="Cerrar" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.07] text-white/70"><X className="h-5 w-5" /></button>
+        </div>
+
+        {submitted ? (
+          <div className="overflow-y-auto px-6 py-10 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-400/15 text-emerald-300"><Check className="h-8 w-8" /></div>
+            <h3 className="mt-5 text-2xl font-bold">¡Ya está en revisión!</h3>
+            <p className="mx-auto mt-3 max-w-sm text-[15px] leading-relaxed text-white/65">Revisaremos los datos de <strong className="text-white">{name}</strong>. Te enviaremos un correo a <strong className="text-white">{email}</strong> cuando el negocio sea aprobado.</p>
+            <button type="button" onClick={onClose} className="mt-8 rounded-full bg-white px-7 py-3 text-sm font-bold text-[#202124]">Listo</button>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="min-h-0 overflow-y-auto px-5 pb-8 pt-4">
+            <p className="mb-5 text-sm text-white/55">Comparte los datos que aparecerán en la ficha pública de tu negocio.</p>
+
+            <section className="mb-5 rounded-[22px] bg-[#292a2d] p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><ImagePlus className="h-4 w-4 text-violet-300" /> Fotos del negocio <span className="text-xs font-normal text-white/40">Hasta 8</span></div>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                <label className="flex h-[92px] w-[100px] shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-white/20 bg-white/[0.03] text-white/60 hover:bg-white/[0.06]">
+                  <Camera className="h-5 w-5" /><span className="text-[11px] font-medium">Añadir fotos</span><input type="file" accept="image/*" multiple className="hidden" onChange={(event) => addPhotos(event.target.files)} />
+                </label>
+                {photos.map((photo, index) => <div key={`${photo.name}-${index}`} className="relative h-[92px] w-[100px] shrink-0 overflow-hidden rounded-2xl"><img src={photo.url} alt={photo.name} className="h-full w-full object-cover" />{isSubmitting && <div className="absolute inset-0 flex items-center justify-center bg-black/45"><div className="rounded-full bg-black/60 p-2"><LoaderCircle className="h-5 w-5 animate-spin text-white" /></div></div>}{!isSubmitting && <button type="button" onClick={() => setPhotos((current) => current.filter((_, i) => i !== index))} className="absolute right-1 top-1 rounded-full bg-black/60 p-1"><Trash2 className="h-3.5 w-3.5" /></button>}</div>)}
+              </div>
+              <p className="mt-2 text-[11px] text-white/45">Máximo 5 MB por imagen.</p>
+              {photoError && <p className="mt-1 text-xs text-rose-300">{photoError}</p>}
+              {isSubmitting && photos.length > 0 && <div className="mt-3" role="status" aria-live="polite"><div className="mb-2 flex items-center gap-2 text-xs font-medium text-white/75"><LoaderCircle className="h-4 w-4 animate-spin text-white" />Subiendo fotos {uploadedPhotoCount} de {photos.length}</div><div className="flex gap-1.5">{photos.map((photo, index) => <div key={`${photo.name}-skeleton-${index}`} className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><motion.div className="h-full rounded-full bg-white" initial={{ width: 0 }} animate={{ width: index < uploadedPhotoCount ? '100%' : index === uploadedPhotoCount ? '55%' : '0%' }} transition={{ duration: 0.35 }} /></div>)}</div></div>}
+            </section>
+
+            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field icon={<Store />} label="Nombre del negocio"><input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Café de la Plaza" className={inputClass} /></Field>
+              <Field icon={<MapPin />} label="Dirección"><input required value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Calle, número y colonia" className={inputClass} /></Field>
+              <Field icon={<Phone />} label="Teléfono"><input required type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(346) 123 4567" className={inputClass} /></Field>
+              <Field icon={<Clock3 />} label="Horario"><input required value={hours} onChange={(e) => setHours(e.target.value)} placeholder="Lun–Sáb · 9:00–18:00" className={inputClass} /></Field>
+            </div>
+
+            <section className="mb-4 rounded-[22px] bg-[#292a2d] p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><Tag className="h-4 w-4 text-amber-300" /> Categoría</div>
+              <div className="flex flex-wrap gap-2">{categories.map((item) => <button key={item} type="button" onClick={() => setCategory(item)} style={category === item ? { backgroundColor: '#ffffff', color: '#202124' } : { backgroundColor: '#36373b', color: '#f4f4f5' }} className={`rounded-full px-3.5 py-2 text-xs font-semibold transition-colors ${category === item ? '!bg-white !text-[#202124]' : '!bg-[#36373b] !text-white'}`}>{item}</button>)}</div>
+            </section>
+
+            <section className="mb-4 rounded-[22px] bg-[#292a2d] p-4">
+              <div className="mb-3 flex items-center justify-between"><div><p className="text-sm font-semibold">Rango de precios</p><p className="mt-0.5 text-xs text-white/45">Precio promedio por persona</p></div><span className="rounded-full bg-white/[0.08] px-3 py-1 text-sm font-bold text-emerald-300">{'$'.repeat(cost)}</span></div>
+              <div className="flex gap-2">{costs.map((value) => <button key={value} type="button" onClick={() => setCost(value)} className={`flex-1 rounded-xl py-2.5 text-sm font-bold ${cost === value ? 'bg-emerald-300 text-[#17221b]' : 'bg-white/[0.06] text-white/45'}`}>{'$'.repeat(value)}</button>)}</div>
+            </section>
+
+            <Field icon={<Store />} label="Descripción"><textarea required value={description} onChange={(e) => setDescription(e.target.value)} placeholder="¿Qué hace especial a tu negocio?" rows={5} className={`${inputClass} !h-36 resize-y !py-3.5`} /></Field>
+
+            <section className="mb-4 mt-4 rounded-[22px] bg-[#292a2d] p-4">
+              <p className="mb-3 text-sm font-semibold">Lo que deben saber tus clientes</p>
+              <div className="mb-3 flex gap-2"><input value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }} placeholder="Ej. Terraza, acepta tarjeta" className={`${inputClass} flex-1`} /><button type="button" onClick={addTag} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/[0.08]"><Plus className="h-5 w-5" /></button></div>
+              <div className="flex flex-wrap gap-2">{['Wi-Fi', 'Accesible', 'Pet friendly', 'Para llevar'].map((tag) => <button type="button" key={tag} onClick={() => setTags((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag])} className={`rounded-full px-3 py-1.5 text-xs font-medium ${tags.includes(tag) ? 'bg-violet-300 text-[#241d2c]' : 'bg-white/[0.07] text-white/60'}`}>{tag}</button>)}{tags.filter((tag) => !['Wi-Fi', 'Accesible', 'Pet friendly', 'Para llevar'].includes(tag)).map((tag) => <button type="button" key={tag} onClick={() => setTags((current) => current.filter((item) => item !== tag))} className="rounded-full bg-violet-300/15 px-3 py-1.5 text-xs font-medium text-violet-200">{tag} ×</button>)}</div>
+            </section>
+
+            <Field icon={<span className="text-sm font-bold">@</span>} label="Correo para avisarte"><input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@correo.com" className={inputClass} /><span className="mt-2 block text-xs leading-relaxed text-white/55">Te enviaremos un correo cuando tu negocio sea aprobado.</span></Field>
+
+            {submitError && <p role="alert" className="mt-4 rounded-2xl bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{submitError}</p>}
+            {isSubmitting && photos.length > 0 && <div className="mt-4 space-y-2" aria-hidden="true"><div className="h-3 w-2/5 animate-pulse rounded-full bg-white/10" /><div className="h-2 w-full animate-pulse rounded-full bg-white/[0.06]" /></div>}
+            <button type="submit" disabled={isSubmitting} style={{ backgroundColor: '#ffffff', color: '#111111' }} className="mt-6 flex w-full items-center justify-center gap-2 rounded-full !bg-white py-3.5 text-sm font-bold !text-black transition-transform active:scale-[0.98] disabled:opacity-75">{isSubmitting && <LoaderCircle className="h-4 w-4 animate-spin" />}{isSubmitting ? (photos.length ? 'Subiendo imágenes…' : 'Enviando…') : 'Enviar para aprobación'}</button>
+            <p className="mt-3 text-center text-[11px] text-white/35">Tu ficha se publicará cuando nuestro equipo la apruebe.</p>
+          </form>
+        )}
+      </motion.section>
+    </>
+  );
+}
+
+const inputClass = 'h-12 w-full rounded-2xl !bg-[#303135] px-3.5 text-sm !text-white outline-none placeholder:!text-white/45 focus:ring-2 focus:ring-white/20';
+
+function Field({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
+  return <label className="mb-1 block rounded-[22px] bg-[#292a2d] p-4 text-xs font-semibold text-white/75"><span className="mb-3 flex items-center gap-2">{icon}<span>{label}</span></span>{children}</label>;
+}

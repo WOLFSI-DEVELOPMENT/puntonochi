@@ -1,0 +1,510 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { categories, colonias, visits, mockPlaces } from './data';
+import { ChevronRight, Search, Mic, MoreHorizontal } from 'lucide-react';
+import { BottomNav } from './components/BottomNav';
+import { ColoniasPage } from './components/ColoniasPage';
+import { DiscoverPage } from './components/DiscoverPage';
+import { CategoryPage } from './components/CategoryPage';
+import { AllCategoriesPage } from './components/AllCategoriesPage';
+import { DestacadosPage } from './components/DestacadosPage';
+import { ColoniaDetailPage } from './components/ColoniaDetailPage';
+import { BusinessDetailSheet } from './components/BusinessDetailSheet';
+import { VideosPage } from './components/VideosPage';
+import { NewsPage } from './components/NewsPage';
+import { SearchPage } from './components/SearchPage';
+import { BusinessPromotionSheet } from './components/BusinessPromotionSheet';
+import { BusinessSubmissionSheet } from './components/BusinessSubmissionSheet';
+import { SplashScreen } from './components/SplashScreen';
+import CornerKit from '@cornerkit/core';
+import { Category, Place, Colonia } from './types';
+import { AnimatePresence, motion } from 'motion/react';
+
+declare global {
+  interface Window {
+    initLiquidGlass: () => void;
+  }
+}
+
+export default function App() {
+  useEffect(() => {
+    document.documentElement.classList.add('dark');
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (window.initLiquidGlass) {
+        window.initLiquidGlass();
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const getInitialState = () => {
+    const path = window.location.pathname;
+    const parts = path.split('/').filter(Boolean);
+    
+    let initialTab = 'inicio';
+    let initialCategory = null;
+    let initialBusiness = null;
+    let initShowAllCategories = false;
+    let initShowColonias = false;
+
+    if (parts.length > 0) {
+      if (parts[0] === 'categories') {
+        initShowAllCategories = true;
+      } else if (parts[0] === 'colonias') {
+        initShowColonias = true;
+      } else if (parts[0] === 'explorar' || parts[0] === 'guardados' || parts[0] === 'videos' || parts[0] === 'noticias' || parts[0] === 'mapa') {
+        initialTab = parts[0] === 'mapa' ? 'videos' : parts[0];
+      } else {
+        // It might be a category name
+        const cat = categories.find(c => c.name.toLowerCase() === parts[0].toLowerCase());
+        if (cat) {
+          initialCategory = cat;
+          if (parts.length > 1) {
+            const biz = mockPlaces.find(p => p.id === parts[1]);
+            if (biz) initialBusiness = biz;
+          }
+        } else if (parts[0] === 'place' && parts.length > 1) {
+          const biz = mockPlaces.find(p => p.id === parts[1]);
+          if (biz) initialBusiness = biz;
+        }
+      }
+    }
+    
+    return { initialTab, initialCategory, initialBusiness, initShowAllCategories, initShowColonias };
+  };
+
+  const init = getInitialState();
+
+  const [showColonias, setShowColonias] = useState(init.initShowColonias);
+  const [showAllCategories, setShowAllCategories] = useState(init.initShowAllCategories);
+  const [showDestacados, setShowDestacados] = useState(false);
+  const [showBusinessPromotion, setShowBusinessPromotion] = useState(false);
+  const [showBusinessSubmission, setShowBusinessSubmission] = useState(false);
+  const [selectedColonia, setSelectedColonia] = useState<Colonia | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(init.initialCategory);
+  const [selectedBusiness, setSelectedBusiness] = useState<Place | null>(init.initialBusiness);
+  const [activeTab, setActiveTab] = useState(init.initialTab);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const [destacadosState, setDestacadosState] = useState({ index: 0, direction: 0 });
+
+  useEffect(() => {
+    if (activeTab === 'inicio') {
+      const timer = setTimeout(() => {
+        const ck = new CornerKit();
+        ck.applyAll('.ck-app-card', { radius: 26, smoothing: 1 });
+        ck.applyAll('.ck-app-card-inner', { radius: 21, smoothing: 1 });
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, destacadosState.index]);
+
+  
+  const destacadosPlaces = React.useMemo(() => {
+    const seen = new Set();
+    const results = [];
+    for (const place of mockPlaces) {
+      if (place.images && place.images.length > 0 && !seen.has(place.category)) {
+        seen.add(place.category);
+        results.push(place);
+      }
+    }
+    return results;
+  }, [mockPlaces]);
+
+  const paginateDestacados = (newDirection: number) => {
+    if (destacadosPlaces.length === 0) return;
+    let nextIndex = destacadosState.index + newDirection;
+    if (nextIndex < 0) nextIndex = destacadosPlaces.length - 1;
+    if (nextIndex >= destacadosPlaces.length) nextIndex = 0;
+    setDestacadosState({ index: nextIndex, direction: newDirection });
+  };
+
+  useEffect(() => {
+    if (loading || activeTab !== 'inicio' || destacadosPlaces.length < 2) return;
+    const timer = window.setInterval(() => paginateDestacados(1), 3000);
+    return () => window.clearInterval(timer);
+  }, [loading, activeTab, destacadosPlaces.length, destacadosState.index]);
+
+  const carouselVariants = {
+    enter: (direction: number) => ({
+      x: direction > 0 ? '110%' : '-110%',
+      opacity: 0,
+      scale: 0.88,
+      rotateY: direction > 0 ? 18 : -18,
+      zIndex: 0,
+    }),
+    center: {
+      zIndex: 1,
+      x: 0,
+      opacity: 1,
+      scale: 1,
+      rotateY: 0,
+    },
+    exit: (direction: number) => ({
+      zIndex: 0,
+      x: direction < 0 ? '110%' : '-110%',
+      opacity: 0,
+      scale: 0.88,
+      rotateY: direction < 0 ? 18 : -18,
+    })
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 2200); // Allow splash screen animation to display
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    let path = '/';
+    if (showSearch) {
+      path = '/buscar';
+    } else if (selectedBusiness) {
+      // If a business is selected, ideally we show /category/business-name
+      // But if category isn't selected (e.g. from Discover page), fallback to /place/
+      if (selectedCategory) {
+        path = `/${selectedCategory.name.toLowerCase()}/${selectedBusiness.id}`;
+      } else {
+        path = `/place/${selectedBusiness.id}`;
+      }
+    } else if (selectedCategory) {
+      path = `/${selectedCategory.name.toLowerCase()}`;
+    } else if (showAllCategories) {
+      path = `/categories`;
+    } else if (showColonias) {
+      path = `/colonias`;
+    } else if (activeTab !== 'inicio') {
+      path = `/${activeTab}`;
+    }
+    
+    window.history.pushState({}, '', path);
+  }, [selectedBusiness, selectedCategory, showAllCategories, showColonias, activeTab, showSearch]);
+
+  useEffect(() => {
+    const onSearchQuery = (event: Event) => setSearchQuery((event as CustomEvent<string>).detail);
+    window.addEventListener('appSearchQuery', onSearchQuery);
+    return () => window.removeEventListener('appSearchQuery', onSearchQuery);
+  }, []);
+
+  return (
+    <div id="app-root" className="relative min-h-screen bg-[#f8f9fa] pb-36 font-sans text-neutral-900 selection:bg-blue-100" style={{ fontFamily: "'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif" }}>
+      {/* Dynamic Main Content based on activeTab */}
+      {activeTab === 'inicio' && (
+        <main className="pt-16">
+          {/* Header Section */}
+          <section className="px-5 mb-8">
+            <h1 className="text-4xl font-extrabold tracking-tight text-neutral-900">
+              Descubre<br/>
+              <span className="text-[#1a73e8]">Nochistlán</span>
+            </h1>
+          </section>
+          
+          {/* By Category Section */}
+          <section className="mb-10">
+            <div 
+              className="px-5 mb-4 cursor-pointer active:opacity-70 transition-opacity"
+              onClick={() => !loading && setShowAllCategories(true)}
+            >
+              <h2 className="text-2xl font-bold flex items-center gap-1">
+                Por Categoría <ChevronRight className="w-5 h-5 text-neutral-400 mt-1" strokeWidth={1.5} />
+              </h2>
+              <p className="text-[15px] text-neutral-500 font-medium mt-0.5">Encuentra lo que necesitas</p>
+            </div>
+            
+            <div className="flex overflow-x-auto gap-4 px-5 pb-4 scrollbar-hide snap-x">
+              {loading ? (
+                <>
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="squircle-24 w-[140px] h-[160px] shrink-0 snap-start bg-neutral-200 animate-pulse relative overflow-hidden" />
+                  ))}
+                </>
+              ) : (
+                categories.map((cat) => {
+                  const itemCount = mockPlaces.filter(p => p.category === cat.name).length;
+                  return (
+                    <div 
+                      key={cat.id} 
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`squircle-24 w-[140px] h-[160px] shrink-0 snap-start ${cat.gradient} p-4 flex flex-col justify-between shadow-[0_4px_12px_rgba(0,0,0,0.05)] text-white relative overflow-hidden cursor-pointer hover:opacity-90 active:scale-95 transition-all`}
+                    >
+                      <div className="h-[84px] w-full flex items-center justify-center mt-1 mb-1 drop-shadow-[0_8px_6px_rgba(0,0,0,0.2)]">
+                        {cat.emoji ? (
+                          <img src={cat.emoji} alt={cat.name} className="h-full object-contain scale-110" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+                            <span className="text-white/60 text-2xl font-bold">{cat.name.charAt(0)}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <h3 className="text-[17px] font-semibold tracking-[-0.4px] mb-[2px] leading-tight">{cat.name}</h3>
+                        <p className="text-[13px] font-medium opacity-80 leading-none">{itemCount} {itemCount === 1 ? 'lugar' : 'lugares'}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </section>
+
+          {/* By City (Colonia) Section */}
+          <section className="mb-10">
+            <div 
+              className="px-5 mb-4 flex justify-between items-center cursor-pointer active:opacity-70 transition-opacity"
+              onClick={() => !loading && setShowColonias(true)}
+            >
+              <div>
+                <h2 className="text-2xl font-bold flex items-center gap-1">
+                  Por Colonias <ChevronRight className="w-5 h-5 text-neutral-400 mt-1" strokeWidth={1.5} />
+                </h2>
+                <p className="text-[15px] text-neutral-500 font-medium mt-0.5">Explora la ciudad por zonas</p>
+              </div>
+            </div>
+            
+            <div className="px-5 flex gap-4 h-[280px]">
+              {loading ? (
+                <>
+                  <div className="w-[60%] h-full squircle-60 bg-neutral-200 animate-pulse" />
+                  <div className="w-[40%] flex flex-col gap-4 h-full">
+                    <div className="flex-1 squircle-32 bg-neutral-200 animate-pulse" />
+                    <div className="flex-1 squircle-32 bg-neutral-200 animate-pulse" />
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Main large card */}
+                  <div className="w-[60%] h-full squircle-60 relative overflow-hidden shadow-sm">
+                    <img src={colonias[0]?.image} alt={colonias[0]?.name} className="absolute inset-0 w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                    <div className="absolute bottom-5 left-5 right-5 text-white">
+                      <h3 className="font-bold text-xl leading-tight">{colonias[0]?.name}</h3>
+                      <p className="text-white/80 text-[13px] font-medium">Descubrir</p>
+                    </div>
+                  </div>
+                  
+                  {/* Stacked right cards */}
+                  <div className="w-[40%] flex flex-col gap-4 h-full">
+                    {colonias.slice(1, 3).map((colonia) => (
+                      <div key={colonia.id} className="flex-1 squircle-32 relative overflow-hidden shadow-sm">
+                        <img src={colonia.image} alt={colonia.name} className="absolute inset-0 w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                        <div className="absolute bottom-4 left-4 right-4 text-white">
+                          <h3 className="font-bold text-base leading-tight">{colonia.name}</h3>
+                          <p className="text-white/80 text-[11px] font-medium">Descubrir</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+
+          {/* All Visits Section */}
+          <section className="px-5">
+            <div 
+              className="mb-4 cursor-pointer active:opacity-70 transition-opacity"
+              onClick={() => setShowDestacados(true)}
+            >
+              <h2 className="text-2xl font-bold flex items-center gap-1">
+                Lugares Destacados <ChevronRight className="w-5 h-5 text-neutral-400 mt-1" strokeWidth={1.5} />
+              </h2>
+              <p className="text-[15px] text-neutral-500 font-medium mt-0.5">Recomendaciones para ti</p>
+            </div>
+
+            <div className="relative h-[240px] w-full flex items-center justify-center overflow-hidden" style={{ perspective: 1000 }}>
+              {!loading && destacadosPlaces.length > 0 ? (
+                <AnimatePresence initial={false} custom={destacadosState.direction}>
+                  <motion.div
+                    key={destacadosState.index}
+                    custom={destacadosState.direction}
+                    variants={carouselVariants}
+                    initial="enter"
+                    animate="center"
+                    exit="exit"
+                    transition={{ type: 'spring', stiffness: 260, damping: 28 }}
+                    drag="x"
+                    dragConstraints={{ left: 0, right: 0 }}
+                    dragElastic={1}
+                    onDragEnd={(e, { offset, velocity }) => {
+                      const swipe = Math.abs(offset.x) * velocity.x;
+                      if (swipe < -10000 || offset.x < -50) {
+                        paginateDestacados(1);
+                      } else if (swipe > 10000 || offset.x > 50) {
+                        paginateDestacados(-1);
+                      }
+                    }}
+                    onClick={() => {
+                      const place = destacadosPlaces[destacadosState.index];
+                      setSelectedCategory(null);
+                      setSelectedBusiness(place);
+                    }}
+                    className="ck-app-card rounded-[26px] absolute w-[85%] h-full bg-white cursor-pointer p-[5px]"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        const place = destacadosPlaces[destacadosState.index];
+                        setSelectedCategory(null);
+                        setSelectedBusiness(place);
+                      }
+                    }}
+                  >
+                    <div className="ck-app-card-inner rounded-[21px] relative w-full h-full overflow-hidden">
+                      <img 
+                        src={destacadosPlaces[destacadosState.index].images[0]} 
+                        alt={destacadosPlaces[destacadosState.index].name} 
+                        className="absolute inset-0 w-full h-full object-cover pointer-events-none" 
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
+                      <div className="absolute bottom-4 left-4 right-4 text-white pointer-events-none">
+                        <p className="text-[11px] font-bold uppercase tracking-wider mb-1 opacity-80">{destacadosPlaces[destacadosState.index].category}</p>
+                        <h3 className="font-bold text-xl leading-tight mb-1">{destacadosPlaces[destacadosState.index].name}</h3>
+                        <p className="text-[13px] text-white/80 line-clamp-1">{destacadosPlaces[destacadosState.index].subtitle || destacadosPlaces[destacadosState.index].location}</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                </AnimatePresence>
+              ) : loading ? (
+                <div className="ck-app-card rounded-[26px] w-[85%] h-full bg-neutral-200 animate-pulse p-[5px]">
+                  <div className="ck-app-card-inner h-full w-full rounded-[21px] bg-neutral-300/70 animate-pulse" />
+                </div>
+              ) : null}
+            </div>
+            <div className="mt-4 flex flex-col gap-2 px-5" aria-hidden="true">
+              {loading ? (
+                <>
+                  <div className="h-3 w-24 rounded-full bg-neutral-200 animate-pulse" />
+                  <div className="h-4 w-2/3 rounded-full bg-neutral-200 animate-pulse" />
+                  <div className="h-3 w-1/2 rounded-full bg-neutral-200 animate-pulse" />
+                </>
+              ) : destacadosPlaces.length > 1 ? (
+                <motion.div
+                  key={`next-${(destacadosState.index + 1) % destacadosPlaces.length}`}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center gap-3"
+                >
+                  <div className="h-12 w-16 shrink-0 overflow-hidden rounded-xl bg-neutral-200">
+                    <img src={destacadosPlaces[(destacadosState.index + 1) % destacadosPlaces.length].images[0]} alt="" className="h-full w-full object-cover" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Próximamente</p>
+                    <p className="truncate text-sm font-semibold text-neutral-700">{destacadosPlaces[(destacadosState.index + 1) % destacadosPlaces.length].name}</p>
+                  </div>
+                </motion.div>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="mb-10 mt-10 px-5">
+            <div className="mb-4">
+              <h2 className="text-2xl font-bold tracking-tight">Agrega tu negocio</h2>
+              <p className="mt-1 text-[15px] font-medium text-neutral-500">Comparte tu negocio con la comunidad de Nochistlán.</p>
+            </div>
+            <button type="button" onClick={() => setShowBusinessSubmission(true)} style={{ backgroundColor: '#ffffff', color: '#111111' }} className="w-full rounded-full !bg-white px-6 py-3.5 text-sm font-bold !text-black transition-transform active:scale-[0.99]">Agrega tu negocio</button>
+          </section>
+        </main>
+      )}
+
+      <AnimatePresence mode="wait">
+        {activeTab === 'explorar' && (
+          <DiscoverPage 
+            key="discover" 
+            onSelectBusiness={(place) => setSelectedBusiness(place)} 
+          />
+        )}
+        {activeTab === 'videos' && (
+          <VideosPage key="videos" />
+        )}
+        {activeTab === 'noticias' && (
+          <NewsPage key="noticias" />
+        )}
+      </AnimatePresence>
+
+      {/* Bottom Navigation & Search */}
+      {!showSearch && (
+        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => setShowSearch(true)} />
+      )}
+
+      {/* Pages & Overlays */}
+      <AnimatePresence>
+        {showBusinessPromotion && <BusinessPromotionSheet key="business-promotion" onClose={() => setShowBusinessPromotion(false)} />}
+        {showBusinessSubmission && <BusinessSubmissionSheet key="business-submission" onClose={() => setShowBusinessSubmission(false)} />}
+        {showSearch && (
+          <SearchPage
+            key="search-page"
+            query={searchQuery}
+            onQueryChange={setSearchQuery}
+            onClose={() => setShowSearch(false)}
+            onSelectBusiness={(place) => {
+              setSelectedCategory(null);
+              setSelectedBusiness(place);
+              setShowSearch(false);
+            }}
+          />
+        )}
+        {showAllCategories && (
+          <AllCategoriesPage 
+            key="all-categories"
+            onClose={() => setShowAllCategories(false)}
+            onSelectCategory={(cat) => setSelectedCategory(cat)}
+          />
+        )}
+        {showColonias && (
+          <ColoniasPage 
+            key="colonias" 
+            onClose={() => setShowColonias(false)} 
+            onSelectColonia={(colonia) => setSelectedColonia(colonia)}
+          />
+        )}
+        {selectedColonia && (
+          <ColoniaDetailPage
+            key="colonia-detail"
+            colonia={selectedColonia}
+            onClose={() => setSelectedColonia(null)}
+            onSelectBusiness={(place) => {
+              setSelectedBusiness(place);
+            }}
+          />
+        )}
+        {showDestacados && (
+          <DestacadosPage 
+            key="destacados" 
+            onClose={() => setShowDestacados(false)} 
+            onSelectBusiness={(place) => {
+              setSelectedBusiness(place);
+            }} 
+          />
+        )}
+        {selectedCategory && (
+          <CategoryPage 
+            key="category-page"
+            category={selectedCategory} 
+            onClose={() => setSelectedCategory(null)} 
+            onSelectBusiness={(place) => setSelectedBusiness(place)} 
+          />
+        )}
+        {selectedBusiness && (
+          <BusinessDetailSheet 
+            key="business-sheet"
+            place={selectedBusiness} 
+            onClose={() => setSelectedBusiness(null)} 
+          />
+        )}
+
+        {/* PuntoNochi Animated Brand Splash Screen */}
+        {loading && (
+          <SplashScreen key="splash-screen" onFinish={() => setLoading(false)} />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
