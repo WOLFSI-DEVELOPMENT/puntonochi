@@ -4,6 +4,10 @@
 
 @layer base {
   html, body { scroll-behavior: smooth; }
+  html, body, #root { width: 100%; min-height: 100%; }
+  html { min-height: 100dvh; background: #121212; }
+  body { min-height: 100vh; min-height: 100dvh; margin: 0; overflow-x: hidden; }
+  #app-root { min-height: 100vh; min-height: 100dvh; padding-top: env(safe-area-inset-top, 0px); }
   html, body, * {
     font-family: 'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif;
     -ms-overflow-style: none;

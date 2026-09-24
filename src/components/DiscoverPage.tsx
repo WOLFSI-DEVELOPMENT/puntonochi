@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Search, MapPin, Plus } from 'lucide-react';
 import { motion, useScroll, useMotionValueEvent } from 'motion/react';
 import { mockPlaces } from '../data';
@@ -20,6 +20,37 @@ const discoverFilters = [
 const heights = ['h-[220px]', 'h-[160px]', 'h-[260px]', 'h-[200px]', 'h-[180px]', 'h-[240px]'];
 const FEED_COLUMNS = 2;
 const ITEMS_PER_PROMOTION = 5 * FEED_COLUMNS;
+
+function FeedAd() {
+  const adRef = useRef<HTMLModElement>(null);
+  const pushed = useRef(false);
+
+  useEffect(() => {
+    if (pushed.current || !adRef.current) return;
+    pushed.current = true;
+    try {
+      const adsWindow = window as Window & { adsbygoogle?: unknown[] };
+      adsWindow.adsbygoogle = adsWindow.adsbygoogle || [];
+      adsWindow.adsbygoogle.push({});
+    } catch (error) {
+      console.error('AdSense feed unit could not be initialized.', error);
+    }
+  }, []);
+
+  return (
+    <div className="my-3 w-full px-1" aria-label="Publicidad">
+      <ins
+        ref={adRef}
+        className="adsbygoogle block w-full"
+        style={{ display: 'block' }}
+        data-ad-format="fluid"
+        data-ad-layout-key="-6t+ed+2i-1n-4w"
+        data-ad-client="ca-pub-7029279570287128"
+        data-ad-slot="7895105729"
+      />
+    </div>
+  );
+}
 
 export function DiscoverPage({ onSelectBusiness }: { onSelectBusiness: (place: Place) => void }) {
   const [activeFilter, setActiveFilter] = useState(discoverFilters[0]);
@@ -140,16 +171,21 @@ export function DiscoverPage({ onSelectBusiness }: { onSelectBusiness: (place: P
           <div key={`feed-section-${sectionIndex}`}>
             <div className="columns-2 md:columns-3 gap-1 space-y-1">
               {section.map((item) => (
-                <div
+                <a
                   key={item.id}
+                  href={`/place/${encodeURIComponent(item.place.id)}`}
+                  aria-label={`${item.place.name}, ${item.place.category} en Nochistlán`}
                   className={`w-full relative break-inside-avoid ${item.height} cursor-pointer active:opacity-80 transition-opacity`}
-                  onClick={() => onSelectBusiness(item.place)}
+                  onClick={(event) => { event.preventDefault(); onSelectBusiness(item.place); }}
                 >
-                  <img src={item.image} alt="Discover item" className="absolute inset-0 w-full h-full object-cover rounded-sm pointer-events-none" />
-                </div>
+                  <img src={item.image} alt={`${item.place.name}, ${item.place.category} en Nochistlán`} className="absolute inset-0 w-full h-full object-cover rounded-sm pointer-events-none" />
+                </a>
               ))}
             </div>
-            {sectionIndex < feedSections.length - 1 && renderPromotion(`promotion-${sectionIndex}`)}
+            {sectionIndex < feedSections.length - 1 && <>
+              {renderPromotion(`promotion-${sectionIndex}`)}
+              <FeedAd />
+            </>}
           </div>
         ))}
       </div>

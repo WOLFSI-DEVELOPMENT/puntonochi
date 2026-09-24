@@ -19,6 +19,8 @@ import CornerKit from '@cornerkit/core';
 import { Category, Place, Colonia } from './types';
 import { AnimatePresence, motion } from 'motion/react';
 
+const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
+
 declare global {
   interface Window {
     initLiquidGlass: () => void;
@@ -98,10 +100,13 @@ export default function App() {
         const ck = new CornerKit();
         ck.applyAll('.ck-app-card', { radius: 26, smoothing: 1 });
         ck.applyAll('.ck-app-card-inner', { radius: 21, smoothing: 1 });
+        ck.applyAll('.ck-home-category-card', { radius: 24, smoothing: 1 });
+        ck.applyAll('.ck-home-colonia-featured', { radius: 60, smoothing: 1 });
+        ck.applyAll('.ck-home-colonia-card', { radius: 32, smoothing: 1 });
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [activeTab, destacadosState.index]);
+  }, [activeTab, destacadosState.index, loading]);
 
   
   const destacadosPlaces = React.useMemo(() => {
@@ -155,13 +160,6 @@ export default function App() {
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 2200); // Allow splash screen animation to display
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
     let path = '/';
     if (showSearch) {
       path = '/buscar';
@@ -185,6 +183,110 @@ export default function App() {
     
     window.history.pushState({}, '', path);
   }, [selectedBusiness, selectedCategory, showAllCategories, showColonias, activeTab, showSearch]);
+
+  useEffect(() => {
+    let title = 'PuntoNochi | Lugares, negocios y noticias de Nochistlán';
+    let description = 'Descubre restaurantes, cafeterías, hoteles, servicios, videos y noticias de Nochistlán de Mejía, Zacatecas.';
+    let noIndex = false;
+
+    if (selectedBusiness) {
+      title = `${selectedBusiness.name} | ${selectedBusiness.category} en Nochistlán | PuntoNochi`;
+      description = `${selectedBusiness.name}: ${selectedBusiness.category} en ${selectedBusiness.location || 'Nochistlán de Mejía, Zacatecas'}. Consulta fotos, ubicación y datos del negocio en PuntoNochi.`;
+    } else if (showSearch) {
+      title = 'Buscar negocios en Nochistlán | PuntoNochi';
+      description = 'Busca negocios, restaurantes, servicios y lugares en Nochistlán de Mejía, Zacatecas.';
+      noIndex = true;
+    } else if (selectedCategory) {
+      title = `${selectedCategory.name} en Nochistlán | PuntoNochi`;
+      description = `Encuentra ${selectedCategory.name.toLowerCase()} en Nochistlán de Mejía, Zacatecas. Explora lugares, fotos y datos útiles en PuntoNochi.`;
+    } else if (showAllCategories) {
+      title = 'Categorías de negocios en Nochistlán | PuntoNochi';
+      description = 'Explora restaurantes, cafeterías, hoteles, farmacias y más negocios de Nochistlán de Mejía.';
+    } else if (showColonias) {
+      title = 'Colonias y zonas de Nochistlán | PuntoNochi';
+      description = 'Descubre lugares y negocios por colonia en Nochistlán de Mejía, Zacatecas.';
+    } else if (activeTab === 'explorar') {
+      title = 'Explorar negocios y lugares en Nochistlán | PuntoNochi';
+      description = 'Explora fotos, negocios y lugares recomendados en Nochistlán de Mejía, Zacatecas.';
+    } else if (activeTab === 'videos') {
+      title = 'Videos de Nochistlán | PuntoNochi';
+      description = 'Mira videos cortos y largos sobre lugares y novedades de Nochistlán.';
+    } else if (activeTab === 'noticias') {
+      title = 'Noticias de México y Nochistlán | PuntoNochi';
+      description = 'Consulta noticias y videos informativos de México y Nochistlán en PuntoNochi.';
+    }
+
+    document.title = title;
+    document.documentElement.lang = 'es-MX';
+
+    const setMeta = (attribute: 'name' | 'property', key: string, content: string) => {
+      let meta = document.head.querySelector<HTMLMetaElement>(`meta[${attribute}="${key}"]`);
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute(attribute, key);
+        document.head.appendChild(meta);
+      }
+      meta.content = content;
+    };
+
+    setMeta('name', 'description', description);
+    setMeta('name', 'robots', noIndex ? 'noindex,follow' : 'index,follow');
+    setMeta('property', 'og:title', title);
+    setMeta('property', 'og:description', description);
+    setMeta('property', 'og:url', `${SEO_SITE_ORIGIN}${window.location.pathname}`);
+    setMeta('name', 'twitter:title', title);
+    setMeta('name', 'twitter:description', description);
+
+    const canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (canonical) canonical.href = `${SEO_SITE_ORIGIN}${window.location.pathname}`;
+
+    const pageUrl = `${SEO_SITE_ORIGIN}${window.location.pathname}`;
+    const pageSchema: Record<string, unknown> = selectedBusiness ? {
+      '@context': 'https://schema.org',
+      '@type': 'LocalBusiness',
+      '@id': `${pageUrl}#business`,
+      name: selectedBusiness.name,
+      description,
+      url: pageUrl,
+      image: selectedBusiness.images.map((image) => new URL(image, SEO_SITE_ORIGIN).href),
+      telephone: selectedBusiness.phone || undefined,
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: selectedBusiness.address || undefined,
+        addressLocality: 'Nochistlán de Mejía',
+        addressRegion: 'Zacatecas',
+        addressCountry: 'MX',
+      },
+      geo: selectedBusiness.lat != null && selectedBusiness.lng != null ? {
+        '@type': 'GeoCoordinates',
+        latitude: selectedBusiness.lat,
+        longitude: selectedBusiness.lng,
+      } : undefined,
+      hasMap: selectedBusiness.mapUrl || undefined,
+      areaServed: 'Nochistlán de Mejía, Zacatecas, México',
+    } : {
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      name: title,
+      description,
+      url: pageUrl,
+      inLanguage: 'es-MX',
+      isPartOf: { '@id': `${SEO_SITE_ORIGIN}/#website` },
+      about: {
+        '@type': 'City',
+        name: 'Nochistlán de Mejía',
+        containedInPlace: { '@type': 'AdministrativeArea', name: 'Zacatecas, México' },
+      },
+    };
+    let schemaScript = document.getElementById('route-seo-schema') as HTMLScriptElement | null;
+    if (!schemaScript) {
+      schemaScript = document.createElement('script');
+      schemaScript.id = 'route-seo-schema';
+      schemaScript.type = 'application/ld+json';
+      document.head.appendChild(schemaScript);
+    }
+    schemaScript.textContent = JSON.stringify(pageSchema).replace(/</g, '\\u003c');
+  }, [activeTab, selectedBusiness, selectedCategory, showAllCategories, showColonias, showSearch]);
 
   useEffect(() => {
     const onSearchQuery = (event: Event) => setSearchQuery((event as CustomEvent<string>).detail);
@@ -231,7 +333,7 @@ export default function App() {
                     <div 
                       key={cat.id} 
                       onClick={() => setSelectedCategory(cat)}
-                      className={`squircle-24 w-[140px] h-[160px] shrink-0 snap-start ${cat.gradient} p-4 flex flex-col justify-between shadow-[0_4px_12px_rgba(0,0,0,0.05)] text-white relative overflow-hidden cursor-pointer hover:opacity-90 active:scale-95 transition-all`}
+                      className={`ck-home-category-card squircle-24 w-[140px] h-[160px] shrink-0 snap-start ${cat.gradient} p-4 flex flex-col justify-between shadow-[0_4px_12px_rgba(0,0,0,0.05)] text-white relative overflow-hidden cursor-pointer hover:opacity-90 active:scale-95 transition-all`}
                     >
                       <div className="h-[84px] w-full flex items-center justify-center mt-1 mb-1 drop-shadow-[0_8px_6px_rgba(0,0,0,0.2)]">
                         {cat.emoji ? (
@@ -279,7 +381,7 @@ export default function App() {
               ) : (
                 <>
                   {/* Main large card */}
-                  <div className="w-[60%] h-full squircle-60 relative overflow-hidden shadow-sm">
+                  <div className="ck-home-colonia-featured w-[60%] h-full squircle-60 relative overflow-hidden shadow-sm">
                     <img src={colonias[0]?.image} alt={colonias[0]?.name} className="absolute inset-0 w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
                     <div className="absolute bottom-5 left-5 right-5 text-white">
@@ -291,7 +393,7 @@ export default function App() {
                   {/* Stacked right cards */}
                   <div className="w-[40%] flex flex-col gap-4 h-full">
                     {colonias.slice(1, 3).map((colonia) => (
-                      <div key={colonia.id} className="flex-1 squircle-32 relative overflow-hidden shadow-sm">
+                      <div key={colonia.id} className="ck-home-colonia-card flex-1 squircle-32 relative overflow-hidden shadow-sm">
                         <img src={colonia.image} alt={colonia.name} className="absolute inset-0 w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
                         <div className="absolute bottom-4 left-4 right-4 text-white">

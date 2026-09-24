@@ -26,7 +26,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch }: { activeTab:
   };
 
   return (
-    <div className="fixed bottom-6 left-0 right-0 w-full flex justify-center z-50 pointer-events-none px-4">
+    <div style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.5rem)' }} className="fixed left-0 right-0 w-full flex justify-center z-50 pointer-events-none px-4">
       <motion.div 
         layout
         className="liquid-glass pointer-events-auto relative flex items-center h-[60px] rounded-[30px] px-0 shadow-2xl shadow-black/40 w-[min(100%,340px)]"
