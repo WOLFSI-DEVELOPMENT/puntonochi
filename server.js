@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import dotenv from 'dotenv';
-import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import { neon } from '@neondatabase/serverless';
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import webpush from 'web-push';
@@ -32,10 +32,31 @@ const requireNeon = (req, res, next) => {
 
 const ADMIN_COOKIE = 'puntonochi_admin';
 const ADMIN_SESSION_TTL_SECONDS = 8 * 60 * 60;
-const hasAdminConfig = () => Boolean(
-  process.env.ADMIN_PASSWORD && process.env.ADMIN_PASSWORD.length >= 12 &&
-  process.env.ADMIN_SESSION_SECRET && process.env.ADMIN_SESSION_SECRET.length >= 32,
-);
+let adminSchemaReady;
+const ensureAdminSchema = () => {
+  if (!sql) throw new Error('DATABASE_URL is not configured.');
+  if (!adminSchemaReady) adminSchemaReady = sql`CREATE TABLE IF NOT EXISTS admin_credentials (
+    id SMALLINT PRIMARY KEY CHECK (id = 1),
+    password_salt TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    session_secret TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`.catch((error) => { adminSchemaReady = undefined; throw error; });
+  return adminSchemaReady;
+};
+const getAdminConfig = async () => {
+  if (!sql) return null;
+  await ensureAdminSchema();
+  let [config] = await sql`SELECT password_salt AS "passwordSalt", password_hash AS "passwordHash", session_secret AS "sessionSecret" FROM admin_credentials WHERE id = 1`;
+  if (!config && process.env.ADMIN_PASSWORD?.length >= 12 && process.env.ADMIN_SESSION_SECRET?.length >= 32) {
+    const salt = randomBytes(16).toString('hex');
+    const passwordHash = scryptSync(process.env.ADMIN_PASSWORD, salt, 64).toString('hex');
+    await sql`INSERT INTO admin_credentials (id, password_salt, password_hash, session_secret) VALUES (1, ${salt}, ${passwordHash}, ${process.env.ADMIN_SESSION_SECRET}) ON CONFLICT (id) DO NOTHING`;
+    [config] = await sql`SELECT password_salt AS "passwordSalt", password_hash AS "passwordHash", session_secret AS "sessionSecret" FROM admin_credentials WHERE id = 1`;
+  }
+  return config || null;
+};
 const safeEqual = (left, right) => timingSafeEqual(
   createHash('sha256').update(String(left)).digest(),
   createHash('sha256').update(String(right)).digest(),
@@ -44,15 +65,14 @@ const getCookieValue = (req, name) => {
   const entry = (req.headers.cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
   return entry ? entry.slice(name.length + 1) : '';
 };
-const signAdminPayload = (payload) => createHmac('sha256', process.env.ADMIN_SESSION_SECRET).update(payload).digest('base64url');
-const isAdminSessionValid = (req) => {
-  if (!hasAdminConfig()) return false;
+const signAdminPayload = (payload, secret) => createHmac('sha256', secret).update(payload).digest('base64url');
+const isAdminSessionValid = (req, secret) => {
   const token = getCookieValue(req, ADMIN_COOKIE);
   const separator = token.lastIndexOf('.');
   if (separator < 1) return false;
   const payload = token.slice(0, separator);
   const suppliedSignature = Buffer.from(token.slice(separator + 1), 'base64url');
-  const expectedSignature = Buffer.from(signAdminPayload(payload), 'base64url');
+  const expectedSignature = Buffer.from(signAdminPayload(payload, secret), 'base64url');
   if (suppliedSignature.length !== expectedSignature.length || !timingSafeEqual(suppliedSignature, expectedSignature)) return false;
   try {
     return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')).expiresAt > Date.now();
@@ -60,10 +80,16 @@ const isAdminSessionValid = (req) => {
     return false;
   }
 };
-const requireAdmin = (req, res, next) => {
-  if (!hasAdminConfig()) return res.status(503).json({ error: 'Admin access needs ADMIN_PASSWORD (12+ characters) and ADMIN_SESSION_SECRET (32+ characters) in the server environment.' });
-  if (!isAdminSessionValid(req)) return res.status(401).json({ error: 'Inicia sesión como administrador.' });
-  next();
+const requireAdmin = async (req, res, next) => {
+  try {
+    const config = await getAdminConfig();
+    if (!config) return res.status(503).json({ error: 'Configura DATABASE_URL, ADMIN_PASSWORD (12+ caracteres) y ADMIN_SESSION_SECRET (32+ caracteres); al iniciar, el acceso se guarda en Neon.' });
+    if (!isAdminSessionValid(req, config.sessionSecret)) return res.status(401).json({ error: 'Inicia sesión como administrador.' });
+    next();
+  } catch (error) {
+    console.error('Admin credentials could not be read from Neon:', error);
+    res.status(503).json({ error: 'No se pudo conectar con Neon para comprobar el acceso de administrador.' });
+  }
 };
 const ensureSameOrigin = (req, res) => {
   const origin = req.get('origin');
@@ -96,21 +122,32 @@ const parseImageUrl = (value) => {
   }
 };
 
-app.get('/api/admin/session', (req, res) => {
+app.get('/api/admin/session', async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  const configured = hasAdminConfig();
-  res.json({ configured, authenticated: configured && isAdminSessionValid(req) });
+  try {
+    const config = await getAdminConfig();
+    res.json({ configured: Boolean(config), authenticated: Boolean(config && isAdminSessionValid(req, config.sessionSecret)) });
+  } catch (error) {
+    console.error('Admin configuration check failed:', error);
+    res.status(503).json({ configured: false, authenticated: false, error: 'No se pudo comprobar la configuración en Neon.' });
+  }
 });
 
-app.post('/api/admin/login', (req, res) => {
+app.post('/api/admin/login', async (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (!ensureSameOrigin(req, res)) return;
-  if (!hasAdminConfig()) return res.status(503).json({ error: 'Admin access needs ADMIN_PASSWORD (12+ characters) and ADMIN_SESSION_SECRET (32+ characters) in the server environment.' });
+  let config;
+  try { config = await getAdminConfig(); } catch (error) {
+    console.error('Admin login could not read Neon credentials:', error);
+    return res.status(503).json({ error: 'No se pudo conectar con Neon para comprobar el acceso.' });
+  }
+  if (!config) return res.status(503).json({ error: 'Configura DATABASE_URL, ADMIN_PASSWORD y ADMIN_SESSION_SECRET; al iniciar, el acceso se guarda en Neon.' });
   const password = typeof req.body?.password === 'string' ? req.body.password : '';
-  if (!safeEqual(password, process.env.ADMIN_PASSWORD)) return res.status(401).json({ error: 'Contraseña incorrecta.' });
+  const suppliedHash = scryptSync(password, config.passwordSalt, 64).toString('hex');
+  if (!safeEqual(suppliedHash, config.passwordHash)) return res.status(401).json({ error: 'Contraseña incorrecta.' });
 
   const payload = Buffer.from(JSON.stringify({ expiresAt: Date.now() + ADMIN_SESSION_TTL_SECONDS * 1000 })).toString('base64url');
-  const token = `${payload}.${signAdminPayload(payload)}`;
+  const token = `${payload}.${signAdminPayload(payload, config.sessionSecret)}`;
   const secure = process.env.NODE_ENV === 'production' || req.secure;
   res.setHeader('Set-Cookie', `${ADMIN_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/api/admin; SameSite=Strict; Max-Age=${ADMIN_SESSION_TTL_SECONDS}${secure ? '; Secure' : ''}`);
   res.json({ authenticated: true });

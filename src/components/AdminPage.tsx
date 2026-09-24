@@ -182,7 +182,7 @@ export function AdminPage({ onClose }: AdminPageProps) {
 
         {status === 'checking' && <div className="flex items-center justify-center gap-2 py-16 text-sm text-white/60"><LoaderCircle className="h-5 w-5 animate-spin" />Comprobando acceso…</div>}
 
-        {status === 'not-configured' && <section className="rounded-[24px] bg-[#202124] p-5"><h2 className="font-semibold">Falta configurar el acceso seguro</h2><p className="mt-2 text-sm leading-relaxed text-white/60">En las variables de entorno del servidor agrega <code>ADMIN_PASSWORD</code> (12 caracteres o más) y <code>ADMIN_SESSION_SECRET</code> (32 caracteres o más). En Vercel, selecciona Production y Preview y vuelve a desplegar.</p></section>}
+        {status === 'not-configured' && <section className="rounded-[24px] bg-[#202124] p-5"><h2 className="font-semibold">Falta configurar el acceso seguro</h2><p className="mt-2 text-sm leading-relaxed text-white/60">El acceso de administrador se inicializa en Neon. Verifica que el servidor tenga <code>DATABASE_URL</code>, <code>ADMIN_PASSWORD</code> (12+ caracteres) y <code>ADMIN_SESSION_SECRET</code> (32+ caracteres), y que al menos una vez se haya abierto esta página en la implementación de Vercel para guardar las credenciales iniciales en la base de datos.</p></section>}
 
         {status === 'login' && <form onSubmit={login} className="rounded-[24px] bg-[#202124] p-5 sm:p-6">
           <div className="mb-5 flex items-center gap-3"><span className="rounded-2xl bg-white/[0.08] p-3"><Store className="h-5 w-5" /></span><div><h2 className="font-semibold">Acceso de administrador</h2><p className="text-sm text-white/50">Ingresa tu contraseña para administrar negocios.</p></div></div>
