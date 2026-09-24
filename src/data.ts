@@ -8,17 +8,26 @@ export let mockPlaces: Place[] = [];
 export let mockGuides: Guide[] = [];
 export let feedData: FeedItem[] = [];
 
+async function fetchJson(path: string) {
+  const response = await fetch(path);
+  const contentType = response.headers.get('content-type') || '';
+  if (!response.ok || !contentType.includes('application/json')) {
+    throw new Error(`${path} returned ${response.status} ${contentType || 'without a content type'}`);
+  }
+  return response.json();
+}
+
 try {
   const [categoriesRes, coloniasRes, placesRes] = await Promise.all([
-    fetch('/api/categories'),
-    fetch('/api/colonias'),
-    fetch('/api/places')
+    fetchJson('/api/categories'),
+    fetchJson('/api/colonias'),
+    fetchJson('/api/places')
   ]);
-  
-  categories = await categoriesRes.json();
-  allColonias = await coloniasRes.json();
+
+  categories = categoriesRes;
+  allColonias = coloniasRes;
   colonias = allColonias;
-  mockPlaces = await placesRes.json();
+  mockPlaces = placesRes;
 } catch (e) {
-  console.error("Failed to load from API, make sure server is running on port 3001", e);
+  console.error('Failed to load directory data from the API.', e);
 }
