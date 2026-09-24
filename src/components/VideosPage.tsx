@@ -1,5 +1,6 @@
 import { Play, Search } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import CornerKit from '@cornerkit/core';
 import { YouTubeVideoOverlay, type PlayableVideo } from './YouTubeVideoOverlay';
 
 const shorts = [
@@ -20,6 +21,11 @@ const longVideos = [
 export function VideosPage() {
   const [query, setQuery] = useState('');
   const [selectedVideo, setSelectedVideo] = useState<PlayableVideo | null>(null);
+  useEffect(() => {
+    const corners = new CornerKit();
+    corners.applyAll('.ck-video-card', { radius: 24, smoothing: 1 });
+    corners.applyAll('.ck-video-card-media', { radius: 19, smoothing: 1 });
+  }, []);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const visibleShorts = shorts.filter((video) => `${video.title} ${video.creator}`.toLocaleLowerCase().includes(normalizedQuery));
   const visibleLongVideos = longVideos.filter((video) => `${video.title} ${video.creator}`.toLocaleLowerCase().includes(normalizedQuery));
@@ -43,8 +49,8 @@ export function VideosPage() {
         <h2 className="text-lg font-semibold">Shorts</h2>
         <div className="mt-4 flex gap-3 overflow-x-auto pb-3 scrollbar-hide">
           {visibleShorts.map((short) => (
-            <article key={short.id} className="w-[min(50vw,200px)] shrink-0 rounded-[24px] bg-[#292929] p-[5px] sm:w-[min(38vw,270px)]">
-              <button type="button" onClick={() => setSelectedVideo({ ...short, isShort: true, thumbnail: `https://i.ytimg.com/vi/${short.id}/hqdefault.jpg` })} aria-label={`Reproducir: ${short.title}`} className="group relative block aspect-[4/5] w-full overflow-hidden rounded-[19px] bg-black sm:aspect-[9/16]">
+            <article key={short.id} className="ck-video-card w-[min(50vw,200px)] shrink-0 rounded-[24px] bg-[#292929] p-[5px] sm:w-[min(38vw,270px)]">
+              <button type="button" onClick={() => setSelectedVideo({ ...short, isShort: true, thumbnail: `https://i.ytimg.com/vi/${short.id}/hqdefault.jpg` })} aria-label={`Reproducir: ${short.title}`} className="ck-video-card-media group relative block aspect-[4/5] w-full overflow-hidden rounded-[19px] bg-black sm:aspect-[9/16]">
                 <img src={`https://i.ytimg.com/vi/${short.id}/hqdefault.jpg`} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
                 <span className="absolute inset-0 flex items-center justify-center bg-black/20 transition-colors group-hover:bg-black/35">
                   <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/65 text-white"><Play className="ml-0.5 h-5 w-5 fill-current" /></span>
@@ -64,8 +70,8 @@ export function VideosPage() {
         <h2 className="text-lg font-semibold">Videos largos</h2>
         <div className="mt-4 flex gap-3 overflow-x-auto pb-3 scrollbar-hide">
           {visibleLongVideos.map((video) => (
-            <article key={video.id} className="w-[min(84vw,380px)] shrink-0 rounded-[24px] bg-[#292929] p-[5px]">
-              <button type="button" onClick={() => setSelectedVideo({ ...video, isShort: false, thumbnail: `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg` })} aria-label={`Reproducir: ${video.title}`} className="group relative block aspect-video w-full overflow-hidden rounded-[19px] bg-black">
+            <article key={video.id} className="ck-video-card w-[min(84vw,380px)] shrink-0 rounded-[24px] bg-[#292929] p-[5px]">
+              <button type="button" onClick={() => setSelectedVideo({ ...video, isShort: false, thumbnail: `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg` })} aria-label={`Reproducir: ${video.title}`} className="ck-video-card-media group relative block aspect-video w-full overflow-hidden rounded-[19px] bg-black">
                 <img src={`https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
                 <span className="absolute inset-0 flex items-center justify-center bg-black/20 transition-colors group-hover:bg-black/35">
                   <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/65 text-white"><Play className="ml-0.5 h-5 w-5 fill-current" /></span>

@@ -175,7 +175,7 @@ export function DiscoverPage({ onSelectBusiness }: { onSelectBusiness: (place: P
                   key={item.id}
                   href={`/place/${encodeURIComponent(item.place.id)}`}
                   aria-label={`${item.place.name}, ${item.place.category} en Nochistlán`}
-                  className={`w-full relative break-inside-avoid ${item.height} cursor-pointer active:opacity-80 transition-opacity`}
+                  className={`block w-full relative break-inside-avoid ${item.height} cursor-pointer active:opacity-80 transition-opacity`}
                   onClick={(event) => { event.preventDefault(); onSelectBusiness(item.place); }}
                 >
                   <img src={item.image} alt={`${item.place.name}, ${item.place.category} en Nochistlán`} className="absolute inset-0 w-full h-full object-cover rounded-sm pointer-events-none" />
