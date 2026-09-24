@@ -1,13 +1,17 @@
 import { useState, FormEvent, ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Camera, Check, Clock3, ImagePlus, LoaderCircle, MapPin, Phone, Plus, Store, Tag, Trash2, X } from 'lucide-react';
+import { Camera, Check, Clock3, ImagePlus, LoaderCircle, MapPin, Phone, Plus, Store, Tag, Trash2, X, ShieldCheck, UserRoundCheck } from 'lucide-react';
 import { apiFetch } from '../api';
+import { mockPlaces } from '../data';
+import type { Place } from '../types';
 
 const categories = ['Restaurante', 'Cafetería', 'Hotel', 'Farmacia', 'Tienda', 'Servicios', 'Otro'];
 const costs = [1, 2, 3, 4];
 
 type BusinessPhoto = { name: string; url: string; file: File };
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+const weekDays = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+type BusinessHours = { closed: boolean; intervals: { open: string; close: string }[] };
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -35,6 +39,17 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
   const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadedPhotoCount, setUploadedPhotoCount] = useState(0);
+  const [mode, setMode] = useState<'add' | 'claim'>('add');
+  const [selectedClaimPlace, setSelectedClaimPlace] = useState<Place | null>(null);
+  const [claimSearch, setClaimSearch] = useState('');
+  const [claimName, setClaimName] = useState('');
+  const [claimAddress, setClaimAddress] = useState('');
+  const [claimPhone, setClaimPhone] = useState('');
+  const [claimEmail, setClaimEmail] = useState('');
+  const [claimDescription, setClaimDescription] = useState('');
+  const [claimProof, setClaimProof] = useState<File | null>(null);
+  const [claimSubmitted, setClaimSubmitted] = useState(false);
+  const [claimHours, setClaimHours] = useState<Record<string, BusinessHours>>(() => Object.fromEntries(weekDays.map((day) => [day, { closed: day === 'Domingo', intervals: [{ open: '09:00', close: '18:00' }] }])));
 
   const addPhotos = (files: FileList | null) => {
     if (!files) return;
@@ -90,24 +105,70 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const matchingClaims = mockPlaces.filter((place) => `${place.name} ${place.location}`.toLocaleLowerCase('es').includes(claimSearch.toLocaleLowerCase('es')));
+  const selectClaimPlace = (place: Place) => {
+    setSelectedClaimPlace(place); setClaimName(place.name); setClaimAddress(place.address || place.location); setClaimPhone(place.phone || ''); setClaimDescription(place.subtitle || '');
+    setClaimHours(Object.fromEntries(weekDays.map((day) => [day, { closed: day === 'Domingo', intervals: [{ open: '09:00', close: '18:00' }] }])));
+    setSubmitError('');
+  };
+  const updateHours = (day: string, updater: (current: BusinessHours) => BusinessHours) => setClaimHours((current) => ({ ...current, [day]: updater(current[day]) }));
+  const submitClaim = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedClaimPlace || !claimProof) { setSubmitError('Selecciona un negocio y agrega un comprobante.'); return; }
+    setIsSubmitting(true); setSubmitError('');
+    try {
+      const created = await apiFetch('/api/business-claims', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ placeId: selectedClaimPlace.id, name: claimName, address: claimAddress, phone: claimPhone, description: claimDescription, email: claimEmail, hours: claimHours, proofName: claimProof.name, proofMimeType: claimProof.type, proofBase64: await fileToBase64(claimProof) }) });
+      const body = await created.json();
+      if (!created.ok) throw new Error(body.error || 'No se pudo enviar la solicitud.');
+      setClaimSubmitted(true);
+    } catch (error) { setSubmitError(error instanceof Error ? error.message : 'No se pudo enviar la solicitud.'); }
+    finally { setIsSubmitting(false); }
+  };
+
   return (
     <>
       <motion.button aria-label="Cerrar formulario" className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
       <motion.section role="dialog" aria-modal="true" aria-label="Registra tu negocio" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 280 }} className="fixed inset-x-0 bottom-0 z-[71] mx-auto flex max-h-[94dvh] w-full max-w-[680px] flex-col overflow-hidden rounded-t-[32px] bg-[#202124] text-white shadow-2xl">
         <div className="flex shrink-0 items-center justify-between border-b border-white/[0.07] px-5 pb-4 pt-3">
           <div className="mx-auto absolute left-1/2 top-2 h-1.5 w-12 -translate-x-1/2 rounded-full bg-white/20" />
-          <div className="pt-2"><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">PuntoNochi · Negocios</p><h2 className="mt-1 text-xl font-bold">{submitted ? 'Solicitud recibida' : 'Presenta tu negocio'}</h2></div>
+          <div className="pt-2"><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">PuntoNochi · Negocios</p><h2 className="mt-1 text-xl font-bold">{submitted || claimSubmitted ? 'Solicitud recibida' : mode === 'claim' ? 'Reclama tu negocio' : 'Presenta tu negocio'}</h2></div>
           <button type="button" onClick={onClose} aria-label="Cerrar" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.07] text-white/70"><X className="h-5 w-5" /></button>
         </div>
 
-        {submitted ? (
+        {submitted || claimSubmitted ? (
           <div className="overflow-y-auto px-6 py-10 text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-400/15 text-emerald-300"><Check className="h-8 w-8" /></div>
             <h3 className="mt-5 text-2xl font-bold">¡Ya está en revisión!</h3>
-            <p className="mx-auto mt-3 max-w-sm text-[15px] leading-relaxed text-white/65">Revisaremos los datos de <strong className="text-white">{name}</strong>. Te enviaremos un correo a <strong className="text-white">{email}</strong> cuando el negocio sea aprobado.</p>
+            <p className="mx-auto mt-3 max-w-sm text-[15px] leading-relaxed text-white/65">{claimSubmitted ? `El equipo revisará la solicitud de ${claimName} y eliminará el comprobante al resolverla.` : `Revisaremos los datos de ${name}.`}</p>
             <button type="button" onClick={onClose} className="mt-8 rounded-full bg-white px-7 py-3 text-sm font-bold text-[#202124]">Listo</button>
           </div>
         ) : (
+          <>
+          <div className="shrink-0 border-b border-white/[0.07] px-5 py-3">
+            <div className="mx-auto flex w-fit rounded-full bg-[#292a2d] p-1" role="tablist" aria-label="Tipo de solicitud">
+              <button type="button" role="tab" aria-selected={mode === 'add'} onClick={() => { setMode('add'); setSubmitError(''); }} className={`rounded-full px-5 py-2 text-sm font-semibold ${mode === 'add' ? 'bg-[#36373b] !text-white' : 'text-white/60'}`}>Agregar</button>
+              <button type="button" role="tab" aria-selected={mode === 'claim'} onClick={() => { setMode('claim'); setSubmitError(''); }} className={`flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-semibold ${mode === 'claim' ? 'bg-white text-[#202124]' : 'text-white/60'}`}><UserRoundCheck className="h-4 w-4" />Reclamar/editar</button>
+            </div>
+          </div>
+          {mode === 'claim' ? (
+            <form onSubmit={submitClaim} className="min-h-0 overflow-y-auto overscroll-contain px-5 pb-8 pt-4">
+              <p className="mb-4 text-sm text-white/55">Verifica que eres responsable del negocio y mantén su información actualizada.</p>
+              {!selectedClaimPlace ? <section className="rounded-[22px] bg-[#292a2d] p-4"><label className="mb-3 block text-sm font-semibold">Selecciona tu negocio<input value={claimSearch} onChange={(e) => setClaimSearch(e.target.value)} placeholder="Buscar negocio" className={`${inputClass} mt-3`} /></label><div className="max-h-56 space-y-2 overflow-y-auto overscroll-contain">{matchingClaims.slice(0, 60).map((place) => <button key={place.id} type="button" onClick={() => selectClaimPlace(place)} className="flex w-full items-center gap-3 rounded-2xl bg-[#36373b] p-2.5 text-left"><img src={place.logo || place.images?.[0]} alt="" className="h-10 w-10 rounded-xl object-cover" /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{place.name}<span className="block text-xs font-normal text-white/45">{place.location}</span></span></button>)}</div></section> : <>
+                <button type="button" onClick={() => setSelectedClaimPlace(null)} className="mb-4 flex w-full items-center justify-between rounded-2xl bg-[#292a2d] p-4 text-left"><span><span className="block text-xs text-white/45">Negocio seleccionado</span><span className="mt-1 block text-sm font-semibold">{selectedClaimPlace.name}</span></span><span className="text-xs text-white/55">Cambiar</span></button>
+                <div className="mb-4 grid gap-3 sm:grid-cols-2">
+                  <Field icon={<Store />} label="Nombre"><input required value={claimName} onChange={(e) => setClaimName(e.target.value)} className={inputClass} /></Field>
+                  <Field icon={<MapPin />} label="Dirección"><input required value={claimAddress} onChange={(e) => setClaimAddress(e.target.value)} className={inputClass} /></Field>
+                  <Field icon={<Phone />} label="Teléfono"><input required value={claimPhone} onChange={(e) => setClaimPhone(e.target.value)} className={inputClass} /></Field>
+                  <Field icon={<span>@</span>} label="Correo de contacto"><input required type="email" value={claimEmail} onChange={(e) => setClaimEmail(e.target.value)} placeholder="tu@correo.com" className={inputClass} /></Field>
+                </div>
+                <Field icon={<Store />} label="Descripción"><textarea value={claimDescription} onChange={(e) => setClaimDescription(e.target.value)} rows={3} className={`${inputClass} !h-24 resize-y !py-3`} /></Field>
+                <section className="my-4 rounded-[22px] bg-[#292a2d] p-4"><div className="mb-3 flex items-center gap-2 text-sm font-semibold"><Clock3 className="h-4 w-4" />Horario semanal</div><div className="space-y-3">{weekDays.map((day) => { const dayHours = claimHours[day]; return <div key={day} className="rounded-2xl bg-white/[0.04] p-3"><div className="flex items-center justify-between"><span className="text-sm font-semibold">{day}</span><label className="flex items-center gap-2 text-xs text-white/60"><input type="checkbox" checked={dayHours.closed} onChange={(e) => updateHours(day, (current) => ({ ...current, closed: e.target.checked }))} />Cerrado</label></div>{!dayHours.closed && <div className="mt-2 space-y-2">{dayHours.intervals.map((interval, index) => <div key={index} className="flex items-center gap-2"><input aria-label={`${day}, apertura ${index + 1}`} type="time" value={interval.open} onChange={(e) => updateHours(day, (current) => ({ ...current, intervals: current.intervals.map((item, i) => i === index ? { ...item, open: e.target.value } : item) }))} className="min-w-0 flex-1 rounded-xl bg-[#202124] p-2 text-sm" /><span className="text-xs text-white/45">a</span><input aria-label={`${day}, cierre ${index + 1}`} type="time" value={interval.close} onChange={(e) => updateHours(day, (current) => ({ ...current, intervals: current.intervals.map((item, i) => i === index ? { ...item, close: e.target.value } : item) }))} className="min-w-0 flex-1 rounded-xl bg-[#202124] p-2 text-sm" />{index > 0 && <button type="button" aria-label="Quitar horario" onClick={() => updateHours(day, (current) => ({ ...current, intervals: current.intervals.filter((_, i) => i !== index) }))} className="rounded-full p-1 text-white/50"><Trash2 className="h-4 w-4" /></button>}</div>)}<button type="button" onClick={() => updateHours(day, (current) => ({ ...current, intervals: [...current.intervals, { open: '16:00', close: '20:00' }] }))} className="mt-1 text-xs font-semibold text-white/60">+ Agregar otro horario</button></div>}</div>; })}</div></section>
+                <section className="mb-4 rounded-[22px] bg-[#292a2d] p-4"><div className="mb-2 flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4" />Comprobante de propiedad</div><p className="mb-3 text-xs leading-relaxed text-white/55">Sube una factura de CFE u otro comprobante donde aparezca el negocio o tu nombre. Solo JPG o PNG, máximo 5 MB, sin límite de proporción.</p><input required type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" onChange={(e) => { const file = e.target.files?.[0] || null; if (file && (!['image/jpeg', 'image/png'].includes(file.type) || file.size > MAX_PHOTO_BYTES)) { setSubmitError(file.size > MAX_PHOTO_BYTES ? 'El comprobante debe pesar 5 MB o menos.' : 'El comprobante debe ser JPG o PNG.'); setClaimProof(null); return; } setSubmitError(''); setClaimProof(file); }} className="block w-full text-xs text-white/65 file:mr-3 file:rounded-full file:border-0 file:bg-white file:px-4 file:py-2 file:text-xs file:font-semibold file:text-black" />{claimProof && <p className="mt-2 truncate text-xs text-emerald-200">{claimProof.name}</p>}<p className="mt-3 text-[11px] leading-relaxed text-white/45">El comprobante se conservará de forma privada solo mientras se revisa tu solicitud y se eliminará al aprobarla o rechazarla. El correo queda registrado para contacto.</p></section>
+              </>}
+              {submitError && <p role="alert" className="mt-3 rounded-2xl bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{submitError}</p>}
+              {selectedClaimPlace && <button type="submit" disabled={isSubmitting || !claimProof} className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-white py-3.5 text-sm font-bold text-black disabled:opacity-50">{isSubmitting && <LoaderCircle className="h-4 w-4 animate-spin" />}{isSubmitting ? 'Enviando solicitud…' : 'Enviar para revisión'}</button>}
+            </form>
+          ) : (
           <form onSubmit={submit} className="min-h-0 overflow-y-auto px-5 pb-8 pt-4">
             <p className="mb-5 text-sm text-white/55">Comparte los datos que aparecerán en la ficha pública de tu negocio.</p>
 
@@ -156,6 +217,8 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
             <button type="submit" disabled={isSubmitting} style={{ backgroundColor: '#ffffff', color: '#111111' }} className="mt-6 flex w-full items-center justify-center gap-2 rounded-full !bg-white py-3.5 text-sm font-bold !text-black transition-transform active:scale-[0.98] disabled:opacity-75">{isSubmitting && <LoaderCircle className="h-4 w-4 animate-spin" />}{isSubmitting ? (photos.length ? 'Subiendo imágenes…' : 'Enviando…') : 'Enviar para aprobación'}</button>
             <p className="mt-3 text-center text-[11px] text-white/35">Tu ficha se publicará cuando nuestro equipo la apruebe.</p>
           </form>
+          )}
+          </>
         )}
       </motion.section>
     </>

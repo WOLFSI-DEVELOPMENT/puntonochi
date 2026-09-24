@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, PanInfo, AnimatePresence } from 'motion/react';
-import { X, Share, Phone, Globe, ShoppingBag, MoreHorizontal, Navigation, BookOpen, Link, MessageCircle, Twitter, Facebook } from 'lucide-react';
+import { X, Share, Phone, Globe, ShoppingBag, MoreHorizontal, Navigation, BookOpen, Link, MessageCircle, Twitter, Facebook, QrCode } from 'lucide-react';
 import { Place } from '../types';
 import CornerKit from '@cornerkit/core';
 
@@ -11,6 +11,8 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
   const [showWebsiteWarning, setShowWebsiteWarning] = useState(false);
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [showMenuModal, setShowMenuModal] = useState(false);
+  const businessUrl = `${window.location.origin}/place/${encodeURIComponent(place.id)}`;
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=176x176&margin=8&data=${encodeURIComponent(businessUrl)}`;
 
 
   useEffect(() => {
@@ -547,10 +549,17 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
               }}
             >
               <div className="w-12 h-1.5 bg-neutral-200 rounded-full mx-auto mb-6" />
-              <h3 className="font-bold text-xl text-neutral-900 mb-6 px-2 text-center">Compartir</h3>
+              <h3 className="font-bold text-xl text-neutral-900 mb-4 px-2 text-center">Compartir</h3>
+
+              <div className="mb-6 flex flex-col items-center rounded-2xl bg-neutral-50 p-4">
+                <img src={qrCodeUrl} alt={`Código QR para abrir ${place.name}`} className="h-36 w-36 rounded-lg bg-white p-2" />
+                <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-neutral-500">
+                  <QrCode className="h-4 w-4" /> Escanea para abrir {place.name}
+                </div>
+              </div>
               
               <div className="flex justify-around mb-8 px-2">
-                <button onClick={() => { navigator.clipboard.writeText(window.location.href); setShowShareModal(false); alert('Enlace copiado!'); }} className="flex flex-col items-center gap-2 group">
+                <button onClick={() => { navigator.clipboard.writeText(businessUrl); setShowShareModal(false); alert('Enlace copiado!'); }} className="flex flex-col items-center gap-2 group">
                   <div className="w-14 h-14 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-700 group-hover:bg-neutral-200 transition-colors">
                     <Link className="w-6 h-6" />
                   </div>

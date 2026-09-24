@@ -16,6 +16,8 @@ import { BusinessPromotionSheet } from './components/BusinessPromotionSheet';
 import { BusinessSubmissionSheet } from './components/BusinessSubmissionSheet';
 import { AdminPage } from './components/AdminPage';
 import { SplashScreen } from './components/SplashScreen';
+import { InstallAppPrompt } from './components/InstallAppPrompt';
+import { NotificationOptInBanner } from './components/NotificationOptInBanner';
 import CornerKit from '@cornerkit/core';
 import { Category, Place, Colonia } from './types';
 import { AnimatePresence, motion } from 'motion/react';
@@ -624,6 +626,8 @@ export default function App() {
         {loading && (
           <SplashScreen key="splash-screen" onFinish={() => setLoading(false)} />
         )}
+        <InstallAppPrompt enabled={!loading} />
+        <NotificationOptInBanner />
       </AnimatePresence>
     </div>
   );

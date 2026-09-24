@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import { ArrowLeft, ImagePlus, LoaderCircle, LogOut, Plus, Store } from 'lucide-react';
+import { ArrowLeft, Check, ImagePlus, LoaderCircle, LogOut, Plus, Store, X } from 'lucide-react';
 import { Place } from '../types';
 import { mockPlaces } from '../data';
 
@@ -18,6 +18,7 @@ type BusinessForm = {
   cost: string;
   imageUrl: string;
 };
+type BusinessClaim = { id: string; placeId: string; name: string; address: string; phone: string; description: string; email: string; hours: Record<string, { closed: boolean; intervals: { open: string; close: string }[] }>; proofName: string; proofMimeType: string; proofBase64: string; createdAt: string };
 
 const emptyForm: BusinessForm = {
   name: '', category: '', subtitle: '', location: 'Nochistlán de Mejía, Zacatecas',
@@ -45,11 +46,13 @@ export function AdminPage({ onClose }: AdminPageProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [claims, setClaims] = useState<BusinessClaim[]>([]);
 
   const loadPlaces = async () => {
     const result = await apiRequest<AdminPlace[]>('/api/admin/places');
     setPlaces(result);
   };
+  const loadClaims = async () => setClaims(await apiRequest<BusinessClaim[]>('/api/admin/business-claims'));
 
   useEffect(() => {
     let active = true;
@@ -65,6 +68,7 @@ export function AdminPage({ onClose }: AdminPageProps) {
           return;
         }
         await loadPlaces();
+        await loadClaims();
         if (active) setStatus('ready');
       })
       .catch((requestError: unknown) => {
@@ -89,6 +93,7 @@ export function AdminPage({ onClose }: AdminPageProps) {
       await apiRequest('/api/admin/login', { method: 'POST', body: JSON.stringify({ password }) });
       setPassword('');
       await loadPlaces();
+      await loadClaims();
       setStatus('ready');
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : 'No se pudo iniciar sesión.');
@@ -139,6 +144,17 @@ export function AdminPage({ onClose }: AdminPageProps) {
     }
   };
 
+  const reviewClaim = async (claim: BusinessClaim, decision: 'approved' | 'rejected') => {
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const result = await apiRequest<{ emailSent: boolean; emailConfigured: boolean }>(`/api/admin/business-claims/${encodeURIComponent(claim.id)}`, { method: 'PATCH', body: JSON.stringify({ status: decision }) });
+      await Promise.all([loadClaims(), loadPlaces()]);
+      const decisionText = decision === 'approved' ? `Se aprobaron los cambios de ${claim.name}.` : `Se rechazó la solicitud de ${claim.name}.`;
+      setNotice(`${decisionText} El comprobante fue eliminado.${result.emailSent ? ' Se envió el correo.' : result.emailConfigured ? ' No se pudo enviar el correo; revisa los registros del servidor.' : ' Configura RESEND_API_KEY y RESEND_FROM_EMAIL para enviar el correo.'}`);
+    } catch (reviewError) { setError(reviewError instanceof Error ? reviewError.message : 'No se pudo revisar la solicitud.'); }
+    finally { setBusy(false); }
+  };
+
   const logout = async () => {
     setBusy(true);
     try {
@@ -176,6 +192,12 @@ export function AdminPage({ onClose }: AdminPageProps) {
         </form>}
 
         {status === 'ready' && <div className="space-y-6">
+          <section className="space-y-3">
+            <div><h2 className="text-lg font-semibold">Reclamaciones de negocios</h2><p className="mt-1 text-sm text-white/50">{claims.length} solicitud{claims.length === 1 ? '' : 'es'} pendiente{claims.length === 1 ? '' : 's'}. El comprobante se elimina al decidir.</p></div>
+            {claims.map((claim) => <article key={claim.id} className="rounded-[24px] bg-[#202124] p-4 sm:p-5"><div className="grid gap-4 sm:grid-cols-[160px_1fr]"><img src={`data:${claim.proofMimeType};base64,${claim.proofBase64}`} alt={`Comprobante de ${claim.name}`} className="max-h-52 w-full rounded-2xl bg-white object-contain sm:h-40" /><div className="min-w-0"><h3 className="font-semibold">{claim.name}</h3><p className="mt-1 text-sm text-white/55">{claim.address} · {claim.phone}</p><p className="mt-1 text-sm text-white/55">{claim.email} · Archivo: {claim.proofName}</p>{claim.description && <p className="mt-2 text-sm text-white/75">{claim.description}</p>}<div className="mt-3 space-y-1 text-xs text-white/50">{Object.entries(claim.hours || {}).map(([day, hours]) => <p key={day}>{day}: {hours.closed ? 'Cerrado' : (hours.intervals || []).map((item) => `${item.open}–${item.close}`).join(', ')}</p>)}</div><div className="mt-4 flex gap-2"><button type="button" disabled={busy} onClick={() => reviewClaim(claim, 'approved')} className="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"><Check className="h-4 w-4" />Aprobar y actualizar</button><button type="button" disabled={busy} onClick={() => reviewClaim(claim, 'rejected')} className="flex items-center gap-2 rounded-full bg-white/[0.08] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"><X className="h-4 w-4" />Rechazar</button></div></div></div></article>)}
+            {!claims.length && <p className="rounded-[20px] bg-[#202124] p-4 text-sm text-white/55">No hay reclamaciones pendientes.</p>}
+          </section>
+          {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}{notice && <p role="status" className="text-sm text-emerald-300">{notice}</p>}
           <form onSubmit={createBusiness} className="space-y-4 rounded-[24px] bg-[#202124] p-5 sm:p-6">
             <div><h2 className="text-lg font-semibold">Crear negocio</h2><p className="mt-1 text-sm text-white/50">Los datos se guardan directamente en Neon.</p></div>
             <div className="grid gap-3 sm:grid-cols-2">

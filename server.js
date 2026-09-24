@@ -1,9 +1,13 @@
 import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
+import dotenv from 'dotenv';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { neon } from '@neondatabase/serverless';
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import webpush from 'web-push';
+
+dotenv.config({ path: '.env.notifications' });
 
 const app = express();
 app.set('trust proxy', 1);
@@ -170,6 +174,22 @@ const ensureSubmissionSchema = () => {
       size_bytes INTEGER NOT NULL CHECK (size_bytes <= 5242880),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
+    await sql`CREATE TABLE IF NOT EXISTS business_claims (
+      id TEXT PRIMARY KEY,
+      place_id TEXT NOT NULL,
+      business_name TEXT NOT NULL,
+      address TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      contact_email TEXT NOT NULL,
+      weekly_hours JSONB NOT NULL,
+      proof_name TEXT NOT NULL,
+      proof_mime_type TEXT NOT NULL CHECK (proof_mime_type IN ('image/jpeg', 'image/png')),
+      proof_base64 TEXT,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      reviewed_at TIMESTAMPTZ
+    )`;
     await sql`CREATE TABLE IF NOT EXISTS promotion_orders (
       id TEXT PRIMARY KEY,
       place_id TEXT NOT NULL,
@@ -195,6 +215,37 @@ const ensureSubmissionSchema = () => {
   })().catch((error) => { schemaReady = undefined; throw error; });
   return schemaReady;
 };
+
+let pushSchemaReady;
+const ensurePushSchema = () => {
+  if (!pushSchemaReady) pushSchemaReady = sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
+    endpoint TEXT PRIMARY KEY,
+    subscription JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`.catch((error) => { pushSchemaReady = undefined; throw error; });
+  return pushSchemaReady;
+};
+
+app.get('/api/notifications/vapid-public-key', (_req, res) => {
+  if (!process.env.VAPID_PUBLIC_KEY) return res.status(503).json({ error: 'Las notificaciones aún no están configuradas.' });
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
+});
+
+app.post('/api/notifications/subscribe', requireNeon, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    const subscription = req.body?.subscription;
+    if (!subscription?.endpoint?.startsWith('https://') || !subscription.keys?.p256dh || !subscription.keys?.auth) return res.status(400).json({ error: 'La suscripción de notificaciones no es válida.' });
+    await ensurePushSchema();
+    await sql`INSERT INTO push_subscriptions (endpoint, subscription) VALUES (${subscription.endpoint}, ${JSON.stringify(subscription)}::jsonb) ON CONFLICT (endpoint) DO UPDATE SET subscription = EXCLUDED.subscription, updated_at = NOW()`;
+    res.status(201).json({ subscribed: true });
+  } catch (error) {
+    console.error('Push subscription save failed:', error);
+    res.status(500).json({ error: 'No se pudo activar la suscripción.' });
+  }
+});
 
 app.post('/api/business-applications', requireNeon, async (req, res) => {
   try {
@@ -250,6 +301,81 @@ app.post('/api/business-applications/:id/submit', requireNeon, async (req, res) 
   } catch (error) {
     console.error('Business application submit failed:', error);
     res.status(500).json({ error: 'Could not submit the business application.' });
+  }
+});
+
+app.post('/api/business-claims', requireNeon, async (req, res) => {
+  try {
+    const { placeId, name, address, phone, description = '', email, hours, proofName, proofMimeType, proofBase64 } = req.body || {};
+    if (![placeId, name, address, phone, email, proofName].every((value) => typeof value === 'string' && value.trim()) || !hours || typeof hours !== 'object') {
+      return res.status(400).json({ error: 'Completa los datos del negocio, el horario y el comprobante.' });
+    }
+    if (!['image/jpeg', 'image/png'].includes(proofMimeType) || typeof proofBase64 !== 'string') return res.status(400).json({ error: 'El comprobante debe ser JPG o PNG.' });
+    const proof = Buffer.from(proofBase64, 'base64');
+    if (!proof.length || proof.length > 5 * 1024 * 1024) return res.status(413).json({ error: 'El comprobante debe pesar 5 MB o menos.' });
+    await ensureDirectorySchema();
+    const [existingPlace] = await sql`SELECT id FROM places WHERE id = ${placeId.trim()}`;
+    if (!existingPlace) return res.status(404).json({ error: 'No encontramos el negocio seleccionado.' });
+    await ensureSubmissionSchema();
+    const id = randomUUID();
+    await sql`INSERT INTO business_claims (id, place_id, business_name, address, phone, description, contact_email, weekly_hours, proof_name, proof_mime_type, proof_base64)
+      VALUES (${id}, ${placeId.trim()}, ${name.trim()}, ${address.trim()}, ${phone.trim()}, ${String(description).trim().slice(0, 1600)}, ${email.trim()}, ${JSON.stringify(hours)}, ${proofName.trim().slice(0, 180)}, ${proofMimeType}, ${proof.toString('base64')})`;
+    res.status(201).json({ id, submitted: true });
+  } catch (error) {
+    console.error('Business claim create failed:', error);
+    res.status(500).json({ error: 'No se pudo enviar la solicitud de reclamación.' });
+  }
+});
+
+app.get('/api/admin/business-claims', requireAdmin, requireNeon, async (_req, res) => {
+  try {
+    await ensureSubmissionSchema();
+    await ensureDirectorySchema();
+    const claims = await sql`SELECT id, place_id AS "placeId", business_name AS name, address, phone, description, contact_email AS email, weekly_hours AS hours, proof_name AS "proofName", proof_mime_type AS "proofMimeType", proof_base64 AS "proofBase64", created_at AS "createdAt" FROM business_claims WHERE status = 'pending' ORDER BY created_at ASC`;
+    res.json(claims);
+  } catch (error) {
+    console.error('Could not load business claims:', error);
+    res.status(500).json({ error: 'No se pudieron cargar las solicitudes.' });
+  }
+});
+
+app.patch('/api/admin/business-claims/:id', requireAdmin, requireNeon, async (req, res) => {
+  try {
+    const status = req.body?.status;
+    if (!['approved', 'rejected'].includes(status)) return res.status(400).json({ error: 'La decisión debe ser aprobar o rechazar.' });
+    await ensureSubmissionSchema();
+    const [claim] = await sql`SELECT place_id, business_name, address, phone, description, contact_email, weekly_hours FROM business_claims WHERE id = ${req.params.id} AND status = 'pending'`;
+    if (!claim) return res.status(404).json({ error: 'Solicitud pendiente no encontrada.' });
+    if (status === 'approved') {
+      const readableHours = Object.entries(claim.weekly_hours || {}).map(([day, schedule]) => {
+        if (schedule?.closed) return `${day}: cerrado`;
+        const intervals = (schedule?.intervals || []).map(({ open, close }) => `${open}–${close}`).join(' y ');
+        return `${day}: ${intervals}`;
+      }).join(' · ');
+      await sql`UPDATE places SET name = ${claim.business_name}, address = ${claim.address}, phone = ${claim.phone}, subtitle = ${claim.description}, hours = ${readableHours} WHERE id = ${claim.place_id}`;
+    }
+    await sql`UPDATE business_claims SET status = ${status}, proof_base64 = NULL, reviewed_at = NOW() WHERE id = ${req.params.id}`;
+    let emailSent = false;
+    if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
+      try {
+        const emailResponse = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from: process.env.RESEND_FROM_EMAIL,
+            to: [claim.contact_email],
+            subject: status === 'approved' ? 'Tu negocio fue verificado en PuntoNochi' : 'Actualización de tu solicitud en PuntoNochi',
+            html: `<div style="font-family:Arial,sans-serif;background:#121212;color:#f5f5f5;padding:32px;border-radius:24px"><p style="color:#9ca3af;letter-spacing:.12em">PUNTONOCHI</p><h1>${status === 'approved' ? '¡Negocio verificado!' : 'Solicitud revisada'}</h1><p>Hola, revisamos la solicitud para <strong>${String(claim.business_name).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char])}</strong>.</p><p>${status === 'approved' ? 'Los cambios fueron aplicados a la ficha del negocio.' : 'No pudimos aprobarla en esta revisión. Puedes enviar una nueva solicitud con información adicional.'}</p><p>El comprobante que compartiste ya fue eliminado.</p></div>`,
+          }),
+        });
+        if (!emailResponse.ok) console.error('Business claim decision email failed:', await emailResponse.text());
+        else emailSent = true;
+      } catch (emailError) { console.error('Business claim decision email failed:', emailError); }
+    }
+    res.json({ reviewed: true, status, emailSent, emailConfigured: Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) });
+  } catch (error) {
+    console.error('Business claim review failed:', error);
+    res.status(500).json({ error: 'No se pudo guardar la decisión.' });
   }
 });
 
