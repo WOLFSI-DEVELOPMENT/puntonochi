@@ -1,11 +1,12 @@
 import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
-import { randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { neon } from '@neondatabase/serverless';
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
 const app = express();
+app.set('trust proxy', 1);
 const port = 3001;
 
 app.use(cors());
@@ -24,6 +25,100 @@ const requireNeon = (req, res, next) => {
   if (!sql) return res.status(503).json({ error: 'Neon is not configured. Set DATABASE_URL in the server environment.' });
   next();
 };
+
+const ADMIN_COOKIE = 'puntonochi_admin';
+const ADMIN_SESSION_TTL_SECONDS = 8 * 60 * 60;
+const hasAdminConfig = () => Boolean(
+  process.env.ADMIN_PASSWORD && process.env.ADMIN_PASSWORD.length >= 12 &&
+  process.env.ADMIN_SESSION_SECRET && process.env.ADMIN_SESSION_SECRET.length >= 32,
+);
+const safeEqual = (left, right) => timingSafeEqual(
+  createHash('sha256').update(String(left)).digest(),
+  createHash('sha256').update(String(right)).digest(),
+);
+const getCookieValue = (req, name) => {
+  const entry = (req.headers.cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
+  return entry ? entry.slice(name.length + 1) : '';
+};
+const signAdminPayload = (payload) => createHmac('sha256', process.env.ADMIN_SESSION_SECRET).update(payload).digest('base64url');
+const isAdminSessionValid = (req) => {
+  if (!hasAdminConfig()) return false;
+  const token = getCookieValue(req, ADMIN_COOKIE);
+  const separator = token.lastIndexOf('.');
+  if (separator < 1) return false;
+  const payload = token.slice(0, separator);
+  const suppliedSignature = Buffer.from(token.slice(separator + 1), 'base64url');
+  const expectedSignature = Buffer.from(signAdminPayload(payload), 'base64url');
+  if (suppliedSignature.length !== expectedSignature.length || !timingSafeEqual(suppliedSignature, expectedSignature)) return false;
+  try {
+    return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')).expiresAt > Date.now();
+  } catch {
+    return false;
+  }
+};
+const requireAdmin = (req, res, next) => {
+  if (!hasAdminConfig()) return res.status(503).json({ error: 'Admin access needs ADMIN_PASSWORD (12+ characters) and ADMIN_SESSION_SECRET (32+ characters) in the server environment.' });
+  if (!isAdminSessionValid(req)) return res.status(401).json({ error: 'Inicia sesión como administrador.' });
+  next();
+};
+const ensureSameOrigin = (req, res) => {
+  const origin = req.get('origin');
+  let sameOrigin = !origin;
+  try {
+    if (origin) {
+      const parsedOrigin = new URL(origin);
+      sameOrigin = parsedOrigin.host === req.get('host') && parsedOrigin.protocol === `${req.protocol}:`;
+      if (!sameOrigin && process.env.NODE_ENV !== 'production') {
+        sameOrigin = ['localhost', '127.0.0.1'].includes(parsedOrigin.hostname) && ['localhost', '127.0.0.1'].includes(req.hostname);
+      }
+    }
+  } catch {
+    sameOrigin = false;
+  }
+  if (!sameOrigin) {
+    res.status(403).json({ error: 'Solicitud de origen no válido.' });
+    return false;
+  }
+  return true;
+};
+const isPlaceholderImage = (value) => /placeholder|no[-_ ]?image|image[-_ ]?not[-_ ]?found|default[-_ ]?(?:image|photo)|no[-_ ]?photo/i.test(String(value || ''));
+const parseImageUrl = (value) => {
+  if (typeof value !== 'string' || !value.trim() || value.trim().length > 2048) return null;
+  try {
+    const url = new URL(value.trim());
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
+  } catch {
+    return null;
+  }
+};
+
+app.get('/api/admin/session', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const configured = hasAdminConfig();
+  res.json({ configured, authenticated: configured && isAdminSessionValid(req) });
+});
+
+app.post('/api/admin/login', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!ensureSameOrigin(req, res)) return;
+  if (!hasAdminConfig()) return res.status(503).json({ error: 'Admin access needs ADMIN_PASSWORD (12+ characters) and ADMIN_SESSION_SECRET (32+ characters) in the server environment.' });
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  if (!safeEqual(password, process.env.ADMIN_PASSWORD)) return res.status(401).json({ error: 'Contraseña incorrecta.' });
+
+  const payload = Buffer.from(JSON.stringify({ expiresAt: Date.now() + ADMIN_SESSION_TTL_SECONDS * 1000 })).toString('base64url');
+  const token = `${payload}.${signAdminPayload(payload)}`;
+  const secure = process.env.NODE_ENV === 'production' || req.secure;
+  res.setHeader('Set-Cookie', `${ADMIN_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/api/admin; SameSite=Strict; Max-Age=${ADMIN_SESSION_TTL_SECONDS}${secure ? '; Secure' : ''}`);
+  res.json({ authenticated: true });
+});
+
+app.post('/api/admin/logout', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!ensureSameOrigin(req, res)) return;
+  const secure = process.env.NODE_ENV === 'production' || req.secure;
+  res.setHeader('Set-Cookie', `${ADMIN_COOKIE}=; HttpOnly; Path=/api/admin; SameSite=Strict; Max-Age=0${secure ? '; Secure' : ''}`);
+  res.json({ authenticated: false });
+});
 
 let directorySchemaReady;
 const ensureDirectorySchema = () => {
@@ -393,6 +488,81 @@ app.get('/api/places', requireNeon, async (req, res) => {
   } catch (error) {
     console.error('Could not load places from Neon:', error);
     res.status(500).json({ error: 'No se pudieron cargar los negocios.' });
+  }
+});
+
+app.get('/api/admin/places', requireAdmin, requireNeon, async (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    await ensureDirectorySchema();
+    const places = await sql`SELECT id, name, category, subtitle, location, address,
+      map_url AS "mapUrl", images, logo, rating, review_count AS "reviewCount",
+      is_open AS "isOpen", cost, distance, good_to_know AS "goodToKnow", hours,
+      lat, lng, phone FROM places ORDER BY sort_order, name`;
+    res.json(places.map((place) => ({
+      ...place,
+      images: Array.isArray(place.images) ? place.images : [],
+      goodToKnow: Array.isArray(place.goodToKnow) ? place.goodToKnow : [],
+    })));
+  } catch (error) {
+    console.error('Could not load admin business list:', error);
+    res.status(500).json({ error: 'No se pudieron cargar los negocios.' });
+  }
+});
+
+app.post('/api/admin/places', requireAdmin, requireNeon, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    await ensureDirectorySchema();
+    const body = req.body || {};
+    const name = typeof body.name === 'string' ? body.name.trim().slice(0, 180) : '';
+    const category = typeof body.category === 'string' ? body.category.trim().slice(0, 100) : '';
+    const subtitle = typeof body.subtitle === 'string' ? body.subtitle.trim().slice(0, 500) : '';
+    const location = typeof body.location === 'string' ? body.location.trim().slice(0, 180) : '';
+    const address = typeof body.address === 'string' ? body.address.trim().slice(0, 300) : '';
+    const phone = typeof body.phone === 'string' ? body.phone.trim().slice(0, 60) : '';
+    const hours = typeof body.hours === 'string' && body.hours.trim() ? body.hours.trim().slice(0, 180) : 'Por confirmar';
+    const cost = Number(body.cost || 1);
+    const imageUrl = body.imageUrl ? parseImageUrl(body.imageUrl) : null;
+    if (!name || !category || !location) return res.status(400).json({ error: 'Nombre, categoría y ubicación son obligatorios.' });
+    if (body.imageUrl && !imageUrl) return res.status(400).json({ error: 'La imagen debe tener una URL HTTP o HTTPS válida.' });
+    if (!Number.isInteger(cost) || cost < 1 || cost > 4) return res.status(400).json({ error: 'El rango de precio debe ser de 1 a 4.' });
+
+    const id = `admin-${randomUUID()}`;
+    const images = imageUrl ? [imageUrl] : [];
+    const [place] = await sql`INSERT INTO places (
+      id, name, category, subtitle, location, address, images, logo, rating,
+      review_count, is_open, cost, distance, good_to_know, hours, sort_order, phone
+    ) VALUES (
+      ${id}, ${name}, ${category}, ${subtitle || null}, ${location}, ${address || null},
+      ${JSON.stringify(images)}::jsonb, NULL, 0, 0, FALSE, ${cost}, '',
+      '[]'::jsonb, ${hours}, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM places), ${phone || null}
+    ) RETURNING id, name, category, subtitle, location, address, map_url AS "mapUrl", images, logo,
+      rating, review_count AS "reviewCount", is_open AS "isOpen", cost, distance,
+      good_to_know AS "goodToKnow", hours, lat, lng, phone`;
+    res.status(201).json({ ...place, images: Array.isArray(place.images) ? place.images : [] });
+  } catch (error) {
+    console.error('Could not create admin business:', error);
+    res.status(500).json({ error: 'No se pudo guardar el negocio.' });
+  }
+});
+
+app.patch('/api/admin/places/:id/image', requireAdmin, requireNeon, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  const imageUrl = parseImageUrl(req.body?.imageUrl);
+  if (!imageUrl) return res.status(400).json({ error: 'La imagen debe tener una URL HTTP o HTTPS válida.' });
+  try {
+    await ensureDirectorySchema();
+    const [place] = await sql`SELECT id, images FROM places WHERE id = ${req.params.id}`;
+    if (!place) return res.status(404).json({ error: 'No se encontró el negocio.' });
+    const existingImages = Array.isArray(place.images) ? place.images : [];
+    const realImages = existingImages.filter((image) => typeof image === 'string' && image && !isPlaceholderImage(image) && image !== imageUrl);
+    const images = [imageUrl, ...realImages];
+    await sql`UPDATE places SET images = ${JSON.stringify(images)}::jsonb WHERE id = ${place.id}`;
+    res.json({ id: place.id, images });
+  } catch (error) {
+    console.error('Could not update admin business image:', error);
+    res.status(500).json({ error: 'No se pudo guardar la imagen.' });
   }
 });
 

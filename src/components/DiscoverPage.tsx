@@ -70,7 +70,12 @@ export function DiscoverPage({ onSelectBusiness }: { onSelectBusiness: (place: P
       setFeedVersion((version) => version + 1);
     };
     window.addEventListener('community-post-published', refreshPublishedPost);
-    return () => window.removeEventListener('community-post-published', refreshPublishedPost);
+    const refreshBusinessDirectory = () => setFeedVersion((version) => version + 1);
+    window.addEventListener('business-directory-updated', refreshBusinessDirectory);
+    return () => {
+      window.removeEventListener('community-post-published', refreshPublishedPost);
+      window.removeEventListener('business-directory-updated', refreshBusinessDirectory);
+    };
   }, []);
 
   useMotionValueEvent(scrollY, "change", (latest) => {

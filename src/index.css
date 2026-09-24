@@ -90,6 +90,7 @@
 .dark [class*="border-white"] { border-color: #3c4043 !important; }
 .dark input:not(.search-input-fix):not([type="checkbox"]) { background-color: #202124 !important; color: #fff !important; }
 .dark input.search-input-fix, input.search-input-fix { background-color: transparent !important; background: transparent !important; }
+.dark .admin-login-button { background-color: #ffffff !important; color: #111111 !important; }
 
 .material-symbols-rounded {
   font-family: 'Material Symbols Rounded';

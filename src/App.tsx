@@ -14,6 +14,7 @@ import { NewsPage } from './components/NewsPage';
 import { SearchPage } from './components/SearchPage';
 import { BusinessPromotionSheet } from './components/BusinessPromotionSheet';
 import { BusinessSubmissionSheet } from './components/BusinessSubmissionSheet';
+import { AdminPage } from './components/AdminPage';
 import { SplashScreen } from './components/SplashScreen';
 import CornerKit from '@cornerkit/core';
 import { Category, Place, Colonia } from './types';
@@ -50,9 +51,12 @@ export default function App() {
     let initialBusiness = null;
     let initShowAllCategories = false;
     let initShowColonias = false;
+    let initShowAdmin = false;
 
     if (parts.length > 0) {
-      if (parts[0] === 'categories') {
+      if (parts[0] === 'admin') {
+        initShowAdmin = true;
+      } else if (parts[0] === 'categories') {
         initShowAllCategories = true;
       } else if (parts[0] === 'colonias') {
         initShowColonias = true;
@@ -74,13 +78,14 @@ export default function App() {
       }
     }
     
-    return { initialTab, initialCategory, initialBusiness, initShowAllCategories, initShowColonias };
+    return { initialTab, initialCategory, initialBusiness, initShowAllCategories, initShowColonias, initShowAdmin };
   };
 
   const init = getInitialState();
 
   const [showColonias, setShowColonias] = useState(init.initShowColonias);
   const [showAllCategories, setShowAllCategories] = useState(init.initShowAllCategories);
+  const [showAdminPage, setShowAdminPage] = useState(init.initShowAdmin);
   const [showDestacados, setShowDestacados] = useState(false);
   const [showBusinessPromotion, setShowBusinessPromotion] = useState(false);
   const [showBusinessSubmission, setShowBusinessSubmission] = useState(false);
@@ -91,6 +96,7 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [directoryVersion, setDirectoryVersion] = useState(0);
 
   const [destacadosState, setDestacadosState] = useState({ index: 0, direction: 0 });
 
@@ -119,7 +125,7 @@ export default function App() {
       }
     }
     return results;
-  }, [mockPlaces]);
+  }, [mockPlaces, directoryVersion]);
 
   const paginateDestacados = (newDirection: number) => {
     if (destacadosPlaces.length === 0) return;
@@ -161,7 +167,9 @@ export default function App() {
 
   useEffect(() => {
     let path = '/';
-    if (showSearch) {
+    if (showAdminPage) {
+      path = '/admin';
+    } else if (showSearch) {
       path = '/buscar';
     } else if (selectedBusiness) {
       // If a business is selected, ideally we show /category/business-name
@@ -182,7 +190,7 @@ export default function App() {
     }
     
     window.history.pushState({}, '', path);
-  }, [selectedBusiness, selectedCategory, showAllCategories, showColonias, activeTab, showSearch]);
+  }, [selectedBusiness, selectedCategory, showAllCategories, showColonias, activeTab, showSearch, showAdminPage]);
 
   useEffect(() => {
     let title = 'PuntoNochi | Lugares, negocios y noticias de Nochistlán';
@@ -192,6 +200,10 @@ export default function App() {
     if (selectedBusiness) {
       title = `${selectedBusiness.name} | ${selectedBusiness.category} en Nochistlán | PuntoNochi`;
       description = `${selectedBusiness.name}: ${selectedBusiness.category} en ${selectedBusiness.location || 'Nochistlán de Mejía, Zacatecas'}. Consulta fotos, ubicación y datos del negocio en PuntoNochi.`;
+    } else if (showAdminPage) {
+      title = 'Administración | PuntoNochi';
+      description = 'Panel privado de administración de PuntoNochi.';
+      noIndex = true;
     } else if (showSearch) {
       title = 'Buscar negocios en Nochistlán | PuntoNochi';
       description = 'Busca negocios, restaurantes, servicios y lugares en Nochistlán de Mejía, Zacatecas.';
@@ -286,12 +298,17 @@ export default function App() {
       document.head.appendChild(schemaScript);
     }
     schemaScript.textContent = JSON.stringify(pageSchema).replace(/</g, '\\u003c');
-  }, [activeTab, selectedBusiness, selectedCategory, showAllCategories, showColonias, showSearch]);
+  }, [activeTab, selectedBusiness, selectedCategory, showAllCategories, showColonias, showSearch, showAdminPage]);
 
   useEffect(() => {
     const onSearchQuery = (event: Event) => setSearchQuery((event as CustomEvent<string>).detail);
+    const onDirectoryChange = () => setDirectoryVersion((version) => version + 1);
     window.addEventListener('appSearchQuery', onSearchQuery);
-    return () => window.removeEventListener('appSearchQuery', onSearchQuery);
+    window.addEventListener('business-directory-updated', onDirectoryChange);
+    return () => {
+      window.removeEventListener('appSearchQuery', onSearchQuery);
+      window.removeEventListener('business-directory-updated', onDirectoryChange);
+    };
   }, []);
 
   return (
@@ -532,12 +549,13 @@ export default function App() {
       </AnimatePresence>
 
       {/* Bottom Navigation & Search */}
-      {!showSearch && (
+      {!showSearch && !showAdminPage && (
         <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => setShowSearch(true)} />
       )}
 
       {/* Pages & Overlays */}
       <AnimatePresence>
+        {showAdminPage && <AdminPage key="admin-page" onClose={() => setShowAdminPage(false)} />}
         {showBusinessPromotion && <BusinessPromotionSheet key="business-promotion" onClose={() => setShowBusinessPromotion(false)} />}
         {showBusinessSubmission && <BusinessSubmissionSheet key="business-submission" onClose={() => setShowBusinessSubmission(false)} />}
         {showSearch && (
