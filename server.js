@@ -117,8 +117,16 @@ const parseImageUrl = (value) => {
 app.get('/api/admin/session', async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try {
-    const session = await getAdminSession(req);
-    res.json({ configured: Boolean(sql && isGoogleOAuthConfigured()), authenticated: Boolean(session), email: session?.email || null });
+    const databaseConfigured = Boolean(sql);
+    const googleConfigured = isGoogleOAuthConfigured();
+    const session = databaseConfigured ? await getAdminSession(req) : null;
+    res.json({
+      configured: databaseConfigured && googleConfigured,
+      databaseConfigured,
+      googleConfigured,
+      authenticated: Boolean(session),
+      email: session?.email || null,
+    });
   } catch (error) {
     console.error('Admin configuration check failed:', error);
     res.status(503).json({ configured: false, authenticated: false, email: null, error: 'No se pudo comprobar la configuración en Neon.' });

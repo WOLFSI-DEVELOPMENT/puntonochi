@@ -5,7 +5,7 @@ import { Place } from '../types';
 import { mockPlaces } from '../data';
 
 type AdminPageProps = { onClose: () => void };
-type AdminStatus = 'checking' | 'not-configured' | 'login' | 'ready';
+type AdminStatus = 'checking' | 'not-configured' | 'login' | 'ready' | 'api-error';
 type AdminPlace = Pick<Place, 'id' | 'name' | 'category' | 'location' | 'images'> & Partial<Pick<Place, 'subtitle' | 'address' | 'phone' | 'hours' | 'cost'>>;
 type BusinessForm = {
   name: string;
@@ -32,6 +32,10 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: { ...(init?.body ? { 'Content-Type': 'application/json' } : {}), ...init?.headers },
   });
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.toLowerCase().includes('application/json')) {
+    throw new Error(`La ruta ${path} no respondió JSON (HTTP ${response.status}). Revisa la función API y vuelve a desplegar.`);
+  }
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(result.error || 'No se pudo completar la solicitud.');
   return result as T;
@@ -61,11 +65,14 @@ export function AdminPage({ onClose }: AdminPageProps) {
       setError(loginError);
       window.history.replaceState({}, '', `${window.location.pathname}${window.location.hash}`);
     }
-    apiRequest<{ configured: boolean; authenticated: boolean; email?: string | null }>('/api/admin/session')
+    apiRequest<{ configured: boolean; databaseConfigured?: boolean; googleConfigured?: boolean; authenticated: boolean; email?: string | null }>('/api/admin/session')
       .then(async (session) => {
         if (!active) return;
         if (!session.configured) {
           setStatus('not-configured');
+          if (session.databaseConfigured === false) setError('Falta DATABASE_URL en el entorno de Producción de Vercel.');
+          else if (session.googleConfigured === false) setError('La función de Vercel no está recibiendo GOOGLE_CLIENT_ID o GOOGLE_CLIENT_SECRET. Confirma que ambos estén en Production y vuelve a desplegar.');
+          else setError('La función API está usando una versión anterior. Vuelve a desplegar el proyecto en Vercel.');
           return;
         }
         if (!session.authenticated) {
@@ -80,7 +87,7 @@ export function AdminPage({ onClose }: AdminPageProps) {
       .catch((requestError: unknown) => {
         if (active) {
           setError(requestError instanceof Error ? requestError.message : 'No se pudo abrir el panel.');
-          setStatus('login');
+          setStatus('api-error');
         }
       });
     return () => { active = false; };
@@ -171,7 +178,9 @@ export function AdminPage({ onClose }: AdminPageProps) {
 
         {status === 'checking' && <div className="flex items-center justify-center gap-2 py-16 text-sm text-white/60"><LoaderCircle className="h-5 w-5 animate-spin" />Comprobando acceso…</div>}
 
-        {status === 'not-configured' && <section className="rounded-[24px] bg-[#202124] p-5"><h2 className="font-semibold">Falta configurar Google</h2><p className="mt-2 text-sm leading-relaxed text-white/60">Agrega <code>GOOGLE_CLIENT_ID</code> y <code>GOOGLE_CLIENT_SECRET</code> como variables del servidor en Vercel y vuelve a desplegar.</p></section>}
+        {status === 'not-configured' && <section className="rounded-[24px] bg-[#202124] p-5"><h2 className="font-semibold">Falta configurar el acceso</h2><p role="alert" className="mt-2 text-sm leading-relaxed text-white/60">{error}</p></section>}
+
+        {status === 'api-error' && <section className="rounded-[24px] bg-[#202124] p-5"><h2 className="font-semibold">No se pudo comprobar el acceso</h2><p role="alert" className="mt-2 text-sm leading-relaxed text-white/60">{error}</p><button type="button" onClick={() => window.location.reload()} className="mt-4 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black">Reintentar</button></section>}
 
         {status === 'login' && <section className="rounded-[24px] bg-[#202124] p-5 sm:p-6">
           <div className="mb-5 flex items-center gap-3"><span className="rounded-2xl bg-white/[0.08] p-3"><Store className="h-5 w-5" /></span><div><h2 className="font-semibold">Acceso de administrador</h2><p className="text-sm text-white/50">Continúa con una de las cuentas Google autorizadas.</p></div></div>
