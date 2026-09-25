@@ -3,6 +3,14 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/api/admin/session", "destination": "/api/admin-dispatch?__adminPath=session" },
+    { "source": "/api/admin/oauth/start", "destination": "/api/admin-dispatch?__adminPath=oauth/start" },
+    { "source": "/api/admin/oauth/callback", "destination": "/api/admin-dispatch?__adminPath=oauth/callback" },
+    { "source": "/api/admin/logout", "destination": "/api/admin-dispatch?__adminPath=logout" },
+    { "source": "/api/admin/business-claims", "destination": "/api/admin-dispatch?__adminPath=business-claims" },
+    { "source": "/api/admin/business-claims/:id", "destination": "/api/admin-dispatch?__adminPath=business-claims/:id" },
+    { "source": "/api/admin/places", "destination": "/api/admin-dispatch?__adminPath=places" },
+    { "source": "/api/admin/places/:id/image", "destination": "/api/admin-dispatch?__adminPath=places/:id/image" },
     { "source": "/:path((?!api/).*)", "destination": "/index.html" }
   ],
   "crons": [
