@@ -3,6 +3,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/api/places/:id/reviews", "destination": "/api/places?__reviewPlaceId=:id" },
     { "source": "/api/admin/session", "destination": "/api/admin-dispatch?__adminPath=session" },
     { "source": "/api/admin/oauth/start", "destination": "/api/admin-dispatch?__adminPath=oauth/start" },
     { "source": "/api/admin/oauth/callback", "destination": "/api/admin-dispatch?__adminPath=oauth/callback" },
