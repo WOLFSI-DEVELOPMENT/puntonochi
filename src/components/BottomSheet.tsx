@@ -2,6 +2,7 @@ import { motion } from 'motion/react';
 import { X } from 'lucide-react';
 import React, { useEffect } from 'react';
 import { cn } from '../utils';
+import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 
 interface BottomSheetProps {
   children: React.ReactNode;
@@ -10,6 +11,7 @@ interface BottomSheetProps {
 }
 
 export function BottomSheet({ children, onClose, fullHeight = false }: BottomSheetProps) {
+  const sheetDrag = useSheetDrag(onClose);
   // Prevent body scroll when open
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -28,18 +30,11 @@ export function BottomSheet({ children, onClose, fullHeight = false }: BottomShe
         className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm"
       />
       <motion.div
-        drag="y"
-        dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={0.2}
-        onDragEnd={(e, { offset, velocity }) => {
-          if (offset.y > 100 || velocity.y > 500) {
-            onClose();
-          }
-        }}
+        {...sheetDrag}
         initial={{ y: '100%' }}
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
-        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        transition={{ type: 'spring', damping: 32, stiffness: 360, mass: 0.82 }}
         className={cn(
           "fixed inset-x-0 bottom-0 z-50 bg-white squircle overflow-hidden flex flex-col shadow-2xl",
           fullHeight ? "h-[90vh]" : "max-h-[90vh]"
@@ -61,9 +56,7 @@ export function BottomSheet({ children, onClose, fullHeight = false }: BottomShe
           </button>
         </div>
 
-        <div className="sticky top-0 w-full pt-3 pb-2 flex justify-center z-10 shrink-0 touch-none">
-          <div className="w-12 h-1.5 bg-neutral-300 rounded-full" />
-        </div>
+        <SheetDragHandle controls={sheetDrag.dragControls} tone="dark" className="sticky top-0 z-10 w-full bg-white" />
 
         <div className="flex-1 overflow-y-auto pb-8 scrollbar-hide">
           {children}

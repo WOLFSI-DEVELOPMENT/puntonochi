@@ -3,6 +3,10 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/api/events/:id/image", "destination": "/api/places?__eventPath=:id/image" },
+    { "source": "/api/events/:id", "destination": "/api/places?__eventPath=:id" },
+    { "source": "/api/events", "destination": "/api/places?__eventList=1" },
+    { "source": "/api/places/:id/overview", "destination": "/api/places?__overviewPlaceId=:id" },
     { "source": "/api/places/:id/reviews", "destination": "/api/places?__reviewPlaceId=:id" },
     { "source": "/api/admin/session", "destination": "/api/admin-dispatch?__adminPath=session" },
     { "source": "/api/admin/oauth/start", "destination": "/api/admin-dispatch?__adminPath=oauth/start" },

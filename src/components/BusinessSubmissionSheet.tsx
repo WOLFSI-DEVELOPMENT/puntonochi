@@ -1,10 +1,14 @@
-import { useState, FormEvent, ReactNode } from 'react';
+import { useEffect, useState, FormEvent, ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Camera, Check, Clock3, ImagePlus, LoaderCircle, MapPin, Phone, Plus, Store, Tag, Trash2, X, ShieldCheck, UserRoundCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Camera, Check, Clock3, ImagePlus, LoaderCircle, MapPin, Phone, Plus, Store, Tag, Trash2, X, ShieldCheck, UserRoundCheck } from 'lucide-react';
 import { apiFetch } from '../api';
 import { mockPlaces } from '../data';
 import type { Place } from '../types';
 import { createDefaultWeeklySchedule, WeeklyHoursEditor, type BusinessHours } from './WeeklyHoursEditor';
+import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
+import CornerKit from '@cornerkit/core';
+
+const businessSheetCornerKit = new CornerKit();
 
 const categories = [
   'Comida', 'Restaurantes y antojos', 'Vinos y Licores', 'Bebidas y Depósitos', 'Mercado',
@@ -28,6 +32,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
+  const sheetDrag = useSheetDrag(onClose);
   const [name, setName] = useState('');
   const [category, setCategory] = useState('Restaurante');
   const [description, setDescription] = useState('');
@@ -44,7 +49,9 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
   const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadedPhotoCount, setUploadedPhotoCount] = useState(0);
-  const [mode, setMode] = useState<'add' | 'claim'>('add');
+  const [mode, setMode] = useState<'choose' | 'add' | 'claim'>('choose');
+  const [addStep, setAddStep] = useState(0);
+  const [claimStep, setClaimStep] = useState(0);
   const [selectedClaimPlace, setSelectedClaimPlace] = useState<Place | null>(null);
   const [claimSearch, setClaimSearch] = useState('');
   const [claimName, setClaimName] = useState('');
@@ -55,6 +62,11 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
   const [claimProof, setClaimProof] = useState<File | null>(null);
   const [claimSubmitted, setClaimSubmitted] = useState(false);
   const [claimHours, setClaimHours] = useState<Record<string, BusinessHours>>(() => createDefaultWeeklySchedule());
+
+  useEffect(() => {
+    businessSheetCornerKit.apply('[data-business-sheet]', { radius: 32, smoothing: 1 });
+    businessSheetCornerKit.applyAll('[data-business-onboarding-card]', { radius: 28, smoothing: 1 });
+  }, [mode, submitted, claimSubmitted]);
 
   const addPhotos = (files: FileList | null) => {
     if (!files) return;
@@ -80,6 +92,7 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (addStep < 2) { setSubmitError(''); setAddStep((step) => step + 1); return; }
     setIsSubmitting(true);
     setUploadedPhotoCount(0);
     setSubmitError('');
@@ -118,6 +131,7 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
   };
   const submitClaim = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (claimStep < 2) { setSubmitError(''); setClaimStep((step) => step + 1); return; }
     if (!selectedClaimPlace || !claimProof) { setSubmitError('Selecciona un negocio y agrega un comprobante.'); return; }
     setIsSubmitting(true); setSubmitError('');
     try {
@@ -132,11 +146,12 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
   return (
     <>
       <motion.button aria-label="Cerrar formulario" className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
-      <motion.section role="dialog" aria-modal="true" aria-label="Registra tu negocio" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 280 }} className="fixed inset-x-0 bottom-0 z-[71] mx-auto flex max-h-[94dvh] w-full max-w-[680px] flex-col overflow-hidden rounded-t-[32px] bg-[#202124] text-white shadow-2xl">
-        <div className="flex shrink-0 items-center justify-between border-b border-white/[0.07] px-5 pb-4 pt-3">
-          <div className="mx-auto absolute left-1/2 top-2 h-1.5 w-12 -translate-x-1/2 rounded-full bg-white/20" />
-          <div className="pt-2"><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">PuntoNochi · Negocios</p><h2 className="mt-1 text-xl font-bold">{submitted || claimSubmitted ? 'Solicitud recibida' : mode === 'claim' ? 'Reclama tu negocio' : 'Presenta tu negocio'}</h2></div>
-          <button type="button" onClick={onClose} aria-label="Cerrar" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.07] text-white/70"><X className="h-5 w-5" /></button>
+      <motion.section {...sheetDrag} data-business-sheet role="dialog" aria-modal="true" aria-label="Registra tu negocio" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360, mass: 0.82 }} className="fixed inset-x-0 bottom-0 z-[71] mx-auto flex max-h-[94dvh] w-full max-w-[680px] flex-col overflow-hidden bg-[#202124] text-white shadow-2xl">
+        <div className="relative flex shrink-0 items-center justify-between border-b border-white/[0.07] px-5 pb-4 pt-7">
+          <SheetDragHandle controls={sheetDrag.dragControls} className="absolute inset-x-0 top-0" />
+          {mode !== 'choose' && !submitted && !claimSubmitted && <button type="button" onClick={() => { setMode('choose'); setSubmitError(''); }} aria-label="Volver a opciones" className="mr-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.07] text-white/80"><ArrowLeft className="h-5 w-5" /></button>}
+          <div className="min-w-0 flex-1 pt-2"><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">PuntoNochi · Negocios</p><h2 className="mt-1 text-xl font-bold">{submitted || claimSubmitted ? 'Solicitud recibida' : mode === 'choose' ? 'Tu negocio en PuntoNochi' : mode === 'claim' ? 'Reclamar o editar' : 'Agregar negocio'}</h2></div>
+          <button type="button" onClick={onClose} aria-label="Cerrar" className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.08] text-white/80"><X className="h-5 w-5" /></button>
         </div>
 
         {submitted || claimSubmitted ? (
@@ -146,37 +161,40 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
             <p className="mx-auto mt-3 max-w-sm text-[15px] leading-relaxed text-white/65">{claimSubmitted ? `El equipo revisará la solicitud de ${claimName} y eliminará el comprobante al resolverla.` : `Revisaremos los datos de ${name}.`}</p>
             <button type="button" onClick={onClose} className="mt-8 rounded-full bg-white px-7 py-3 text-sm font-bold text-[#202124]">Listo</button>
           </div>
-        ) : (
-          <>
-          <div className="shrink-0 border-b border-white/[0.07] px-5 py-3">
-            <div className="mx-auto flex w-fit rounded-full bg-[#292a2d] p-1" role="tablist" aria-label="Tipo de solicitud">
-              <button type="button" role="tab" aria-selected={mode === 'add'} onClick={() => { setMode('add'); setSubmitError(''); }} className={`rounded-full px-5 py-2 text-sm font-semibold ${mode === 'add' ? 'bg-[#36373b] !text-white' : 'text-white/60'}`}>Agregar</button>
-              <button type="button" role="tab" aria-selected={mode === 'claim'} onClick={() => { setMode('claim'); setSubmitError(''); }} className={`flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-semibold ${mode === 'claim' ? 'bg-white text-[#202124]' : 'text-white/60'}`}><UserRoundCheck className="h-4 w-4" />Reclamar/editar</button>
+        ) : mode === 'choose' ? (
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-8 pt-5">
+            <p className="mb-5 text-sm leading-relaxed text-white/55">Elige cómo quieres participar. Te guiaremos paso a paso.</p>
+            <div className="space-y-3">
+              <motion.button data-business-onboarding-card type="button" whileTap={{ scale: 0.985 }} onClick={() => { setMode('add'); setAddStep(0); }} className="flex w-full items-center gap-4 rounded-[28px] bg-[#292a2d] p-5 text-left transition-colors hover:bg-[#303134]">
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] bg-white/[0.08] text-white"><Store className="h-6 w-6"/></span><span className="min-w-0 flex-1"><span className="block text-base font-bold">Agregar un negocio</span><span className="mt-1 block text-sm leading-relaxed text-white/55">Registra un nuevo lugar para que la comunidad lo encuentre.</span></span><ArrowRight className="h-5 w-5 shrink-0 text-white/45"/>
+              </motion.button>
+              <motion.button data-business-onboarding-card type="button" whileTap={{ scale: 0.985 }} onClick={() => { setMode('claim'); setClaimStep(0); }} className="flex w-full items-center gap-4 rounded-[28px] bg-[#292a2d] p-5 text-left transition-colors hover:bg-[#303134]">
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] bg-white/[0.08] text-white"><UserRoundCheck className="h-6 w-6"/></span><span className="min-w-0 flex-1"><span className="block text-base font-bold">Editar o reclamar mi negocio</span><span className="mt-1 block text-sm leading-relaxed text-white/55">Actualiza los datos y confirma que eres responsable.</span></span><ArrowRight className="h-5 w-5 shrink-0 text-white/45"/>
+              </motion.button>
             </div>
           </div>
+        ) : (
+          <>
           {mode === 'claim' ? (
             <form onSubmit={submitClaim} className="min-h-0 overflow-y-auto overscroll-contain px-5 pb-8 pt-4">
-              <p className="mb-4 text-sm text-white/55">Verifica que eres responsable del negocio y mantén su información actualizada.</p>
-              {!selectedClaimPlace ? <section className="rounded-[22px] bg-[#292a2d] p-4"><label className="mb-3 block text-sm font-semibold">Selecciona tu negocio<input value={claimSearch} onChange={(e) => setClaimSearch(e.target.value)} placeholder="Buscar negocio" className={`${inputClass} mt-3`} /></label><div className="max-h-56 space-y-2 overflow-y-auto overscroll-contain">{matchingClaims.slice(0, 60).map((place) => <button key={place.id} type="button" onClick={() => selectClaimPlace(place)} className="flex w-full items-center gap-3 rounded-2xl bg-[#36373b] p-2.5 text-left"><img src={place.logo || place.images?.[0]} alt="" className="h-10 w-10 rounded-xl object-cover" /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{place.name}<span className="block text-xs font-normal text-white/45">{place.location}</span></span></button>)}</div></section> : <>
-                <button type="button" onClick={() => setSelectedClaimPlace(null)} className="mb-4 flex w-full items-center justify-between rounded-2xl bg-[#292a2d] p-4 text-left"><span><span className="block text-xs text-white/45">Negocio seleccionado</span><span className="mt-1 block text-sm font-semibold">{selectedClaimPlace.name}</span></span><span className="text-xs text-white/55">Cambiar</span></button>
-                <div className="mb-4 grid gap-3 sm:grid-cols-2">
-                  <Field icon={<Store />} label="Nombre"><input required value={claimName} onChange={(e) => setClaimName(e.target.value)} className={inputClass} /></Field>
-                  <Field icon={<MapPin />} label="Dirección"><input required value={claimAddress} onChange={(e) => setClaimAddress(e.target.value)} className={inputClass} /></Field>
-                  <Field icon={<Phone />} label="Teléfono"><input required value={claimPhone} onChange={(e) => setClaimPhone(e.target.value)} className={inputClass} /></Field>
-                  <Field icon={<span>@</span>} label="Correo de contacto"><input required type="email" value={claimEmail} onChange={(e) => setClaimEmail(e.target.value)} placeholder="tu@correo.com" className={inputClass} /></Field>
-                </div>
-                <Field icon={<Store />} label="Descripción"><textarea value={claimDescription} onChange={(e) => setClaimDescription(e.target.value)} rows={3} className={`${inputClass} !h-24 resize-y !py-3`} /></Field>
-                <WeeklyHoursEditor value={claimHours} onChange={setClaimHours} />
-                <section className="mb-4 rounded-[22px] bg-[#292a2d] p-4"><div className="mb-2 flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4" />Comprobante de propiedad</div><p className="mb-3 text-xs leading-relaxed text-white/55">Sube una factura de CFE u otro comprobante donde aparezca el negocio o tu nombre. Solo JPG o PNG, máximo 5 MB, sin límite de proporción.</p><input required type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" onChange={(e) => { const file = e.target.files?.[0] || null; if (file && (!['image/jpeg', 'image/png'].includes(file.type) || file.size > MAX_PHOTO_BYTES)) { setSubmitError(file.size > MAX_PHOTO_BYTES ? 'El comprobante debe pesar 5 MB o menos.' : 'El comprobante debe ser JPG o PNG.'); setClaimProof(null); return; } setSubmitError(''); setClaimProof(file); }} className="block w-full text-xs text-white/65 file:mr-3 file:rounded-full file:border-0 file:bg-white file:px-4 file:py-2 file:text-xs file:font-semibold file:text-black" />{claimProof && <p className="mt-2 truncate text-xs text-emerald-200">{claimProof.name}</p>}<p className="mt-3 text-[11px] leading-relaxed text-white/45">El comprobante se conservará de forma privada solo mientras se revisa tu solicitud y se eliminará al aprobarla o rechazarla. El correo queda registrado para contacto.</p></section>
+              <div className="mb-4"><div className="mb-2 flex items-center justify-between text-xs font-semibold text-white/50"><span>Paso {claimStep + 1} de 3</span><span>{['Negocio', 'Datos y horario', 'Verificación'][claimStep]}</span></div><div className="flex gap-1.5">{[0, 1, 2].map((step) => <span key={step} className={`h-1 flex-1 rounded-full ${step <= claimStep ? 'bg-white' : 'bg-white/15'}`} />)}</div></div>
+              <p className="mb-4 text-sm text-white/55">{['Selecciona el negocio que administras.', 'Confirma los datos y el horario que verán tus clientes.', 'Sube una prueba para que el equipo pueda verificar la solicitud.'][claimStep]}</p>
+              {claimStep === 0 && <section className="rounded-[26px] bg-[#292a2d] p-4 [corner-shape:squircle]"><label className="mb-3 block text-sm font-semibold">Buscar negocio<input value={claimSearch} onChange={(e) => setClaimSearch(e.target.value)} placeholder="Nombre o colonia" className={`${inputClass} mt-3`} /></label><div className="max-h-[42dvh] space-y-2 overflow-y-auto overscroll-contain">{matchingClaims.slice(0, 60).map((place) => <button data-business-onboarding-card key={place.id} type="button" onClick={() => selectClaimPlace(place)} className={`flex w-full items-center gap-3 rounded-[20px] p-2.5 text-left ${selectedClaimPlace?.id === place.id ? 'bg-white/15 ring-1 ring-white/35' : 'bg-[#36373b]'}`}><img src={place.logo || place.images?.[0]} alt="" className="h-11 w-11 rounded-2xl object-cover" /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{place.name}<span className="block text-xs font-normal text-white/45">{place.location}</span></span>{selectedClaimPlace?.id === place.id && <Check className="h-4 w-4"/>}</button>)}</div></section>}
+              {claimStep === 1 && selectedClaimPlace && <>
+                <button type="button" onClick={() => setClaimStep(0)} className="mb-4 flex w-full items-center justify-between rounded-[24px] bg-[#292a2d] p-4 text-left [corner-shape:squircle]"><span><span className="block text-xs text-white/45">Negocio seleccionado</span><span className="mt-1 block text-sm font-semibold">{selectedClaimPlace.name}</span></span><span className="text-xs text-white/55">Cambiar</span></button>
+                <div className="mb-4 grid gap-3 sm:grid-cols-2"><Field icon={<Store />} label="Nombre"><input required value={claimName} onChange={(e) => setClaimName(e.target.value)} className={inputClass} /></Field><Field icon={<MapPin />} label="Dirección"><input required value={claimAddress} onChange={(e) => setClaimAddress(e.target.value)} className={inputClass} /></Field><Field icon={<Phone />} label="Teléfono"><input required value={claimPhone} onChange={(e) => setClaimPhone(e.target.value)} className={inputClass} /></Field><Field icon={<span>@</span>} label="Correo de contacto"><input required type="email" value={claimEmail} onChange={(e) => setClaimEmail(e.target.value)} placeholder="tu@correo.com" className={inputClass} /></Field></div>
+                <Field icon={<Store />} label="Descripción"><textarea value={claimDescription} onChange={(e) => setClaimDescription(e.target.value)} rows={3} className={`${inputClass} !h-24 resize-y !py-3`} /></Field><div className="mt-4"><WeeklyHoursEditor value={claimHours} onChange={setClaimHours} /></div>
               </>}
+              {claimStep === 2 && selectedClaimPlace && <section className="rounded-[26px] bg-[#292a2d] p-4 [corner-shape:squircle]"><div className="mb-2 flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4" />Comprobante de propiedad</div><p className="mb-3 text-xs leading-relaxed text-white/55">Sube una factura de CFE u otro comprobante donde aparezca el negocio o tu nombre. Solo JPG o PNG, máximo 5 MB, sin límite de proporción.</p><input required type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" onChange={(e) => { const file = e.target.files?.[0] || null; if (file && (!['image/jpeg', 'image/png'].includes(file.type) || file.size > MAX_PHOTO_BYTES)) { setSubmitError(file.size > MAX_PHOTO_BYTES ? 'El comprobante debe pesar 5 MB o menos.' : 'El comprobante debe ser JPG o PNG.'); setClaimProof(null); return; } setSubmitError(''); setClaimProof(file); }} className="block w-full text-xs text-white/65 file:mr-3 file:rounded-full file:border-0 file:bg-white file:px-4 file:py-2 file:text-xs file:font-semibold file:text-black" />{claimProof && <p className="mt-2 truncate text-xs text-emerald-200">{claimProof.name}</p>}<p className="mt-3 text-[11px] leading-relaxed text-white/45">El comprobante se conservará de forma privada solo mientras se revisa tu solicitud y se eliminará al aprobarla o rechazarla. El correo queda registrado para contacto.</p></section>}
               {submitError && <p role="alert" className="mt-3 rounded-2xl bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{submitError}</p>}
-              {selectedClaimPlace && <button type="submit" disabled={isSubmitting || !claimProof} className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-white py-3.5 text-sm font-bold text-black disabled:opacity-50">{isSubmitting && <LoaderCircle className="h-4 w-4 animate-spin" />}{isSubmitting ? 'Enviando solicitud…' : 'Enviar para revisión'}</button>}
+              <div className="mt-5 flex gap-2">{claimStep > 0 && <button type="button" onClick={() => { setSubmitError(''); setClaimStep((step) => step - 1); }} className="rounded-full bg-white/[0.08] px-5 py-3.5 text-sm font-semibold">Atrás</button>}<button type="submit" disabled={isSubmitting || (claimStep === 0 && !selectedClaimPlace) || (claimStep === 2 && !claimProof)} className="flex flex-1 items-center justify-center gap-2 rounded-full bg-white py-3.5 text-sm font-bold text-black disabled:opacity-50">{isSubmitting ? <><LoaderCircle className="h-4 w-4 animate-spin"/>Enviando…</> : claimStep === 2 ? 'Enviar para revisión' : <>Continuar <ArrowRight className="h-4 w-4"/></>}</button></div>
             </form>
           ) : (
           <form onSubmit={submit} className="min-h-0 overflow-y-auto px-5 pb-8 pt-4">
-            <p className="mb-5 text-sm text-white/55">Comparte los datos que aparecerán en la ficha pública de tu negocio.</p>
+            <div className="mb-4"><div className="mb-2 flex items-center justify-between text-xs font-semibold text-white/50"><span>Paso {addStep + 1} de 3</span><span>{['Información básica', 'Detalles y fotos', 'Contacto y envío'][addStep]}</span></div><div className="flex gap-1.5">{[0, 1, 2].map((step) => <span key={step} className={`h-1 flex-1 rounded-full ${step <= addStep ? 'bg-white' : 'bg-white/15'}`} />)}</div></div>
+            <p className="mb-5 text-sm text-white/55">{['Cuéntanos lo básico para identificar tu negocio.', 'Agrega detalles que ayudarán a la comunidad a elegirte.', 'Déjanos un correo para avisarte cuando revisemos tu ficha.'][addStep]}</p>
 
-            <section className="mb-5 rounded-[22px] bg-[#292a2d] p-4">
+            {addStep === 1 && <section className="mb-5 rounded-[26px] bg-[#292a2d] p-4 [corner-shape:squircle]">
               <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><ImagePlus className="h-4 w-4 text-violet-300" /> Fotos del negocio <span className="text-xs font-normal text-white/40">Hasta 8</span></div>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 <label className="flex h-[92px] w-[100px] shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-white/20 bg-white/[0.03] text-white/60 hover:bg-white/[0.06]">
@@ -187,9 +205,9 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
               <p className="mt-2 text-[11px] text-white/45">Máximo 5 MB por imagen.</p>
               {photoError && <p className="mt-1 text-xs text-rose-300">{photoError}</p>}
               {isSubmitting && photos.length > 0 && <div className="mt-3" role="status" aria-live="polite"><div className="mb-2 flex items-center gap-2 text-xs font-medium text-white/75"><LoaderCircle className="h-4 w-4 animate-spin text-white" />Subiendo fotos {uploadedPhotoCount} de {photos.length}</div><div className="flex gap-1.5">{photos.map((photo, index) => <div key={`${photo.name}-skeleton-${index}`} className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><motion.div className="h-full rounded-full bg-white" initial={{ width: 0 }} animate={{ width: index < uploadedPhotoCount ? '100%' : index === uploadedPhotoCount ? '55%' : '0%' }} transition={{ duration: 0.35 }} /></div>)}</div></div>}
-            </section>
+            </section>}
 
-            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {addStep === 0 && <><div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field icon={<Store />} label="Nombre del negocio"><input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Café de la Plaza" className={inputClass} /></Field>
               <Field icon={<MapPin />} label="Dirección"><input required value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Calle, número y colonia" className={inputClass} /></Field>
               <Field icon={<Phone />} label="Teléfono"><input required type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(346) 123 4567" className={inputClass} /></Field>
@@ -199,27 +217,29 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
             <section className="mb-4 rounded-[22px] bg-[#292a2d] p-4">
               <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><Tag className="h-4 w-4 text-amber-300" /> Categoría</div>
               <div className="flex flex-wrap gap-2">{categories.map((item) => <button key={item} type="button" onClick={() => setCategory(item)} style={category === item ? { backgroundColor: '#ffffff', color: '#202124' } : { backgroundColor: '#36373b', color: '#f4f4f5' }} className={`rounded-full px-3.5 py-2 text-xs font-semibold transition-colors ${category === item ? '!bg-white !text-[#202124]' : '!bg-[#36373b] !text-white'}`}>{item}</button>)}</div>
-            </section>
+            </section></>}
 
-            <section className="mb-4 rounded-[22px] bg-[#292a2d] p-4">
+            {addStep === 1 && <><section className="mb-4 rounded-[26px] bg-[#292a2d] p-4 [corner-shape:squircle]">
               <div className="mb-3 flex items-center justify-between"><div><p className="text-sm font-semibold">Rango de precios</p><p className="mt-0.5 text-xs text-white/45">Precio promedio por persona</p></div><span className="rounded-full bg-white/[0.08] px-3 py-1 text-sm font-bold text-emerald-300">{'$'.repeat(cost)}</span></div>
               <div className="flex gap-2">{costs.map((value) => <button key={value} type="button" onClick={() => setCost(value)} className={`flex-1 rounded-xl py-2.5 text-sm font-bold ${cost === value ? 'bg-emerald-300 text-[#17221b]' : 'bg-white/[0.06] text-white/45'}`}>{'$'.repeat(value)}</button>)}</div>
             </section>
 
             <Field icon={<Store />} label="Descripción"><textarea required value={description} onChange={(e) => setDescription(e.target.value)} placeholder="¿Qué hace especial a tu negocio?" rows={5} className={`${inputClass} !h-36 resize-y !py-3.5`} /></Field>
+            </>}
 
-            <section className="mb-4 mt-4 rounded-[22px] bg-[#292a2d] p-4">
+            {addStep === 2 && <><section className="mb-4 mt-4 rounded-[26px] bg-[#292a2d] p-4 [corner-shape:squircle]">
               <p className="mb-3 text-sm font-semibold">Lo que deben saber tus clientes</p>
               <div className="mb-3 flex gap-2"><input value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }} placeholder="Ej. Terraza, acepta tarjeta" className={`${inputClass} flex-1`} /><button type="button" onClick={addTag} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/[0.08]"><Plus className="h-5 w-5" /></button></div>
               <div className="flex flex-wrap gap-2">{['Wi-Fi', 'Accesible', 'Pet friendly', 'Para llevar'].map((tag) => <button type="button" key={tag} onClick={() => setTags((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag])} className={`rounded-full px-3 py-1.5 text-xs font-medium ${tags.includes(tag) ? 'bg-violet-300 text-[#241d2c]' : 'bg-white/[0.07] text-white/60'}`}>{tag}</button>)}{tags.filter((tag) => !['Wi-Fi', 'Accesible', 'Pet friendly', 'Para llevar'].includes(tag)).map((tag) => <button type="button" key={tag} onClick={() => setTags((current) => current.filter((item) => item !== tag))} className="rounded-full bg-violet-300/15 px-3 py-1.5 text-xs font-medium text-violet-200">{tag} ×</button>)}</div>
             </section>
 
             <Field icon={<span className="text-sm font-bold">@</span>} label="Correo para avisarte"><input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@correo.com" className={inputClass} /><span className="mt-2 block text-xs leading-relaxed text-white/55">Te enviaremos un correo cuando tu negocio sea aprobado.</span></Field>
+            </>}
 
             {submitError && <p role="alert" className="mt-4 rounded-2xl bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{submitError}</p>}
-            {isSubmitting && photos.length > 0 && <div className="mt-4 space-y-2" aria-hidden="true"><div className="h-3 w-2/5 animate-pulse rounded-full bg-white/10" /><div className="h-2 w-full animate-pulse rounded-full bg-white/[0.06]" /></div>}
-            <button type="submit" disabled={isSubmitting} style={{ backgroundColor: '#ffffff', color: '#111111' }} className="mt-6 flex w-full items-center justify-center gap-2 rounded-full !bg-white py-3.5 text-sm font-bold !text-black transition-transform active:scale-[0.98] disabled:opacity-75">{isSubmitting && <LoaderCircle className="h-4 w-4 animate-spin" />}{isSubmitting ? (photos.length ? 'Subiendo imágenes…' : 'Enviando…') : 'Enviar para aprobación'}</button>
-            <p className="mt-3 text-center text-[11px] text-white/35">Tu ficha se publicará cuando nuestro equipo la apruebe.</p>
+            {addStep === 2 && isSubmitting && photos.length > 0 && <div className="mt-4 space-y-2" aria-hidden="true"><div className="h-3 w-2/5 animate-pulse rounded-full bg-white/10" /><div className="h-2 w-full animate-pulse rounded-full bg-white/[0.06]" /></div>}
+            <div className="mt-6 flex gap-2">{addStep > 0 && <button type="button" onClick={() => { setSubmitError(''); setAddStep((step) => step - 1); }} className="rounded-full bg-white/[0.08] px-5 py-3.5 text-sm font-semibold">Atrás</button>}<button type="submit" disabled={isSubmitting} style={{ backgroundColor: '#ffffff', color: '#111111' }} className="flex flex-1 items-center justify-center gap-2 rounded-full !bg-white py-3.5 text-sm font-bold !text-black transition-transform active:scale-[0.98] disabled:opacity-75">{isSubmitting && <LoaderCircle className="h-4 w-4 animate-spin" />}{isSubmitting ? (photos.length ? 'Subiendo imágenes…' : 'Enviando…') : addStep === 2 ? 'Enviar para aprobación' : <>Continuar <ArrowRight className="h-4 w-4"/></>}</button></div>
+            {addStep === 2 && <p className="mt-3 text-center text-[11px] text-white/35">Tu ficha se publicará cuando nuestro equipo la apruebe.</p>}
           </form>
           )}
           </>

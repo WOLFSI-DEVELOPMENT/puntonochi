@@ -4,6 +4,7 @@ import { ArrowLeft, Camera, Check, Images, LoaderCircle, RotateCcw, Search, X } 
 import { mockPlaces } from '../data';
 import { Place } from '../types';
 import { apiFetch } from '../api';
+import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 
 type FlowStep = 'camera' | 'preview' | 'compose' | 'published';
 
@@ -27,6 +28,7 @@ export function CreatePostFlow({ onClose }: { onClose: () => void }) {
   const [coverName, setCoverName] = useState('');
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState('');
+  const placePickerDrag = useSheetDrag(() => setShowPlacePicker(false));
 
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -222,8 +224,8 @@ export function CreatePostFlow({ onClose }: { onClose: () => void }) {
       <AnimatePresence>
         {showPlacePicker && <>
           <motion.button aria-label="Cerrar selector" onClick={() => setShowPlacePicker(false)} className="fixed inset-0 z-[90] bg-black/65" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
-          <motion.section role="dialog" aria-modal="true" className="fixed inset-x-0 bottom-0 z-[91] mx-auto flex h-[min(78dvh,720px)] w-full max-w-[620px] flex-col overflow-hidden rounded-t-[32px] bg-[#202020] pt-4" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 28, stiffness: 280 }}>
-            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-white/20" />
+          <motion.section {...placePickerDrag} role="dialog" aria-modal="true" className="fixed inset-x-0 bottom-0 z-[91] mx-auto flex h-[min(78dvh,720px)] w-full max-w-[620px] flex-col overflow-hidden rounded-t-[32px] bg-[#202020] pt-2" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360, mass: 0.82 }}>
+            <SheetDragHandle controls={placePickerDrag.dragControls}/>
             <div className="mb-4 flex items-center justify-between px-5"><h2 className="text-lg font-bold">Elige un negocio</h2><button type="button" onClick={() => setShowPlacePicker(false)} aria-label="Cerrar" className="rounded-full bg-white/[0.08] p-2"><X className="h-4 w-4" /></button></div>
             <div className="mx-5 mb-4 flex items-center gap-2 rounded-full bg-[#303030] px-4 py-3"><Search className="h-4 w-4 shrink-0 text-white/45" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar negocio" style={{ background: 'transparent', backgroundColor: 'transparent' }} className="!min-w-0 !flex-1 !bg-transparent text-sm text-white outline-none placeholder:text-white/50" /></div>
             <div className="relative min-h-0 flex-1 overflow-hidden">

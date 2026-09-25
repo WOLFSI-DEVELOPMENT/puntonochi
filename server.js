@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { neon } from '@neondatabase/serverless';
 import { OAuth2Client } from 'google-auth-library';
+import { GoogleGenAI } from '@google/genai';
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import webpush from 'web-push';
 
@@ -329,9 +330,11 @@ const ensureSubmissionSchema = () => {
       budget_mxn INTEGER NOT NULL CHECK (budget_mxn BETWEEN 100 AND 5000),
       estimated_appearances INTEGER NOT NULL,
       schedule JSONB NOT NULL,
-      status TEXT NOT NULL DEFAULT 'simulated-checkout-complete',
+      contact_email TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'awaiting-payment-link',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
+    await sql`ALTER TABLE promotion_orders ADD COLUMN IF NOT EXISTS contact_email TEXT NOT NULL DEFAULT ''`;
     await sql`CREATE TABLE IF NOT EXISTS community_posts (
       id TEXT PRIMARY KEY,
       place_id TEXT NOT NULL,
@@ -362,6 +365,18 @@ const ensureSubmissionSchema = () => {
       status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       reviewed_at TIMESTAMPTZ
+    )`;
+    await sql`CREATE TABLE IF NOT EXISTS public_events (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      event_date DATE NOT NULL,
+      end_date DATE,
+      event_time TEXT,
+      location TEXT NOT NULL,
+      description TEXT NOT NULL,
+      image_key TEXT NOT NULL,
+      image_mime_type TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
   })().catch((error) => { schemaReady = undefined; throw error; });
   return schemaReady;
@@ -668,19 +683,124 @@ app.patch('/api/admin/business-claims/:id', requireAdmin, requireNeon, async (re
 app.post('/api/promotions', requireNeon, async (req, res) => {
   try {
     const { placeId, placeName, budgetMXN, estimatedAppearances, schedule } = req.body || {};
+    const contactEmail = typeof req.body?.contactEmail === 'string' ? req.body.contactEmail.trim().slice(0, 180) : '';
     const budget = Number(budgetMXN);
     const appearances = Number(estimatedAppearances);
-    if (typeof placeId !== 'string' || typeof placeName !== 'string' || !Number.isInteger(budget) || budget < 100 || budget > 5000 || !Number.isInteger(appearances) || appearances < 0 || !Array.isArray(schedule)) {
+    if (typeof placeId !== 'string' || typeof placeName !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail) || !Number.isInteger(budget) || budget < 100 || budget > 5000 || !Number.isInteger(appearances) || appearances < 0 || !Array.isArray(schedule)) {
       return res.status(400).json({ error: 'Invalid promotion details.' });
     }
     await ensureSubmissionSchema();
     const id = randomUUID();
-    await sql`INSERT INTO promotion_orders (id, place_id, place_name, budget_mxn, estimated_appearances, schedule)
-      VALUES (${id}, ${placeId}, ${placeName}, ${budget}, ${appearances}, ${JSON.stringify(schedule)})`;
+    await sql`INSERT INTO promotion_orders (id, place_id, place_name, budget_mxn, estimated_appearances, schedule, contact_email, status)
+      VALUES (${id}, ${placeId}, ${placeName}, ${budget}, ${appearances}, ${JSON.stringify(schedule)}, ${contactEmail}, 'awaiting-payment-link')`;
     res.status(201).json({ id });
   } catch (error) {
     console.error('Promotion order save failed:', error);
     res.status(500).json({ error: 'Could not save the promotion request.' });
+  }
+});
+
+const eventImageUrl = (req, id) => `${req.protocol}://${req.get('host')}/api/events/${encodeURIComponent(id)}/image`;
+const eventResponse = (req, event) => ({
+  id: event.id,
+  title: event.title,
+  date: String(event.date),
+  endDate: event.endDate ? String(event.endDate) : null,
+  time: event.time || null,
+  location: event.location,
+  description: event.description,
+  imageUrl: eventImageUrl(req, event.id),
+  createdAt: event.createdAt,
+});
+
+app.get('/api/events', requireNeon, async (req, res) => {
+  try {
+    await ensureSubmissionSchema();
+    const events = await sql`SELECT id, title, event_date::text AS date, end_date::text AS "endDate",
+      event_time AS time, location, description, created_at AS "createdAt"
+      FROM public_events ORDER BY CASE WHEN event_date >= CURRENT_DATE THEN 0 ELSE 1 END,
+        CASE WHEN event_date >= CURRENT_DATE THEN event_date END ASC,
+        CASE WHEN event_date < CURRENT_DATE THEN event_date END DESC, created_at DESC LIMIT 100`;
+    res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=120');
+    res.json(events.map((event) => eventResponse(req, event)));
+  } catch (error) {
+    console.error('Public events load failed:', error);
+    res.status(500).json({ error: 'No se pudieron cargar los eventos.' });
+  }
+});
+
+app.post('/api/events', requireNeon, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    const body = req.body || {};
+    const title = typeof body.title === 'string' ? body.title.trim().slice(0, 140) : '';
+    const description = typeof body.description === 'string' ? body.description.trim().slice(0, 4000) : '';
+    const location = typeof body.location === 'string' ? body.location.trim().slice(0, 240) : '';
+    const date = typeof body.date === 'string' ? body.date : '';
+    const endDate = typeof body.endDate === 'string' && body.endDate ? body.endDate : null;
+    const time = typeof body.time === 'string' && body.time ? body.time : null;
+    const mimeType = typeof body.mimeType === 'string' ? body.mimeType : '';
+    const base64 = typeof body.base64 === 'string' ? body.base64 : '';
+    const validDate = (value) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+      const parsed = new Date(`${value}T00:00:00Z`);
+      return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+    };
+    if (!title || !description || !location || !validDate(date) || (endDate && (!validDate(endDate) || endDate < date)) || (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time))) {
+      return res.status(400).json({ error: 'Revisa el nombre, descripción, lugar, fecha y horario del evento.' });
+    }
+    if (!s3) return res.status(503).json({ error: 'El almacenamiento de imágenes no está configurado en el servidor.' });
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType) || !base64) return res.status(400).json({ error: 'Agrega una portada JPG, PNG o WebP.' });
+    const bytes = Buffer.from(base64, 'base64');
+    if (!bytes.length || bytes.length > 5 * 1024 * 1024) return res.status(413).json({ error: 'La portada debe pesar 5 MB o menos.' });
+    await ensureSubmissionSchema();
+    const id = randomUUID();
+    const objectKey = `events/${id}/cover-${randomUUID()}`;
+    await s3.send(new PutObjectCommand({ Bucket: 'uploads', Key: objectKey, Body: bytes, ContentType: mimeType }));
+    try {
+      const [event] = await sql`INSERT INTO public_events (id, title, event_date, end_date, event_time, location, description, image_key, image_mime_type)
+        VALUES (${id}, ${title}, ${date}::date, ${endDate}::date, ${time}, ${location}, ${description}, ${objectKey}, ${mimeType})
+        RETURNING id, title, event_date::text AS date, end_date::text AS "endDate", event_time AS time, location, description, created_at AS "createdAt"`;
+      res.status(201).json(eventResponse(req, event));
+    } catch (error) {
+      await s3.send(new DeleteObjectCommand({ Bucket: 'uploads', Key: objectKey })).catch(() => undefined);
+      throw error;
+    }
+  } catch (error) {
+    console.error('Public event create failed:', error);
+    res.status(500).json({ error: 'No se pudo publicar el evento.' });
+  }
+});
+
+app.get('/api/events/:id/image', requireNeon, async (req, res) => {
+  try {
+    if (!s3) return res.status(503).json({ error: 'El almacenamiento de imágenes no está configurado.' });
+    await ensureSubmissionSchema();
+    const [event] = await sql`SELECT image_key, image_mime_type FROM public_events WHERE id = ${req.params.id}`;
+    if (!event) return res.status(404).json({ error: 'No encontramos la portada del evento.' });
+    const object = await s3.send(new GetObjectCommand({ Bucket: 'uploads', Key: String(event.image_key) }));
+    const bytes = await object.Body?.transformToByteArray();
+    if (!bytes) return res.status(502).json({ error: 'No se pudo leer la portada.' });
+    res.set('Content-Type', String(event.image_mime_type));
+    res.set('Cache-Control', 'public, max-age=86400, immutable');
+    res.send(Buffer.from(bytes));
+  } catch (error) {
+    console.error('Public event image load failed:', error);
+    res.status(500).json({ error: 'No se pudo cargar la portada del evento.' });
+  }
+});
+
+app.get('/api/events/:id', requireNeon, async (req, res) => {
+  try {
+    await ensureSubmissionSchema();
+    const [event] = await sql`SELECT id, title, event_date::text AS date, end_date::text AS "endDate",
+      event_time AS time, location, description, created_at AS "createdAt" FROM public_events WHERE id = ${req.params.id}`;
+    if (!event) return res.status(404).json({ error: 'No encontramos este evento.' });
+    res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=120');
+    res.json(eventResponse(req, event));
+  } catch (error) {
+    console.error('Public event detail load failed:', error);
+    res.status(500).json({ error: 'No se pudo cargar el evento.' });
   }
 });
 
@@ -900,6 +1020,54 @@ app.get('/api/places', requireNeon, async (req, res) => {
   } catch (error) {
     console.error('Could not load places from Neon:', error);
     res.status(500).json({ error: 'No se pudieron cargar los negocios.' });
+  }
+});
+
+let placeOverviewSchemaReady;
+const ensurePlaceOverviewSchema = () => {
+  if (!sql) throw new Error('DATABASE_URL is not configured.');
+  if (!placeOverviewSchemaReady) placeOverviewSchemaReady = sql`CREATE TABLE IF NOT EXISTS place_ai_overviews (
+    place_id TEXT PRIMARY KEY REFERENCES places(id) ON DELETE CASCADE,
+    overview TEXT NOT NULL,
+    source_hash TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`.catch((error) => { placeOverviewSchemaReady = undefined; throw error; });
+  return placeOverviewSchemaReady;
+};
+
+app.get('/api/places/:id/overview', requireNeon, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'El resumen con IA todavía no está configurado.' });
+  try {
+    await Promise.all([ensureDirectorySchema(), ensurePlaceOverviewSchema()]);
+    const [place] = await sql`SELECT id, name, category, subtitle, location, address, phone, good_to_know AS "goodToKnow", hours, weekly_hours AS "weeklyHours", rating, review_count AS "reviewCount" FROM places WHERE id = ${req.params.id}`;
+    if (!place) return res.status(404).json({ error: 'No encontramos este negocio.' });
+
+    const source = JSON.stringify(place);
+    const sourceHash = createHash('sha256').update(source).digest('hex');
+    const [cached] = await sql`SELECT overview, source_hash AS "sourceHash" FROM place_ai_overviews WHERE place_id = ${place.id}`;
+    if (cached?.sourceHash === sourceHash) {
+      res.set('Cache-Control', 'private, max-age=86400');
+      return res.json({ overview: cached.overview, cached: true });
+    }
+
+    const client = new GoogleGenAI({ apiKey });
+    const response = await client.models.generateContent({
+      model: 'gemini-3.1-flash-lite',
+      contents: `Escribe un resumen breve en español para una tarjeta de directorio local. Usa exclusivamente los datos proporcionados; no inventes servicios, precios, calidad ni horarios. No reveles razonamiento, no uses listas ni introducciones; devuelve solo 1 o 2 frases (máximo 42 palabras). Si hay pocos datos, resume únicamente lo que sí se sabe.\n\nDatos del negocio:\n${source}`,
+      config: { maxOutputTokens: 120, thinkingConfig: { thinkingLevel: 'low', includeThoughts: false } },
+    });
+    const overview = response.text?.trim();
+    if (!overview) return res.status(502).json({ error: 'Gemini no devolvió un resumen.' });
+    await sql`INSERT INTO place_ai_overviews (place_id, overview, source_hash, updated_at)
+      VALUES (${place.id}, ${overview}, ${sourceHash}, NOW())
+      ON CONFLICT (place_id) DO UPDATE SET overview = EXCLUDED.overview, source_hash = EXCLUDED.source_hash, updated_at = NOW()`;
+    res.set('Cache-Control', 'private, max-age=86400');
+    res.json({ overview, cached: false });
+  } catch (error) {
+    console.error('Could not generate a business overview:', error);
+    res.status(502).json({ error: 'No se pudo generar el resumen con IA.' });
   }
 });
 

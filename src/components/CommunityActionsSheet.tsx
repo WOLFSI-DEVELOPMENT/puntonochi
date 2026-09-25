@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ArrowLeft, Camera, Check, Clock3, MessageSquareText, Pencil, Send, Star, X } from 'lucide-react';
 import type { Place, Review } from '../types';
 import { createDefaultWeeklySchedule, formatWeeklyHours, WeeklyHoursEditor, type WeeklyHours } from './WeeklyHoursEditor';
+import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 
 type Props = { place: Place; onClose: () => void };
 type Mode = 'menu' | 'reviews' | 'edit';
@@ -20,6 +21,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 const dateLabel = (value: string) => new Date(value).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
 
 export function CommunityActionsSheet({ place, onClose }: Props) {
+  const sheetDrag = useSheetDrag(onClose);
   const [mode, setMode] = useState<Mode>('menu');
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
@@ -103,8 +105,8 @@ export function CommunityActionsSheet({ place, onClose }: Props) {
 
   return <>
     <motion.button aria-label="Cerrar opciones de comunidad" onClick={onClose} className="fixed inset-0 z-[84] bg-black/60 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
-    <motion.section role="dialog" aria-modal="true" aria-label={title} initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 28, stiffness: 260 }} className="fixed inset-x-0 bottom-0 z-[85] flex max-h-[90dvh] flex-col overflow-hidden rounded-t-[30px] bg-[#202124] text-white shadow-2xl">
-      <div className="shrink-0 border-b border-white/[0.08] px-5 pb-4 pt-6"><div className="absolute left-1/2 top-2 h-1.5 w-12 -translate-x-1/2 rounded-full bg-white/20"/><div className="flex items-center gap-3">{mode !== 'menu' && <button type="button" onClick={() => { setMode('menu'); setError(''); setNotice(''); }} aria-label="Volver" className="rounded-full bg-white/[0.08] p-2"><ArrowLeft className="h-4 w-4"/></button>}<div className="min-w-0 flex-1"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40">{place.name}</p><h2 className="mt-0.5 text-xl font-bold">{title}</h2></div><button type="button" onClick={onClose} aria-label="Cerrar" className="rounded-full bg-white/[0.08] p-2"><X className="h-5 w-5"/></button></div></div>
+    <motion.section {...sheetDrag} role="dialog" aria-modal="true" aria-label={title} initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360, mass: 0.82 }} className="fixed inset-x-0 bottom-0 z-[85] flex max-h-[90dvh] flex-col overflow-hidden rounded-t-[30px] bg-[#202124] text-white shadow-2xl">
+      <div className="relative shrink-0 border-b border-white/[0.08] px-5 pb-4 pt-7"><SheetDragHandle controls={sheetDrag.dragControls} className="absolute inset-x-0 top-0"/><div className="flex items-center gap-3">{mode !== 'menu' && <button type="button" onClick={() => { setMode('menu'); setError(''); setNotice(''); }} aria-label="Volver" className="rounded-full bg-white/[0.08] p-2"><ArrowLeft className="h-4 w-4"/></button>}<div className="min-w-0 flex-1"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40">{place.name}</p><h2 className="mt-0.5 text-xl font-bold">{title}</h2></div><button type="button" onClick={onClose} aria-label="Cerrar" className="rounded-full bg-white/[0.08] p-2"><X className="h-5 w-5"/></button></div></div>
       <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-5 py-5">
         {mode === 'menu' && <div className="space-y-3"><p className="mb-4 text-sm text-white/55">Ayuda a mantener actualizada la información de {place.name}.</p><button type="button" onClick={() => { setMode('reviews'); setNotice(''); setError(''); }} className="flex w-full items-center gap-4 rounded-[22px] bg-[#2b2c30] p-4 text-left"><span className="rounded-2xl bg-amber-300/15 p-3 text-amber-200"><Star className="h-5 w-5"/></span><span className="flex-1"><span className="block font-bold">Dejar una reseña</span><span className="mt-1 block text-xs text-white/50">Comparte tu experiencia y lee opiniones</span></span><MessageSquareText className="h-5 w-5 text-white/35"/></button><button type="button" onClick={() => { setMode('edit'); setNotice(''); setError(''); }} className="flex w-full items-center gap-4 rounded-[22px] bg-[#2b2c30] p-4 text-left"><span className="rounded-2xl bg-blue-300/15 p-3 text-blue-200"><Pencil className="h-5 w-5"/></span><span className="flex-1"><span className="block font-bold">Sugerir una edición</span><span className="mt-1 block text-xs text-white/50">Toca los datos en la ficha para corregirlos</span></span><Camera className="h-5 w-5 text-white/35"/></button></div>}
 

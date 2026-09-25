@@ -21,10 +21,10 @@ import { NotificationOptInBanner } from './components/NotificationOptInBanner';
 import CornerKit from '@cornerkit/core';
 import { Category, Place, Colonia } from './types';
 import { AnimatePresence, motion } from 'motion/react';
+import { DAILY_USE_KEY, recordProfileActiveSeconds } from './profileStorage';
 
 const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
 type DailyUse = { lastOpened: string; totalDays: number; currentStreak: number };
-const DAILY_USE_KEY = 'puntonochi-daily-use-v1';
 
 function localDateKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -88,6 +88,8 @@ export default function App() {
         initShowAllCategories = true;
       } else if (parts[0] === 'colonias') {
         initShowColonias = true;
+      } else if (parts[0] === 'eventos') {
+        initialTab = 'noticias';
       } else if (parts[0] === 'explorar' || parts[0] === 'guardados' || parts[0] === 'videos' || parts[0] === 'noticias' || parts[0] === 'mapa') {
         initialTab = parts[0] === 'mapa' ? 'videos' : parts[0];
       } else {
@@ -129,18 +131,25 @@ export default function App() {
   const streakDateRef = useRef(dailyUse.lastOpened);
 
   useEffect(() => {
+    let lastActivityCheck = Date.now();
     const refreshDailyUse = () => {
       const today = localDateKey();
       if (streakDateRef.current === today) return;
       streakDateRef.current = today;
       setDailyUse(recordDailyUse());
     };
-    window.addEventListener('focus', refreshDailyUse);
-    document.addEventListener('visibilitychange', refreshDailyUse);
-    const timer = window.setInterval(refreshDailyUse, 60_000);
+    const accountForActiveTime = () => {
+      const now = Date.now();
+      if (document.visibilityState === 'visible' && document.hasFocus()) recordProfileActiveSeconds((now - lastActivityCheck) / 1000);
+      lastActivityCheck = now;
+      refreshDailyUse();
+    };
+    window.addEventListener('focus', accountForActiveTime);
+    document.addEventListener('visibilitychange', accountForActiveTime);
+    const timer = window.setInterval(accountForActiveTime, 15_000);
     return () => {
-      window.removeEventListener('focus', refreshDailyUse);
-      document.removeEventListener('visibilitychange', refreshDailyUse);
+      window.removeEventListener('focus', accountForActiveTime);
+      document.removeEventListener('visibilitychange', accountForActiveTime);
       window.clearInterval(timer);
     };
   }, []);
@@ -232,6 +241,8 @@ export default function App() {
       path = `/categories`;
     } else if (showColonias) {
       path = `/colonias`;
+    } else if (activeTab === 'noticias' && /^\/eventos\/[^/]+\/?$/.test(window.location.pathname)) {
+      path = window.location.pathname;
     } else if (activeTab !== 'inicio') {
       path = `/${activeTab}`;
     }

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { motion, PanInfo, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { X, Share, Phone, Globe, ShoppingBag, MoreHorizontal, Navigation, BookOpen, Link, MessageCircle, Twitter, Facebook, QrCode } from 'lucide-react';
 import { Place } from '../types';
 import CornerKit from '@cornerkit/core';
 import { CommunityActionsSheet } from './CommunityActionsSheet';
+import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 
 export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose: () => void }) {
   const [showMapSelector, setShowMapSelector] = useState(false);
@@ -13,8 +14,42 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [showMenuModal, setShowMenuModal] = useState(false);
   const [showCommunityActions, setShowCommunityActions] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState('');
   const businessUrl = `${window.location.origin}/place/${encodeURIComponent(place.id)}`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=176x176&margin=8&data=${encodeURIComponent(businessUrl)}`;
+  const shareText = `Mira ${place.name} en PuntoNochi`;
+  const detailDrag = useSheetDrag(onClose);
+  const mapDrag = useSheetDrag(() => setShowMapSelector(false));
+  const phoneDrag = useSheetDrag(() => setShowPhoneModal(false));
+  const menuDrag = useSheetDrag(() => setShowMenuModal(false));
+  const shareDrag = useSheetDrag(() => setShowShareModal(false));
+
+  const copyBusinessLink = async () => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(businessUrl);
+      } else {
+        const input = document.createElement('textarea');
+        input.value = businessUrl;
+        input.setAttribute('readonly', '');
+        input.style.position = 'fixed';
+        input.style.opacity = '0';
+        document.body.appendChild(input);
+        input.select();
+        const copied = document.execCommand('copy');
+        input.remove();
+        if (!copied) throw new Error('No se pudo copiar el enlace.');
+      }
+      setShareFeedback('Enlace copiado.');
+    } catch {
+      setShareFeedback('No se pudo copiar. Mantén pulsado el enlace para copiarlo.');
+    }
+  };
+
+  const shareTo = (url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer');
+    setShareFeedback('Se abrió la opción para compartir.');
+  };
 
 
   useEffect(() => {
@@ -59,18 +94,6 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
     })
   };
 
-  const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (info.offset.y > 100) {
-      onClose();
-    }
-  };
-
-  const handleMapSelectorDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (info.offset.y > 50) {
-      setShowMapSelector(false);
-    }
-  };
-
   const openMap = (app: 'google' | 'apple') => {
     const query = encodeURIComponent(place.address || place.name);
     if (app === 'google') {
@@ -94,14 +117,11 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
-        transition={{ type: "spring", damping: 28, stiffness: 250 }}
-        drag="y"
-        dragConstraints={{ top: 0 }}
-        dragElastic={0.2}
-        onDragEnd={handleDragEnd}
+        transition={{ type: "spring", damping: 32, stiffness: 360, mass: 0.82 }}
+        {...detailDrag}
         className="fixed inset-x-0 bottom-0 z-[61] h-[92vh] bg-white rounded-t-[32px] overflow-hidden flex flex-col"
       >
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-black/20 rounded-full z-20" />
+        <SheetDragHandle controls={detailDrag.dragControls} tone="dark" className="absolute inset-x-0 top-0 z-20" />
         
         <div className="flex-1 overflow-y-auto pb-8">
           {/* Hero Section */}
@@ -315,14 +335,11 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              drag="y"
-              dragConstraints={{ top: 0 }}
-              dragElastic={0.2}
-              onDragEnd={handleMapSelectorDragEnd}
+              transition={{ type: "spring", damping: 32, stiffness: 360, mass: 0.82 }}
+              {...mapDrag}
               className="fixed inset-x-0 bottom-0 z-[73] bg-white rounded-t-[24px] overflow-hidden flex flex-col p-5 pb-8 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]"
             >
-              <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 bg-neutral-200 rounded-full" />
+              <SheetDragHandle controls={mapDrag.dragControls} tone="dark" className="-mx-5 -mt-5 mb-2" />
               
               <div className="flex justify-between items-center mt-3 mb-6">
                 <h3 className="font-bold text-lg text-neutral-900">Abrir en...</h3>
@@ -438,16 +455,11 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              drag="y"
-              dragConstraints={{ top: 0 }}
-              dragElastic={0.2}
-              onDragEnd={(e, info) => {
-                if (info.offset.y > 50) setShowPhoneModal(false);
-              }}
+              transition={{ type: "spring", damping: 32, stiffness: 360, mass: 0.82 }}
+              {...phoneDrag}
               className="fixed inset-x-0 bottom-0 z-[73] bg-white rounded-t-[24px] overflow-hidden flex flex-col p-5 pb-8 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]"
             >
-              <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 bg-neutral-200 rounded-full" />
+              <SheetDragHandle controls={phoneDrag.dragControls} tone="dark" className="-mx-5 -mt-5 mb-2" />
               
               <div className="mt-6 mb-2 flex flex-col gap-3">
                 <a 
@@ -483,16 +495,11 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 28, stiffness: 250 }}
-              drag="y"
-              dragConstraints={{ top: 0 }}
-              dragElastic={0.2}
-              onDragEnd={(e, info) => {
-                if (info.offset.y > 100) setShowMenuModal(false);
-              }}
+              transition={{ type: "spring", damping: 32, stiffness: 360, mass: 0.82 }}
+              {...menuDrag}
               className="fixed inset-x-0 bottom-0 z-[73] h-[85vh] bg-white rounded-t-[32px] overflow-hidden flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.1)]"
             >
-              <div className="absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-black/20 rounded-full z-20" />
+              <SheetDragHandle controls={menuDrag.dragControls} tone="dark" className="absolute inset-x-0 top-0 z-20" />
               
               <div className="flex items-center justify-between px-5 pt-8 pb-4 border-b border-black/5 shrink-0">
                 <h2 className="text-xl font-bold text-neutral-900">Menú</h2>
@@ -542,15 +549,11 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              transition={{ type: "spring", damping: 32, stiffness: 360, mass: 0.82 }}
               className="fixed inset-x-0 bottom-0 z-[81] bg-white rounded-t-3xl p-6 shadow-2xl flex flex-col pb-safe"
-              drag="y"
-              dragConstraints={{ top: 0 }}
-              onDragEnd={(e, info) => {
-                if (info.offset.y > 50) setShowShareModal(false);
-              }}
+              {...shareDrag}
             >
-              <div className="w-12 h-1.5 bg-neutral-200 rounded-full mx-auto mb-6" />
+              <SheetDragHandle controls={shareDrag.dragControls} tone="dark" className="-mt-5 mb-3" />
               <h3 className="font-bold text-xl text-neutral-900 mb-4 px-2 text-center">Compartir</h3>
 
               <div className="mb-6 flex flex-col items-center rounded-2xl bg-neutral-50 p-4">
@@ -559,33 +562,37 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
                   <QrCode className="h-4 w-4" /> Escanea para abrir {place.name}
                 </div>
               </div>
+              <button type="button" onClick={() => { void copyBusinessLink(); }} className="mb-5 flex min-w-0 items-center gap-2 rounded-full bg-neutral-100 px-4 py-3 text-left text-sm font-medium text-neutral-700">
+                <Link className="h-4 w-4 shrink-0"/><span className="truncate">{businessUrl}</span>
+              </button>
               
               <div className="flex justify-around mb-8 px-2">
-                <button onClick={() => { navigator.clipboard.writeText(businessUrl); setShowShareModal(false); alert('Enlace copiado!'); }} className="flex flex-col items-center gap-2 group">
+                <button type="button" onClick={() => { void copyBusinessLink(); }} className="flex flex-col items-center gap-2 group">
                   <div className="w-14 h-14 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-700 group-hover:bg-neutral-200 transition-colors">
                     <Link className="w-6 h-6" />
                   </div>
                   <span className="text-[12px] font-medium text-neutral-600">Copiar</span>
                 </button>
-                <button className="flex flex-col items-center gap-2 group">
+                <button type="button" onClick={() => shareTo(`https://wa.me/?text=${encodeURIComponent(`${shareText} ${businessUrl}`)}`)} className="flex flex-col items-center gap-2 group">
                   <div className="w-14 h-14 rounded-full bg-[#25D366]/10 flex items-center justify-center text-[#25D366] group-hover:bg-[#25D366]/20 transition-colors">
                     <MessageCircle className="w-6 h-6" />
                   </div>
                   <span className="text-[12px] font-medium text-neutral-600">WhatsApp</span>
                 </button>
-                <button className="flex flex-col items-center gap-2 group">
+                <button type="button" onClick={() => shareTo(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(businessUrl)}`)} className="flex flex-col items-center gap-2 group">
                   <div className="w-14 h-14 rounded-full bg-[#1877F2]/10 flex items-center justify-center text-[#1877F2] group-hover:bg-[#1877F2]/20 transition-colors">
                     <Facebook className="w-6 h-6" />
                   </div>
                   <span className="text-[12px] font-medium text-neutral-600">Facebook</span>
                 </button>
-                <button className="flex flex-col items-center gap-2 group">
+                <button type="button" onClick={() => shareTo(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(businessUrl)}`)} className="flex flex-col items-center gap-2 group">
                   <div className="w-14 h-14 rounded-full bg-[#1DA1F2]/10 flex items-center justify-center text-[#1DA1F2] group-hover:bg-[#1DA1F2]/20 transition-colors">
                     <Twitter className="w-6 h-6" />
                   </div>
-                  <span className="text-[12px] font-medium text-neutral-600">Twitter</span>
+                  <span className="text-[12px] font-medium text-neutral-600">X / Twitter</span>
                 </button>
               </div>
+              {shareFeedback && <p role="status" className="-mt-4 mb-4 text-center text-sm font-medium text-emerald-700">{shareFeedback}</p>}
 
               <button 
                 onClick={() => setShowShareModal(false)}
