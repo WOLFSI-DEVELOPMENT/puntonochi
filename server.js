@@ -1045,7 +1045,7 @@ app.get('/api/places/:id/overview', requireNeon, async (req, res) => {
     if (!place) return res.status(404).json({ error: 'No encontramos este negocio.' });
 
     const source = JSON.stringify(place);
-    const sourceHash = createHash('sha256').update(source).digest('hex');
+    const sourceHash = createHash('sha256').update(`overview-v2:${source}`).digest('hex');
     const [cached] = await sql`SELECT overview, source_hash AS "sourceHash" FROM place_ai_overviews WHERE place_id = ${place.id}`;
     if (cached?.sourceHash === sourceHash) {
       res.set('Cache-Control', 'private, max-age=86400');
@@ -1055,8 +1055,8 @@ app.get('/api/places/:id/overview', requireNeon, async (req, res) => {
     const client = new GoogleGenAI({ apiKey });
     const response = await client.models.generateContent({
       model: 'gemini-3.1-flash-lite',
-      contents: `Escribe un resumen breve en español para una tarjeta de directorio local. Usa exclusivamente los datos proporcionados; no inventes servicios, precios, calidad ni horarios. No reveles razonamiento, no uses listas ni introducciones; devuelve solo 1 o 2 frases (máximo 42 palabras). Si hay pocos datos, resume únicamente lo que sí se sabe.\n\nDatos del negocio:\n${source}`,
-      config: { maxOutputTokens: 120, thinkingConfig: { thinkingLevel: 'low', includeThoughts: false } },
+      contents: `Escribe exactamente 2 o 3 frases breves en español para presentar este negocio. Basa cada afirmación únicamente en los datos proporcionados: no inventes servicios, precios, calidad, horarios ni recomendaciones. Incluye detalles concretos disponibles, como giro, ubicación, horario, contacto o calificación. Si faltan datos para una segunda frase, di de forma neutral que la ficha no incluye más información. No reveles razonamiento ni agregues listas o introducciones; devuelve solo el resumen (máximo 65 palabras).\n\nDatos del negocio:\n${source}`,
+      config: { maxOutputTokens: 180, thinkingConfig: { thinkingLevel: 'low', includeThoughts: false } },
     });
     const overview = response.text?.trim();
     if (!overview) return res.status(502).json({ error: 'Gemini no devolvió un resumen.' });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Bookmark, MapPin, Plus, Star } from 'lucide-react';
 import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react';
 import CornerKit, { type SquircleConfig } from '@cornerkit/core';
@@ -13,7 +13,7 @@ import { AnimatePresence } from 'motion/react';
 const cornerKit = new CornerKit();
 const feedCorners: SquircleConfig = { radius: 28, smoothing: 1 };
 const adClient = 'ca-pub-7029279570287128';
-const overviewStorageKey = (placeId: string) => `puntonochi-ai-overview-v1:${placeId}`;
+const overviewStorageKey = (placeId: string) => `puntonochi-ai-overview-v2:${placeId}`;
 
 function OverviewIcon() {
   return <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-blue-300" fill="currentColor">
@@ -76,7 +76,7 @@ function ExplorePlaceCard({ place, index, saved, onOpen, onToggleBookmark, reduc
   const imageScale = useTransform(scrollYProgress, [0, 0.5, 1], [1.07, 1.12, 1.07]);
   const image = place.images[0];
 
-  return <motion.article ref={cardRef} data-explore-squircle className="relative isolate aspect-[9/16] w-full overflow-hidden rounded-[28px] bg-[#1a1b1e] shadow-xl shadow-black/25" initial={reduceMotion ? false : { opacity: 0, y: 20, scale: 0.985 }} whileInView={{ opacity: 1, y: 0, scale: 1 }} viewport={{ once: true, amount: 0.08 }} transition={{ type: 'spring', damping: 27, stiffness: 165, mass: 0.85 }}>
+  return <motion.article ref={cardRef} data-explore-squircle className="snap-start [scroll-snap-stop:always] relative isolate aspect-[9/16] w-full overflow-hidden rounded-[28px] bg-[#1a1b1e] shadow-xl shadow-black/25" initial={reduceMotion ? false : { opacity: 0, y: 20, scale: 0.985 }} whileInView={{ opacity: 1, y: 0, scale: 1 }} viewport={{ once: true, amount: 0.08 }} transition={{ type: 'spring', damping: 27, stiffness: 165, mass: 0.85 }}>
     <img src={image} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full scale-125 object-cover opacity-55 blur-3xl" />
     <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.03)_0%,rgba(10,11,13,0.16)_44%,rgba(17,18,20,0.76)_100%)]" />
     <button type="button" onClick={() => onOpen(place)} aria-label={`Abrir ${place.name}`} className="absolute inset-0 z-[1] cursor-pointer" />
@@ -157,22 +157,23 @@ export function DiscoverPage({ onSelectBusiness }: { onSelectBusiness: (place: P
 
   const openPromotion = () => setShowPromotion(true);
 
-  return <motion.main initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="min-h-screen bg-[#111111] px-4 pb-36 pt-3 text-white">
-    <header className="sticky top-0 z-30 -mx-4 mb-4 flex items-center justify-between gap-3 bg-[#111111]/90 px-4 py-3 backdrop-blur-xl">
-      <div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">PuntoNochi</p><h1 className="text-xl font-bold">Explorar</h1></div>
-      <div className="ml-auto flex items-center gap-2">
+  return <motion.main style={{ height: 'calc(100dvh - env(safe-area-inset-top, 0px))', scrollPaddingTop: 72 }} className="snap-y snap-mandatory overflow-y-auto overscroll-y-contain bg-[#111111] px-4 pb-36 pt-3 text-white">
+    <header className="sticky top-0 z-30 isolate -mx-4 mb-4 flex items-center justify-between gap-3 px-4 py-3">
+      <div aria-hidden="true" className="pointer-events-none absolute -left-8 -right-8 -top-10 z-0 h-[172px]" style={{ background: 'linear-gradient(to bottom, rgba(17,17,17,0.08) 0%, rgba(17,17,17,0.42) 36%, rgba(17,17,17,0.62) 58%, rgba(17,17,17,0.28) 82%, transparent 100%)', filter: 'blur(24px)' }} />
+      <div className="relative z-10"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">PuntoNochi</p><h1 className="text-xl font-bold">Explorar</h1></div>
+      <div className="relative z-10 ml-auto flex items-center gap-2">
         <button type="button" onClick={() => setShowProfile(true)} className="flex h-10 items-center gap-2 rounded-full bg-[#292a2d] px-4 text-sm font-semibold text-white"><Bookmark className="h-4 w-4"/><span>Perfil</span></button>
         <button type="button" onClick={() => setShowCreateFlow(true)} aria-label="Crear publicación" className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black transition-transform active:scale-95"><Plus className="h-5 w-5" strokeWidth={2.5}/></button>
       </div>
     </header>
 
-    <div className="mx-auto flex max-w-[460px] flex-col gap-5 [scroll-behavior:smooth]">
+    <div className="mx-auto flex max-w-[460px] flex-col gap-2 [scroll-behavior:smooth]">
       {places.map((place, index) => {
         const saved = bookmarkIds.includes(place.id);
-        return <div key={`${place.id}-${feedVersion}`}>
+        return <Fragment key={`${place.id}-${feedVersion}`}>
           <ExplorePlaceCard place={place} index={index} saved={saved} onOpen={onSelectBusiness} onToggleBookmark={toggleBookmark} reduceMotion={reduceMotion}/>
           {(index + 1) % 7 === 0 && <div className="mt-4"><button type="button" onClick={openPromotion} data-explore-squircle className="w-full rounded-[24px] bg-[#202124] p-4 text-left"><p className="text-sm font-bold">¿Tienes un negocio?</p><p className="mt-1 text-xs text-white/50">Promociónalo en PuntoNochi</p><span className="mt-3 inline-flex rounded-full bg-white px-4 py-2 text-xs font-bold text-black">Promocionar</span></button><FeedAd/></div>}
-        </div>;
+        </Fragment>;
       })}
       {!places.length && <div className="aspect-[9/16] animate-pulse rounded-[28px] bg-[#202124]" aria-label="Cargando lugares" role="status"/>}
     </div>

@@ -20,7 +20,7 @@ import { InstallAppPrompt } from './components/InstallAppPrompt';
 import { NotificationOptInBanner } from './components/NotificationOptInBanner';
 import CornerKit from '@cornerkit/core';
 import { Category, Place, Colonia } from './types';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { DAILY_USE_KEY, recordProfileActiveSeconds } from './profileStorage';
 
 const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
@@ -57,6 +57,7 @@ declare global {
 }
 
 export default function App() {
+  const reduceMotion = useReducedMotion();
   useEffect(() => {
     document.documentElement.classList.add('dark');
   }, []);
@@ -370,10 +371,11 @@ export default function App() {
   }, []);
 
   return (
-    <div id="app-root" className="relative min-h-screen bg-[#f8f9fa] pb-36 font-sans text-neutral-900 selection:bg-blue-100" style={{ fontFamily: "'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif" }}>
+    <div id="app-root" className={`relative min-h-screen bg-[#f8f9fa] ${activeTab === 'explorar' ? 'pb-0' : 'pb-36'} font-sans text-neutral-900 selection:bg-blue-100`} style={{ fontFamily: "'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif" }}>
       {/* Dynamic Main Content based on activeTab */}
+      <AnimatePresence mode="wait" initial={false}>
       {activeTab === 'inicio' && (
-        <main className="pt-16">
+        <motion.main key="home-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }} className="pt-16">
           {/* Header Section */}
           <section className="relative px-5 mb-8">
             <div aria-label={`${dailyUse.totalDays} días usando PuntoNochi. Racha actual de ${dailyUse.currentStreak} días.`} title={`${dailyUse.totalDays} días usando PuntoNochi · racha de ${dailyUse.currentStreak} días`} className="absolute right-5 top-[-4px] flex min-h-9 items-center gap-1.5 rounded-full bg-[#292a2d] px-2.5 py-1 text-white shadow-sm">
@@ -603,21 +605,22 @@ export default function App() {
             </div>
             <button type="button" onClick={() => setShowBusinessSubmission(true)} style={{ backgroundColor: '#ffffff', color: '#111111' }} className="w-full rounded-full !bg-white px-6 py-3.5 text-sm font-bold !text-black transition-transform active:scale-[0.99]">Agrega tu negocio</button>
           </section>
-        </main>
+        </motion.main>
       )}
 
-      <AnimatePresence mode="wait">
         {activeTab === 'explorar' && (
+          <motion.div key="explore-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}>
           <DiscoverPage 
             key="discover" 
             onSelectBusiness={(place) => setSelectedBusiness(place)} 
           />
+          </motion.div>
         )}
         {activeTab === 'videos' && (
-          <VideosPage key="videos" />
+          <motion.div key="videos-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}><VideosPage key="videos" /></motion.div>
         )}
         {activeTab === 'noticias' && (
-          <NewsPage key="noticias" />
+          <motion.div key="news-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}><NewsPage key="noticias" /></motion.div>
         )}
       </AnimatePresence>
 
