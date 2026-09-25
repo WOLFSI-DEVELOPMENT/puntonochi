@@ -33,12 +33,10 @@ export function AllCategoriesPage({ onClose, onSelectCategory }: { onClose: () =
                 className={`squircle-24 w-full h-[160px] ${cat.gradient} p-4 flex flex-col justify-between shadow-[0_4px_12px_rgba(0,0,0,0.05)] text-white relative overflow-hidden cursor-pointer hover:opacity-90 active:scale-95 transition-all`}
               >
                 <div className="h-[72px] w-full flex items-center justify-center mt-1 drop-shadow-[0_8px_6px_rgba(0,0,0,0.2)]">
-                  {cat.emoji ? (
-                    <img src={cat.emoji} alt={cat.name} className="h-full object-contain scale-110" />
+                  {cat.emoji && (cat.emoji.startsWith('http') || cat.emoji.startsWith('/')) ? (
+                    <img src={cat.emoji} alt={cat.name} className="h-full max-w-full object-contain scale-110" />
                   ) : (
-                    <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-                      <span className="text-white/60 text-2xl font-bold">{cat.name.charAt(0)}</span>
-                    </div>
+                    <span aria-hidden="true" className="text-[56px] leading-none drop-shadow-[0_8px_6px_rgba(0,0,0,0.2)]">{cat.emoji || '🏷️'}</span>
                   )}
                 </div>
                 <div>

@@ -5,7 +5,13 @@ import { apiFetch } from '../api';
 import { mockPlaces } from '../data';
 import type { Place } from '../types';
 
-const categories = ['Restaurante', 'Cafetería', 'Hotel', 'Farmacia', 'Tienda', 'Servicios', 'Otro'];
+const categories = [
+  'Comida', 'Restaurantes y antojos', 'Vinos y Licores', 'Bebidas y Depósitos', 'Mercado',
+  'Farmacia', 'Hogar', 'Oficios', 'Mecánica', 'Educación', 'Servicios Pro.', 'Fiestas',
+  'Música y Audio', 'Viajes y Vehículos', 'Agricultura', 'Supermercados', 'Moda y Regalos',
+  'Belleza', 'Salud Esp.', 'Entretenimiento', 'Estilo de Vida', 'Construcción', 'Tecnología',
+  'Hoteles y Rentas', 'Ayuntamiento', 'Eventos', 'Cafetería', 'Otro',
+];
 const costs = [1, 2, 3, 4];
 
 type BusinessPhoto = { name: string; url: string; file: File };

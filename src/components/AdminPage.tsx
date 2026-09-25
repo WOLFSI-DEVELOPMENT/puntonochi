@@ -39,7 +39,7 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function AdminPage({ onClose }: AdminPageProps) {
   const [status, setStatus] = useState<AdminStatus>('checking');
-  const [password, setPassword] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
   const [places, setPlaces] = useState<AdminPlace[]>([]);
   const [form, setForm] = useState<BusinessForm>(emptyForm);
   const [imageDrafts, setImageDrafts] = useState<Record<string, string>>({});
@@ -56,7 +56,12 @@ export function AdminPage({ onClose }: AdminPageProps) {
 
   useEffect(() => {
     let active = true;
-    apiRequest<{ configured: boolean; authenticated: boolean }>('/api/admin/session')
+    const loginError = new URLSearchParams(window.location.search).get('loginError');
+    if (loginError) {
+      setError(loginError);
+      window.history.replaceState({}, '', `${window.location.pathname}${window.location.hash}`);
+    }
+    apiRequest<{ configured: boolean; authenticated: boolean; email?: string | null }>('/api/admin/session')
       .then(async (session) => {
         if (!active) return;
         if (!session.configured) {
@@ -67,6 +72,7 @@ export function AdminPage({ onClose }: AdminPageProps) {
           setStatus('login');
           return;
         }
+        setAdminEmail(session.email || '');
         await loadPlaces();
         await loadClaims();
         if (active) setStatus('ready');
@@ -84,23 +90,6 @@ export function AdminPage({ onClose }: AdminPageProps) {
     () => places.filter((place) => !(place.images || []).some(hasRealImage)),
     [places],
   );
-
-  const login = async (event: FormEvent) => {
-    event.preventDefault();
-    setBusy(true);
-    setError('');
-    try {
-      await apiRequest('/api/admin/login', { method: 'POST', body: JSON.stringify({ password }) });
-      setPassword('');
-      await loadPlaces();
-      await loadClaims();
-      setStatus('ready');
-    } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : 'No se pudo iniciar sesión.');
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const createBusiness = async (event: FormEvent) => {
     event.preventDefault();
@@ -177,19 +166,18 @@ export function AdminPage({ onClose }: AdminPageProps) {
             <button type="button" onClick={onClose} aria-label="Volver" className="rounded-full bg-white/[0.08] p-2.5"><ArrowLeft className="h-5 w-5" /></button>
             <div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">PuntoNochi</p><h1 className="text-xl font-bold">Administración</h1></div>
           </div>
-          {status === 'ready' && <button type="button" disabled={busy} onClick={logout} className="flex items-center gap-2 rounded-full bg-white/[0.08] px-3 py-2 text-sm font-semibold"><LogOut className="h-4 w-4" />Salir</button>}
+          {status === 'ready' && <div className="flex items-center gap-3"><span className="hidden text-xs text-white/45 sm:inline">{adminEmail}</span><button type="button" disabled={busy} onClick={logout} className="flex items-center gap-2 rounded-full bg-white/[0.08] px-3 py-2 text-sm font-semibold"><LogOut className="h-4 w-4" />Salir</button></div>}
         </header>
 
         {status === 'checking' && <div className="flex items-center justify-center gap-2 py-16 text-sm text-white/60"><LoaderCircle className="h-5 w-5 animate-spin" />Comprobando acceso…</div>}
 
-        {status === 'not-configured' && <section className="rounded-[24px] bg-[#202124] p-5"><h2 className="font-semibold">Falta configurar el acceso seguro</h2><p className="mt-2 text-sm leading-relaxed text-white/60">El acceso de administrador se inicializa en Neon. Verifica que el servidor tenga <code>DATABASE_URL</code>, <code>ADMIN_PASSWORD</code> (12+ caracteres) y <code>ADMIN_SESSION_SECRET</code> (32+ caracteres), y que al menos una vez se haya abierto esta página en la implementación de Vercel para guardar las credenciales iniciales en la base de datos.</p></section>}
+        {status === 'not-configured' && <section className="rounded-[24px] bg-[#202124] p-5"><h2 className="font-semibold">Falta configurar Google</h2><p className="mt-2 text-sm leading-relaxed text-white/60">Agrega <code>GOOGLE_CLIENT_ID</code> y <code>GOOGLE_CLIENT_SECRET</code> como variables del servidor en Vercel y vuelve a desplegar.</p></section>}
 
-        {status === 'login' && <form onSubmit={login} className="rounded-[24px] bg-[#202124] p-5 sm:p-6">
-          <div className="mb-5 flex items-center gap-3"><span className="rounded-2xl bg-white/[0.08] p-3"><Store className="h-5 w-5" /></span><div><h2 className="font-semibold">Acceso de administrador</h2><p className="text-sm text-white/50">Ingresa tu contraseña para administrar negocios.</p></div></div>
-          <label className="mb-4 block text-sm font-medium text-white/70">Contraseña<input autoComplete="current-password" type="password" required value={password} onChange={(event) => setPassword(event.target.value)} className="mt-2 h-12 w-full rounded-2xl bg-[#303135] px-4 text-base text-white outline-none placeholder:text-white/40 focus:ring-2 focus:ring-white/20" placeholder="Contraseña de administrador" /></label>
+        {status === 'login' && <section className="rounded-[24px] bg-[#202124] p-5 sm:p-6">
+          <div className="mb-5 flex items-center gap-3"><span className="rounded-2xl bg-white/[0.08] p-3"><Store className="h-5 w-5" /></span><div><h2 className="font-semibold">Acceso de administrador</h2><p className="text-sm text-white/50">Continúa con una de las cuentas Google autorizadas.</p></div></div>
           {error && <p role="alert" className="mb-4 text-sm text-rose-300">{error}</p>}
-          <button disabled={busy} className="admin-login-button flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white font-semibold text-black disabled:opacity-60">{busy && <LoaderCircle className="h-4 w-4 animate-spin" />}Entrar</button>
-        </form>}
+          <button type="button" onClick={() => window.location.assign('/api/admin/oauth/start')} className="admin-login-button flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white font-semibold text-black"><span aria-hidden="true" className="text-base font-bold">G</span>Continuar con Google</button>
+        </section>}
 
         {status === 'ready' && <div className="space-y-6">
           <section className="space-y-3">

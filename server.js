@@ -2,8 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import dotenv from 'dotenv';
-import { createHash, createHmac, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { neon } from '@neondatabase/serverless';
+import { OAuth2Client } from 'google-auth-library';
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import webpush from 'web-push';
 
@@ -31,60 +32,51 @@ const requireNeon = (req, res, next) => {
 };
 
 const ADMIN_COOKIE = 'puntonochi_admin';
+const ADMIN_OAUTH_STATE_COOKIE = 'puntonochi_admin_oauth_state';
 const ADMIN_SESSION_TTL_SECONDS = 8 * 60 * 60;
-let adminSchemaReady;
-const ensureAdminSchema = () => {
-  if (!sql) throw new Error('DATABASE_URL is not configured.');
-  if (!adminSchemaReady) adminSchemaReady = sql`CREATE TABLE IF NOT EXISTS admin_credentials (
-    id SMALLINT PRIMARY KEY CHECK (id = 1),
-    password_salt TEXT NOT NULL,
-    password_hash TEXT NOT NULL,
-    session_secret TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  )`.catch((error) => { adminSchemaReady = undefined; throw error; });
-  return adminSchemaReady;
-};
-const getAdminConfig = async () => {
-  if (!sql) return null;
-  await ensureAdminSchema();
-  let [config] = await sql`SELECT password_salt AS "passwordSalt", password_hash AS "passwordHash", session_secret AS "sessionSecret" FROM admin_credentials WHERE id = 1`;
-  if (!config && process.env.ADMIN_PASSWORD?.length >= 12 && process.env.ADMIN_SESSION_SECRET?.length >= 32) {
-    const salt = randomBytes(16).toString('hex');
-    const passwordHash = scryptSync(process.env.ADMIN_PASSWORD, salt, 64).toString('hex');
-    await sql`INSERT INTO admin_credentials (id, password_salt, password_hash, session_secret) VALUES (1, ${salt}, ${passwordHash}, ${process.env.ADMIN_SESSION_SECRET}) ON CONFLICT (id) DO NOTHING`;
-    [config] = await sql`SELECT password_salt AS "passwordSalt", password_hash AS "passwordHash", session_secret AS "sessionSecret" FROM admin_credentials WHERE id = 1`;
-  }
-  return config || null;
-};
-const safeEqual = (left, right) => timingSafeEqual(
-  createHash('sha256').update(String(left)).digest(),
-  createHash('sha256').update(String(right)).digest(),
+const ADMIN_EMAIL_ALLOWLIST = new Set([
+  'survivalcreativeminecraftadven@gmail.com',
+  'rocioramire1976@gmail.com',
+]);
+const isGoogleOAuthConfigured = () => Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+const getOAuthRedirectUri = (req) => `${req.protocol}://${req.get('host')}/api/admin/oauth/callback`;
+const getGoogleOAuthClient = (req) => new OAuth2Client(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  getOAuthRedirectUri(req),
 );
+let adminSessionSchemaReady;
+const ensureAdminSessionSchema = () => {
+  if (!sql) throw new Error('DATABASE_URL is not configured.');
+  if (!adminSessionSchemaReady) adminSessionSchemaReady = (async () => {
+    await sql`CREATE TABLE IF NOT EXISTS admin_sessions (
+      token_hash TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+    await sql`CREATE INDEX IF NOT EXISTS admin_sessions_expiry_idx ON admin_sessions (expires_at)`;
+    await sql`DROP TABLE IF EXISTS admin_credentials`;
+  })().catch((error) => { adminSessionSchemaReady = undefined; throw error; });
+  return adminSessionSchemaReady;
+};
+const hashAdminSessionToken = (token) => createHash('sha256').update(token).digest('hex');
 const getCookieValue = (req, name) => {
   const entry = (req.headers.cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
   return entry ? entry.slice(name.length + 1) : '';
 };
-const signAdminPayload = (payload, secret) => createHmac('sha256', secret).update(payload).digest('base64url');
-const isAdminSessionValid = (req, secret) => {
+const getAdminSession = async (req) => {
+  if (!sql) return null;
+  await ensureAdminSessionSchema();
   const token = getCookieValue(req, ADMIN_COOKIE);
-  const separator = token.lastIndexOf('.');
-  if (separator < 1) return false;
-  const payload = token.slice(0, separator);
-  const suppliedSignature = Buffer.from(token.slice(separator + 1), 'base64url');
-  const expectedSignature = Buffer.from(signAdminPayload(payload, secret), 'base64url');
-  if (suppliedSignature.length !== expectedSignature.length || !timingSafeEqual(suppliedSignature, expectedSignature)) return false;
-  try {
-    return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')).expiresAt > Date.now();
-  } catch {
-    return false;
-  }
+  if (!token) return null;
+  const [session] = await sql`SELECT email FROM admin_sessions WHERE token_hash = ${hashAdminSessionToken(token)} AND expires_at > NOW()`;
+  return session || null;
 };
 const requireAdmin = async (req, res, next) => {
   try {
-    const config = await getAdminConfig();
-    if (!config) return res.status(503).json({ error: 'Configura DATABASE_URL, ADMIN_PASSWORD (12+ caracteres) y ADMIN_SESSION_SECRET (32+ caracteres); al iniciar, el acceso se guarda en Neon.' });
-    if (!isAdminSessionValid(req, config.sessionSecret)) return res.status(401).json({ error: 'Inicia sesión como administrador.' });
+    if (!sql || !isGoogleOAuthConfigured()) return res.status(503).json({ error: 'Configura DATABASE_URL, GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET.' });
+    if (!(await getAdminSession(req))) return res.status(401).json({ error: 'Inicia sesión con una cuenta Google autorizada.' });
     next();
   } catch (error) {
     console.error('Admin credentials could not be read from Neon:', error);
@@ -125,43 +117,111 @@ const parseImageUrl = (value) => {
 app.get('/api/admin/session', async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try {
-    const config = await getAdminConfig();
-    res.json({ configured: Boolean(config), authenticated: Boolean(config && isAdminSessionValid(req, config.sessionSecret)) });
+    const session = await getAdminSession(req);
+    res.json({ configured: Boolean(sql && isGoogleOAuthConfigured()), authenticated: Boolean(session), email: session?.email || null });
   } catch (error) {
     console.error('Admin configuration check failed:', error);
-    res.status(503).json({ configured: false, authenticated: false, error: 'No se pudo comprobar la configuración en Neon.' });
+    res.status(503).json({ configured: false, authenticated: false, email: null, error: 'No se pudo comprobar la configuración en Neon.' });
   }
 });
 
-app.post('/api/admin/login', async (req, res) => {
+app.get('/api/admin/oauth/start', async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  if (!ensureSameOrigin(req, res)) return;
-  let config;
-  try { config = await getAdminConfig(); } catch (error) {
-    console.error('Admin login could not read Neon credentials:', error);
-    return res.status(503).json({ error: 'No se pudo conectar con Neon para comprobar el acceso.' });
+  if (!sql || !isGoogleOAuthConfigured()) return res.status(503).send('Configura DATABASE_URL, GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en el servidor.');
+  try { await ensureAdminSessionSchema(); } catch (error) {
+    console.error('Admin OAuth could not initialize session storage:', error);
+    return res.status(503).send('No se pudo conectar con Neon para iniciar sesión.');
   }
-  if (!config) return res.status(503).json({ error: 'Configura DATABASE_URL, ADMIN_PASSWORD y ADMIN_SESSION_SECRET; al iniciar, el acceso se guarda en Neon.' });
-  const password = typeof req.body?.password === 'string' ? req.body.password : '';
-  const suppliedHash = scryptSync(password, config.passwordSalt, 64).toString('hex');
-  if (!safeEqual(suppliedHash, config.passwordHash)) return res.status(401).json({ error: 'Contraseña incorrecta.' });
-
-  const payload = Buffer.from(JSON.stringify({ expiresAt: Date.now() + ADMIN_SESSION_TTL_SECONDS * 1000 })).toString('base64url');
-  const token = `${payload}.${signAdminPayload(payload, config.sessionSecret)}`;
+  const state = randomBytes(32).toString('base64url');
   const secure = process.env.NODE_ENV === 'production' || req.secure;
-  res.setHeader('Set-Cookie', `${ADMIN_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/api/admin; SameSite=Strict; Max-Age=${ADMIN_SESSION_TTL_SECONDS}${secure ? '; Secure' : ''}`);
-  res.json({ authenticated: true });
+  res.cookie(ADMIN_OAUTH_STATE_COOKIE, state, { httpOnly: true, secure, sameSite: 'lax', path: '/api/admin/oauth', maxAge: 10 * 60 * 1000 });
+  const authUrl = getGoogleOAuthClient(req).generateAuthUrl({
+    response_type: 'code',
+    scope: ['openid', 'email', 'profile'],
+    state,
+    prompt: 'select_account',
+  });
+  res.redirect(authUrl);
+});
+
+app.get('/api/admin/oauth/callback', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const secure = process.env.NODE_ENV === 'production' || req.secure;
+  const clearStateCookie = `${ADMIN_OAUTH_STATE_COOKIE}=; HttpOnly; Path=/api/admin/oauth; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`;
+  const redirectWithError = (error) => res.setHeader('Set-Cookie', clearStateCookie).redirect(`/admin?loginError=${encodeURIComponent(error)}`);
+  if (!sql || !isGoogleOAuthConfigured()) return redirectWithError('Configura Google OAuth en el servidor.');
+  const code = typeof req.query.code === 'string' ? req.query.code : '';
+  const stateCookie = getCookieValue(req, ADMIN_OAUTH_STATE_COOKIE);
+  const stateQuery = typeof req.query.state === 'string' ? req.query.state : '';
+  if (!code || !stateCookie || !stateQuery || stateCookie !== stateQuery) return redirectWithError('No se pudo validar la sesión de Google. Intenta otra vez.');
+  try {
+    await ensureAdminSessionSchema();
+    const client = getGoogleOAuthClient(req);
+    const { tokens } = await client.getToken(code);
+    if (!tokens.id_token) return redirectWithError('Google no devolvió una identidad válida.');
+    const ticket = await client.verifyIdToken({ idToken: tokens.id_token, audience: process.env.GOOGLE_CLIENT_ID });
+    const payload = ticket.getPayload();
+    const email = payload?.email?.trim().toLowerCase();
+    if (!email || payload?.email_verified !== true || !ADMIN_EMAIL_ALLOWLIST.has(email)) {
+      return redirectWithError('Esta cuenta de Google no tiene acceso de administrador.');
+    }
+    const token = randomBytes(32).toString('base64url');
+    await sql`INSERT INTO admin_sessions (token_hash, email, expires_at) VALUES (
+      ${hashAdminSessionToken(token)}, ${email}, NOW() + (${ADMIN_SESSION_TTL_SECONDS} * INTERVAL '1 second'))`;
+    res.setHeader('Set-Cookie', [
+      `${ADMIN_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/api/admin; SameSite=Strict; Max-Age=${ADMIN_SESSION_TTL_SECONDS}${secure ? '; Secure' : ''}`,
+      clearStateCookie,
+    ]);
+    res.redirect('/admin');
+  } catch (error) {
+    console.error('Google admin OAuth callback failed:', error);
+    redirectWithError('No se pudo completar el inicio con Google. Intenta otra vez.');
+  }
 });
 
 app.post('/api/admin/logout', (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (!ensureSameOrigin(req, res)) return;
   const secure = process.env.NODE_ENV === 'production' || req.secure;
-  res.setHeader('Set-Cookie', `${ADMIN_COOKIE}=; HttpOnly; Path=/api/admin; SameSite=Strict; Max-Age=0${secure ? '; Secure' : ''}`);
-  res.json({ authenticated: false });
+  const token = getCookieValue(req, ADMIN_COOKIE);
+  const removeSession = token && sql ? ensureAdminSessionSchema().then(() => sql`DELETE FROM admin_sessions WHERE token_hash = ${hashAdminSessionToken(token)}`) : Promise.resolve();
+  removeSession.then(() => {
+    res.setHeader('Set-Cookie', `${ADMIN_COOKIE}=; HttpOnly; Path=/api/admin; SameSite=Strict; Max-Age=0${secure ? '; Secure' : ''}`);
+    res.json({ authenticated: false });
+  }).catch((error) => {
+    console.error('Admin session could not be cleared:', error);
+    res.status(500).json({ error: 'No se pudo cerrar la sesión.' });
+  });
 });
 
 let directorySchemaReady;
+const requestedCategories = [
+  ['comida', 'Comida', '🍽️', 'bg-card-orange'],
+  ['vinos-licores', 'Vinos y Licores', '🍷', 'bg-card-purple'],
+  ['bebidas-depositos', 'Bebidas y Depósitos', '🥤', 'bg-card-blue'],
+  ['mercado-locales', 'Mercado', '🧺', 'bg-card-green'],
+  ['farmacia', 'Farmacia', '💊', 'bg-card-purple'],
+  ['hogar', 'Hogar', '🏠', 'bg-card-orange'],
+  ['oficios', 'Oficios', '🛠️', 'bg-card-blue'],
+  ['mecanica', 'Mecánica', '🔧', 'bg-card-green'],
+  ['educacion', 'Educación', '🎓', 'bg-card-purple'],
+  ['servicios-profesionales', 'Servicios Pro.', '💼', 'bg-card-orange'],
+  ['fiestas', 'Fiestas', '🎉', 'bg-card-blue'],
+  ['musica-audio', 'Música y Audio', '🎶', 'bg-card-purple'],
+  ['viajes-vehiculos', 'Viajes y Vehículos', '🚕', 'bg-card-green'],
+  ['agricultura', 'Agricultura', '🌾', 'bg-card-orange'],
+  ['supermercados', 'Supermercados', '🍎', 'bg-card-blue'],
+  ['moda-regalos', 'Moda y Regalos', '🛍️', 'bg-card-purple'],
+  ['belleza', 'Belleza', '💅', 'bg-card-orange'],
+  ['salud-especializada', 'Salud Esp.', '🩺', 'bg-card-green'],
+  ['entretenimiento', 'Entretenimiento', '🎬', 'bg-card-blue'],
+  ['estilo-de-vida', 'Estilo de Vida', '🧘', 'bg-card-purple'],
+  ['construccion', 'Construcción', '🏗️', 'bg-card-orange'],
+  ['tecnologia', 'Tecnología', '💻', 'bg-card-green'],
+  ['hoteles-rentas', 'Hoteles y Rentas', '🏨', 'bg-card-blue'],
+  ['ayuntamiento', 'Ayuntamiento', '🏛️', 'bg-card-purple'],
+  ['eventos', 'Eventos', '🎟️', 'bg-card-orange'],
+];
 const ensureDirectorySchema = () => {
   if (!directorySchemaReady) directorySchemaReady = (async () => {
     await sql`CREATE TABLE IF NOT EXISTS categories (
@@ -181,6 +241,12 @@ const ensureDirectorySchema = () => {
       lat DOUBLE PRECISION, lng DOUBLE PRECISION, phone TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0
     )`;
+    for (const [id, name, emoji, gradient] of requestedCategories) {
+      await sql`INSERT INTO categories (id, name, visits, gradient, emoji, sort_order)
+        VALUES (${`suggested-${id}`}, ${name}, 0, ${gradient}, ${emoji},
+          (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM categories))
+        ON CONFLICT (id) DO UPDATE SET emoji = CASE WHEN categories.emoji IS NULL OR categories.emoji = '' THEN EXCLUDED.emoji ELSE categories.emoji END`;
+    }
   })().catch((error) => { directorySchemaReady = undefined; throw error; });
   return directorySchemaReady;
 };
