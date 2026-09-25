@@ -3,6 +3,7 @@ import { motion, PanInfo, AnimatePresence } from 'motion/react';
 import { X, Share, Phone, Globe, ShoppingBag, MoreHorizontal, Navigation, BookOpen, Link, MessageCircle, Twitter, Facebook, QrCode } from 'lucide-react';
 import { Place } from '../types';
 import CornerKit from '@cornerkit/core';
+import { CommunityActionsSheet } from './CommunityActionsSheet';
 
 export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose: () => void }) {
   const [showMapSelector, setShowMapSelector] = useState(false);
@@ -11,6 +12,7 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
   const [showWebsiteWarning, setShowWebsiteWarning] = useState(false);
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [showMenuModal, setShowMenuModal] = useState(false);
+  const [showCommunityActions, setShowCommunityActions] = useState(false);
   const businessUrl = `${window.location.origin}/place/${encodeURIComponent(place.id)}`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=176x176&margin=8&data=${encodeURIComponent(businessUrl)}`;
 
@@ -169,7 +171,7 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
                 <span className="text-[11px] font-bold leading-none">Sitio</span>
               </button>
 
-              <button className="ck-apply shrink-0 flex flex-col items-center justify-center gap-1 bg-[#f1f3f4] text-[#1a73e8] py-2 px-5 min-w-[76px] snap-start hover:bg-[#e8eaed] transition-colors">
+              <button onClick={() => setShowCommunityActions(true)} className="ck-apply shrink-0 flex flex-col items-center justify-center gap-1 bg-[#f1f3f4] text-[#1a73e8] py-2 px-5 min-w-[76px] snap-start hover:bg-[#e8eaed] transition-colors">
                 <MoreHorizontal className="w-[22px] h-[22px]" strokeWidth={2} />
                 <span className="text-[11px] font-bold leading-none">Más</span>
               </button>
@@ -594,6 +596,9 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
             </motion.div>
           </>
         )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showCommunityActions && <CommunityActionsSheet place={place} onClose={() => setShowCommunityActions(false)} />}
       </AnimatePresence>
     </>
   );

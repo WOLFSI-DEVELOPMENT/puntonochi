@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { categories, colonias, visits, mockPlaces } from './data';
-import { ChevronRight, Search, Mic, MoreHorizontal } from 'lucide-react';
+import { ChevronRight, Search, Mic, MoreHorizontal, Flame } from 'lucide-react';
 import { BottomNav } from './components/BottomNav';
 import { ColoniasPage } from './components/ColoniasPage';
 import { DiscoverPage } from './components/DiscoverPage';
@@ -23,6 +23,32 @@ import { Category, Place, Colonia } from './types';
 import { AnimatePresence, motion } from 'motion/react';
 
 const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
+type DailyUse = { lastOpened: string; totalDays: number; currentStreak: number };
+const DAILY_USE_KEY = 'puntonochi-daily-use-v1';
+
+function localDateKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function previousLocalDateKey(key: string) {
+  const [year, month, day] = key.split('-').map(Number);
+  const date = new Date(year, month - 1, day - 1);
+  return localDateKey(date);
+}
+
+function recordDailyUse(): DailyUse {
+  const today = localDateKey();
+  try {
+    const saved = JSON.parse(localStorage.getItem(DAILY_USE_KEY) || 'null') as DailyUse | null;
+    if (saved?.lastOpened === today) return saved;
+    const currentStreak = saved?.lastOpened === previousLocalDateKey(today) ? saved.currentStreak + 1 : 1;
+    const dailyUse = { lastOpened: today, totalDays: (saved?.totalDays || 0) + 1, currentStreak };
+    localStorage.setItem(DAILY_USE_KEY, JSON.stringify(dailyUse));
+    return dailyUse;
+  } catch {
+    return { lastOpened: today, totalDays: 1, currentStreak: 1 };
+  }
+}
 
 declare global {
   interface Window {
@@ -99,6 +125,25 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [directoryVersion, setDirectoryVersion] = useState(0);
+  const [dailyUse, setDailyUse] = useState<DailyUse>(() => recordDailyUse());
+  const streakDateRef = useRef(dailyUse.lastOpened);
+
+  useEffect(() => {
+    const refreshDailyUse = () => {
+      const today = localDateKey();
+      if (streakDateRef.current === today) return;
+      streakDateRef.current = today;
+      setDailyUse(recordDailyUse());
+    };
+    window.addEventListener('focus', refreshDailyUse);
+    document.addEventListener('visibilitychange', refreshDailyUse);
+    const timer = window.setInterval(refreshDailyUse, 60_000);
+    return () => {
+      window.removeEventListener('focus', refreshDailyUse);
+      document.removeEventListener('visibilitychange', refreshDailyUse);
+      window.clearInterval(timer);
+    };
+  }, []);
 
   const [destacadosState, setDestacadosState] = useState({ index: 0, direction: 0 });
 
@@ -319,7 +364,11 @@ export default function App() {
       {activeTab === 'inicio' && (
         <main className="pt-16">
           {/* Header Section */}
-          <section className="px-5 mb-8">
+          <section className="relative px-5 mb-8">
+            <div aria-label={`${dailyUse.totalDays} días usando PuntoNochi. Racha actual de ${dailyUse.currentStreak} días.`} title={`${dailyUse.totalDays} días usando PuntoNochi · racha de ${dailyUse.currentStreak} días`} className="absolute right-5 top-[-4px] flex min-h-9 items-center gap-1.5 rounded-full bg-[#292a2d] px-2.5 py-1 text-white shadow-sm">
+              <Flame aria-hidden="true" className="h-4 w-4 shrink-0 fill-orange-400 text-orange-400" />
+              <span className="leading-tight"><span className="block text-xs font-bold tabular-nums">{dailyUse.totalDays} días</span><span className="block text-[8px] font-medium text-white/55">racha {dailyUse.currentStreak}</span></span>
+            </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-neutral-900">
               Descubre<br/>
               <span className="text-[#1a73e8]">Nochistlán</span>
@@ -634,7 +683,7 @@ export default function App() {
         )}
 
         {/* PuntoNochi Animated Brand Splash Screen */}
-        {loading && (
+        {loading && !showAdminPage && (
           <SplashScreen key="splash-screen" onFinish={() => setLoading(false)} />
         )}
         <InstallAppPrompt enabled={!loading} />

@@ -15,6 +15,7 @@ export interface Place {
   distance: string;
   goodToKnow: string[];
   hours: string;
+  weeklyHours?: Record<string, { closed: boolean; intervals: { open: string; close: string }[] }> | null;
   lat?: number;
   lng?: number;
   phone?: string;
@@ -24,7 +25,8 @@ export interface Place {
 export interface Review {
   id: string;
   author: string;
-  date: string;
+  date?: string;
+  createdAt?: string;
   rating: number;
   text: string;
   avatar?: string;

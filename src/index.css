@@ -72,7 +72,7 @@
   color: #e8eaed !important;
   color-scheme: dark;
 }
-.dark [class*="bg-[#f8f9fa]"], .dark [class*="bg-white"], .dark .bg-white { background-color: #1e1e1e !important; }
+.dark [class*="bg-[#f8f9fa]"], .dark [class~="bg-white"], .dark .bg-white { background-color: #1e1e1e !important; }
 .dark [class*="from-[#f8f9fa]"] { --tw-gradient-from: #1e1e1e var(--tw-gradient-from-position) !important; --tw-gradient-to: rgba(30, 30, 30, 0) var(--tw-gradient-to-position) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important; }
 .dark [class*="bg-neutral-50"], .dark .bg-neutral-50 { background-color: #202124 !important; }
 .dark [class*="bg-neutral-100"], .dark .bg-neutral-100 { background-color: #2d2f31 !important; color: #ffffff !important; }
@@ -91,6 +91,19 @@
 .dark input:not(.search-input-fix):not([type="checkbox"]) { background-color: #202124 !important; color: #fff !important; }
 .dark input.search-input-fix, input.search-input-fix { background-color: transparent !important; background: transparent !important; }
 .dark .admin-login-button { background-color: #ffffff !important; color: #111111 !important; }
+/* Keep solid white call-to-action controls white in dark mode. The generic
+   surface rule above is only for white surfaces that belong to the dark UI. */
+.dark [class~="bg-white"][class~="text-black"],
+.dark [class~="bg-white"][class~="!text-black"],
+.dark [class~="!bg-white"][class~="text-black"],
+.dark [class~="!bg-white"][class~="!text-black"],
+.dark [class~="bg-white"][class*="text-[#202124]"],
+.dark [class~="!bg-white"][class*="text-[#202124]"],
+.dark [class~="bg-white"][class*="text-neutral-900"],
+.dark [class~="!bg-white"][class*="text-neutral-900"] {
+  background-color: #ffffff !important;
+  color: #111111 !important;
+}
 
 .material-symbols-rounded {
   font-family: 'Material Symbols Rounded';

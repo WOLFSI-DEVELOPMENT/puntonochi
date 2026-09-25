@@ -4,6 +4,7 @@ import { Camera, Check, Clock3, ImagePlus, LoaderCircle, MapPin, Phone, Plus, St
 import { apiFetch } from '../api';
 import { mockPlaces } from '../data';
 import type { Place } from '../types';
+import { createDefaultWeeklySchedule, WeeklyHoursEditor, type BusinessHours } from './WeeklyHoursEditor';
 
 const categories = [
   'Comida', 'Restaurantes y antojos', 'Vinos y Licores', 'Bebidas y Depósitos', 'Mercado',
@@ -16,8 +17,6 @@ const costs = [1, 2, 3, 4];
 
 type BusinessPhoto = { name: string; url: string; file: File };
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
-const weekDays = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-type BusinessHours = { closed: boolean; intervals: { open: string; close: string }[] };
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -55,7 +54,7 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
   const [claimDescription, setClaimDescription] = useState('');
   const [claimProof, setClaimProof] = useState<File | null>(null);
   const [claimSubmitted, setClaimSubmitted] = useState(false);
-  const [claimHours, setClaimHours] = useState<Record<string, BusinessHours>>(() => Object.fromEntries(weekDays.map((day) => [day, { closed: day === 'Domingo', intervals: [{ open: '09:00', close: '18:00' }] }])));
+  const [claimHours, setClaimHours] = useState<Record<string, BusinessHours>>(() => createDefaultWeeklySchedule());
 
   const addPhotos = (files: FileList | null) => {
     if (!files) return;
@@ -114,10 +113,9 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
   const matchingClaims = mockPlaces.filter((place) => `${place.name} ${place.location}`.toLocaleLowerCase('es').includes(claimSearch.toLocaleLowerCase('es')));
   const selectClaimPlace = (place: Place) => {
     setSelectedClaimPlace(place); setClaimName(place.name); setClaimAddress(place.address || place.location); setClaimPhone(place.phone || ''); setClaimDescription(place.subtitle || '');
-    setClaimHours(Object.fromEntries(weekDays.map((day) => [day, { closed: day === 'Domingo', intervals: [{ open: '09:00', close: '18:00' }] }])));
+    setClaimHours(createDefaultWeeklySchedule());
     setSubmitError('');
   };
-  const updateHours = (day: string, updater: (current: BusinessHours) => BusinessHours) => setClaimHours((current) => ({ ...current, [day]: updater(current[day]) }));
   const submitClaim = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedClaimPlace || !claimProof) { setSubmitError('Selecciona un negocio y agrega un comprobante.'); return; }
@@ -168,7 +166,7 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
                   <Field icon={<span>@</span>} label="Correo de contacto"><input required type="email" value={claimEmail} onChange={(e) => setClaimEmail(e.target.value)} placeholder="tu@correo.com" className={inputClass} /></Field>
                 </div>
                 <Field icon={<Store />} label="Descripción"><textarea value={claimDescription} onChange={(e) => setClaimDescription(e.target.value)} rows={3} className={`${inputClass} !h-24 resize-y !py-3`} /></Field>
-                <section className="my-4 rounded-[22px] bg-[#292a2d] p-4"><div className="mb-3 flex items-center gap-2 text-sm font-semibold"><Clock3 className="h-4 w-4" />Horario semanal</div><div className="space-y-3">{weekDays.map((day) => { const dayHours = claimHours[day]; return <div key={day} className="rounded-2xl bg-white/[0.04] p-3"><div className="flex items-center justify-between"><span className="text-sm font-semibold">{day}</span><label className="flex items-center gap-2 text-xs text-white/60"><input type="checkbox" checked={dayHours.closed} onChange={(e) => updateHours(day, (current) => ({ ...current, closed: e.target.checked }))} />Cerrado</label></div>{!dayHours.closed && <div className="mt-2 space-y-2">{dayHours.intervals.map((interval, index) => <div key={index} className="flex items-center gap-2"><input aria-label={`${day}, apertura ${index + 1}`} type="time" value={interval.open} onChange={(e) => updateHours(day, (current) => ({ ...current, intervals: current.intervals.map((item, i) => i === index ? { ...item, open: e.target.value } : item) }))} className="min-w-0 flex-1 rounded-xl bg-[#202124] p-2 text-sm" /><span className="text-xs text-white/45">a</span><input aria-label={`${day}, cierre ${index + 1}`} type="time" value={interval.close} onChange={(e) => updateHours(day, (current) => ({ ...current, intervals: current.intervals.map((item, i) => i === index ? { ...item, close: e.target.value } : item) }))} className="min-w-0 flex-1 rounded-xl bg-[#202124] p-2 text-sm" />{index > 0 && <button type="button" aria-label="Quitar horario" onClick={() => updateHours(day, (current) => ({ ...current, intervals: current.intervals.filter((_, i) => i !== index) }))} className="rounded-full p-1 text-white/50"><Trash2 className="h-4 w-4" /></button>}</div>)}<button type="button" onClick={() => updateHours(day, (current) => ({ ...current, intervals: [...current.intervals, { open: '16:00', close: '20:00' }] }))} className="mt-1 text-xs font-semibold text-white/60">+ Agregar otro horario</button></div>}</div>; })}</div></section>
+                <WeeklyHoursEditor value={claimHours} onChange={setClaimHours} />
                 <section className="mb-4 rounded-[22px] bg-[#292a2d] p-4"><div className="mb-2 flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4" />Comprobante de propiedad</div><p className="mb-3 text-xs leading-relaxed text-white/55">Sube una factura de CFE u otro comprobante donde aparezca el negocio o tu nombre. Solo JPG o PNG, máximo 5 MB, sin límite de proporción.</p><input required type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" onChange={(e) => { const file = e.target.files?.[0] || null; if (file && (!['image/jpeg', 'image/png'].includes(file.type) || file.size > MAX_PHOTO_BYTES)) { setSubmitError(file.size > MAX_PHOTO_BYTES ? 'El comprobante debe pesar 5 MB o menos.' : 'El comprobante debe ser JPG o PNG.'); setClaimProof(null); return; } setSubmitError(''); setClaimProof(file); }} className="block w-full text-xs text-white/65 file:mr-3 file:rounded-full file:border-0 file:bg-white file:px-4 file:py-2 file:text-xs file:font-semibold file:text-black" />{claimProof && <p className="mt-2 truncate text-xs text-emerald-200">{claimProof.name}</p>}<p className="mt-3 text-[11px] leading-relaxed text-white/45">El comprobante se conservará de forma privada solo mientras se revisa tu solicitud y se eliminará al aprobarla o rechazarla. El correo queda registrado para contacto.</p></section>
               </>}
               {submitError && <p role="alert" className="mt-3 rounded-2xl bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{submitError}</p>}

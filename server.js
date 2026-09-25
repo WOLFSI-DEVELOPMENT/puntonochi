@@ -113,6 +113,25 @@ const parseImageUrl = (value) => {
     return null;
   }
 };
+const weekDays = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+const normalizeWeeklyHours = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const normalized = {};
+  for (const day of weekDays) {
+    const schedule = value[day];
+    if (!schedule || typeof schedule.closed !== 'boolean' || !Array.isArray(schedule.intervals) || schedule.intervals.length > 4) return null;
+    const intervals = schedule.intervals.map((interval) => ({ open: interval?.open, close: interval?.close }));
+    if (intervals.some(({ open, close }) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(open) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(close))) return null;
+    if (!schedule.closed && !intervals.length) return null;
+    normalized[day] = { closed: schedule.closed, intervals };
+  }
+  return normalized;
+};
+const formatWeeklyHours = (schedule) => weekDays.map((day) => {
+  const dayHours = schedule[day];
+  if (dayHours.closed) return `${day}: cerrado`;
+  return `${day}: ${dayHours.intervals.map(({ open, close }) => `${open}–${close}`).join(' y ')}`;
+}).join(' · ');
 
 app.get('/api/admin/session', async (req, res) => {
   res.set('Cache-Control', 'no-store');
@@ -249,6 +268,7 @@ const ensureDirectorySchema = () => {
       lat DOUBLE PRECISION, lng DOUBLE PRECISION, phone TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0
     )`;
+    await sql`ALTER TABLE places ADD COLUMN IF NOT EXISTS weekly_hours JSONB`;
     for (const [id, name, emoji, gradient] of requestedCategories) {
       await sql`INSERT INTO categories (id, name, visits, gradient, emoji, sort_order)
         VALUES (${`suggested-${id}`}, ${name}, 0, ${gradient}, ${emoji},
@@ -262,6 +282,7 @@ const ensureDirectorySchema = () => {
 let schemaReady;
 const ensureSubmissionSchema = () => {
   if (!schemaReady) schemaReady = (async () => {
+    await ensureDirectorySchema();
     await sql`CREATE TABLE IF NOT EXISTS business_applications (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -322,6 +343,25 @@ const ensureSubmissionSchema = () => {
       cover_mime_type TEXT,
       status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+    await sql`CREATE TABLE IF NOT EXISTS community_reviews (
+      id TEXT PRIMARY KEY,
+      place_id TEXT NOT NULL REFERENCES places(id) ON DELETE CASCADE,
+      author TEXT NOT NULL,
+      rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+      review_text TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+    await sql`CREATE TABLE IF NOT EXISTS business_edit_suggestions (
+      id TEXT PRIMARY KEY,
+      place_id TEXT NOT NULL REFERENCES places(id) ON DELETE CASCADE,
+      place_name TEXT NOT NULL,
+      author TEXT NOT NULL,
+      contact_email TEXT NOT NULL DEFAULT '',
+      changes JSONB NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      reviewed_at TIMESTAMPTZ
     )`;
   })().catch((error) => { schemaReady = undefined; throw error; });
   return schemaReady;
@@ -435,6 +475,141 @@ app.post('/api/business-claims', requireNeon, async (req, res) => {
   } catch (error) {
     console.error('Business claim create failed:', error);
     res.status(500).json({ error: 'No se pudo enviar la solicitud de reclamación.' });
+  }
+});
+
+app.get('/api/places/:id/reviews', requireNeon, async (req, res) => {
+  try {
+    await ensureSubmissionSchema();
+    const [place] = await sql`SELECT id FROM places WHERE id = ${req.params.id}`;
+    if (!place) return res.status(404).json({ error: 'No encontramos este negocio.' });
+    const reviews = await sql`SELECT id, author, rating, review_text AS text, created_at AS "createdAt"
+      FROM community_reviews WHERE place_id = ${place.id} ORDER BY created_at DESC LIMIT 50`;
+    res.set('Cache-Control', 'no-store');
+    res.json(reviews);
+  } catch (error) {
+    console.error('Could not load community reviews:', error);
+    res.status(500).json({ error: 'No se pudieron cargar las reseñas.' });
+  }
+});
+
+app.post('/api/places/:id/reviews', requireNeon, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    const author = typeof req.body?.author === 'string' ? req.body.author.trim().slice(0, 80) : '';
+    const text = typeof req.body?.text === 'string' ? req.body.text.trim().slice(0, 1500) : '';
+    const rating = Number(req.body?.rating);
+    if (!author || !text || !Number.isInteger(rating) || rating < 1 || rating > 5) return res.status(400).json({ error: 'Escribe tu nombre, una reseña y elige de 1 a 5 estrellas.' });
+    await ensureSubmissionSchema();
+    const [place] = await sql`SELECT id FROM places WHERE id = ${req.params.id}`;
+    if (!place) return res.status(404).json({ error: 'No encontramos este negocio.' });
+    const [review] = await sql`INSERT INTO community_reviews (id, place_id, author, rating, review_text)
+      VALUES (${randomUUID()}, ${place.id}, ${author}, ${rating}, ${text})
+      RETURNING id, author, rating, review_text AS text, created_at AS "createdAt"`;
+    res.status(201).json(review);
+  } catch (error) {
+    console.error('Community review create failed:', error);
+    res.status(500).json({ error: 'No se pudo guardar tu reseña.' });
+  }
+});
+
+app.post('/api/business-edit-suggestions', requireNeon, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    const { placeId, changes: rawChanges } = req.body || {};
+    const author = typeof req.body?.author === 'string' ? req.body.author.trim().slice(0, 80) : '';
+    const contactEmail = typeof req.body?.email === 'string' ? req.body.email.trim().slice(0, 180) : '';
+    if (typeof placeId !== 'string' || !author || !rawChanges || typeof rawChanges !== 'object' || Array.isArray(rawChanges)) return res.status(400).json({ error: 'Selecciona al menos un cambio y agrega tu nombre.' });
+    const allowed = ['name', 'category', 'subtitle', 'location', 'address', 'phone', 'imageUrl', 'weeklyHours'];
+    const changes = {};
+    for (const key of allowed) {
+      if (!Object.prototype.hasOwnProperty.call(rawChanges, key)) continue;
+      if (key === 'weeklyHours') {
+        const schedule = normalizeWeeklyHours(rawChanges.weeklyHours);
+        if (!schedule) return res.status(400).json({ error: 'El horario sugerido no es válido.' });
+        changes.weeklyHours = schedule;
+      } else {
+        const max = key === 'subtitle' || key === 'address' ? 500 : key === 'imageUrl' ? 2048 : key === 'phone' ? 60 : 180;
+        const value = typeof rawChanges[key] === 'string' ? rawChanges[key].trim().slice(0, max) : '';
+        if (key === 'imageUrl' && value && !parseImageUrl(value)) return res.status(400).json({ error: 'La imagen debe tener una URL HTTP o HTTPS válida.' });
+        changes[key] = value;
+      }
+    }
+    if (!Object.keys(changes).length) return res.status(400).json({ error: 'Selecciona al menos un dato para sugerir.' });
+    await ensureSubmissionSchema();
+    const [place] = await sql`SELECT id, name FROM places WHERE id = ${placeId}`;
+    if (!place) return res.status(404).json({ error: 'No encontramos este negocio.' });
+    const id = randomUUID();
+    await sql`INSERT INTO business_edit_suggestions (id, place_id, place_name, author, contact_email, changes)
+      VALUES (${id}, ${place.id}, ${place.name}, ${author}, ${contactEmail}, ${JSON.stringify(changes)}::jsonb)`;
+    res.status(201).json({ id, submitted: true });
+  } catch (error) {
+    console.error('Business edit suggestion create failed:', error);
+    res.status(500).json({ error: 'No se pudo enviar la sugerencia.' });
+  }
+});
+
+app.get('/api/admin/business-edit-suggestions', requireAdmin, requireNeon, async (_req, res) => {
+  try {
+    await ensureSubmissionSchema();
+    const suggestions = await sql`SELECT id, place_id AS "placeId", place_name AS "placeName", author,
+      contact_email AS email, changes, created_at AS "createdAt"
+      FROM business_edit_suggestions WHERE status = 'pending' ORDER BY created_at ASC`;
+    res.set('Cache-Control', 'no-store');
+    res.json(suggestions);
+  } catch (error) {
+    console.error('Could not load business edit suggestions:', error);
+    res.status(500).json({ error: 'No se pudieron cargar las sugerencias.' });
+  }
+});
+
+app.patch('/api/admin/business-edit-suggestions/:id', requireAdmin, requireNeon, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    const status = req.body?.status;
+    if (!['approved', 'rejected'].includes(status)) return res.status(400).json({ error: 'La decisión debe ser aprobar o rechazar.' });
+    await ensureSubmissionSchema();
+    const [suggestion] = await sql`SELECT place_id, changes FROM business_edit_suggestions WHERE id = ${req.params.id} AND status = 'pending'`;
+    if (!suggestion) return res.status(404).json({ error: 'No encontramos la sugerencia pendiente.' });
+    if (status === 'approved') {
+      const changes = suggestion.changes || {};
+      const allowed = ['name', 'category', 'subtitle', 'location', 'address', 'phone', 'imageUrl', 'weeklyHours'];
+      if (!Object.keys(changes).length || Object.keys(changes).some((key) => !allowed.includes(key))) return res.status(400).json({ error: 'La sugerencia contiene cambios no válidos.' });
+      const [existing] = await sql`SELECT id, images FROM places WHERE id = ${suggestion.place_id}`;
+      if (!existing) return res.status(404).json({ error: 'El negocio ya no existe.' });
+      const getText = (key, limit) => typeof changes[key] === 'string' ? changes[key].trim().slice(0, limit) || null : null;
+      const name = getText('name', 180); const category = getText('category', 100); const subtitle = getText('subtitle', 500);
+      const location = getText('location', 180); const address = getText('address', 300); const phone = getText('phone', 60);
+      if (Object.hasOwn(changes, 'name') && !name) return res.status(400).json({ error: 'El nombre del negocio no puede quedar vacío.' });
+      if (Object.hasOwn(changes, 'category') && !category) return res.status(400).json({ error: 'La categoría no puede quedar vacía.' });
+      if (Object.hasOwn(changes, 'location') && !location) return res.status(400).json({ error: 'La ubicación no puede quedar vacía.' });
+      let images = Array.isArray(existing.images) ? existing.images : [];
+      if (Object.hasOwn(changes, 'imageUrl')) {
+        const imageUrl = changes.imageUrl ? parseImageUrl(changes.imageUrl) : null;
+        if (changes.imageUrl && !imageUrl) return res.status(400).json({ error: 'La imagen sugerida no tiene una URL válida.' });
+        images = imageUrl ? [imageUrl, ...images.filter((image) => image !== imageUrl)] : images.slice(1);
+      }
+      let weeklyHours = null; let hours = null;
+      if (Object.hasOwn(changes, 'weeklyHours')) {
+        weeklyHours = normalizeWeeklyHours(changes.weeklyHours);
+        if (!weeklyHours) return res.status(400).json({ error: 'El horario sugerido ya no es válido.' });
+        hours = formatWeeklyHours(weeklyHours);
+      }
+      await sql`UPDATE places SET
+        name = COALESCE(${name}, name), category = COALESCE(${category}, category),
+        subtitle = CASE WHEN ${Object.hasOwn(changes, 'subtitle')} THEN ${subtitle} ELSE subtitle END,
+        location = COALESCE(${location}, location),
+        address = CASE WHEN ${Object.hasOwn(changes, 'address')} THEN ${address} ELSE address END,
+        phone = CASE WHEN ${Object.hasOwn(changes, 'phone')} THEN ${phone} ELSE phone END,
+        images = ${JSON.stringify(images)}::jsonb,
+        weekly_hours = CASE WHEN ${Boolean(weeklyHours)} THEN ${weeklyHours ? JSON.stringify(weeklyHours) : null}::jsonb ELSE weekly_hours END,
+        hours = COALESCE(${hours}, hours) WHERE id = ${suggestion.place_id}`;
+    }
+    await sql`UPDATE business_edit_suggestions SET status = ${status}, reviewed_at = NOW() WHERE id = ${req.params.id}`;
+    res.json({ reviewed: true, status });
+  } catch (error) {
+    console.error('Business edit suggestion review failed:', error);
+    res.status(500).json({ error: 'No se pudo guardar la decisión sobre la sugerencia.' });
   }
 });
 
@@ -708,7 +883,7 @@ app.get('/api/places', requireNeon, async (req, res) => {
     await Promise.all([ensureDirectorySchema(), ensureSubmissionSchema()]);
     const places = await sql`SELECT id, name, category, subtitle, location, address,
       map_url AS "mapUrl", images, logo, rating, review_count AS "reviewCount",
-      is_open AS "isOpen", cost, distance, good_to_know AS "goodToKnow", hours,
+      is_open AS "isOpen", cost, distance, good_to_know AS "goodToKnow", hours, weekly_hours AS "weeklyHours",
       lat, lng, phone FROM places ORDER BY sort_order`;
     const publishedPosts = await sql`SELECT id, place_id FROM community_posts WHERE status = 'published' ORDER BY created_at DESC`;
     const postImagesByPlace = new Map();
@@ -735,7 +910,7 @@ app.get('/api/admin/places', requireAdmin, requireNeon, async (_req, res) => {
     const places = await sql`SELECT id, name, category, subtitle, location, address,
       map_url AS "mapUrl", images, logo, rating, review_count AS "reviewCount",
       is_open AS "isOpen", cost, distance, good_to_know AS "goodToKnow", hours,
-      lat, lng, phone FROM places ORDER BY sort_order, name`;
+      weekly_hours AS "weeklyHours", lat, lng, phone FROM places ORDER BY sort_order, name`;
     res.json(places.map((place) => ({
       ...place,
       images: Array.isArray(place.images) ? place.images : [],
@@ -758,7 +933,9 @@ app.post('/api/admin/places', requireAdmin, requireNeon, async (req, res) => {
     const location = typeof body.location === 'string' ? body.location.trim().slice(0, 180) : '';
     const address = typeof body.address === 'string' ? body.address.trim().slice(0, 300) : '';
     const phone = typeof body.phone === 'string' ? body.phone.trim().slice(0, 60) : '';
-    const hours = typeof body.hours === 'string' && body.hours.trim() ? body.hours.trim().slice(0, 180) : 'Por confirmar';
+    const weeklyHours = normalizeWeeklyHours(body.weeklyHours);
+    if (!weeklyHours) return res.status(400).json({ error: 'Completa un horario válido para cada día.' });
+    const hours = formatWeeklyHours(weeklyHours);
     const cost = Number(body.cost || 1);
     const imageUrl = body.imageUrl ? parseImageUrl(body.imageUrl) : null;
     if (!name || !category || !location) return res.status(400).json({ error: 'Nombre, categoría y ubicación son obligatorios.' });
@@ -769,18 +946,61 @@ app.post('/api/admin/places', requireAdmin, requireNeon, async (req, res) => {
     const images = imageUrl ? [imageUrl] : [];
     const [place] = await sql`INSERT INTO places (
       id, name, category, subtitle, location, address, images, logo, rating,
-      review_count, is_open, cost, distance, good_to_know, hours, sort_order, phone
+      review_count, is_open, cost, distance, good_to_know, hours, weekly_hours, sort_order, phone
     ) VALUES (
       ${id}, ${name}, ${category}, ${subtitle || null}, ${location}, ${address || null},
       ${JSON.stringify(images)}::jsonb, NULL, 0, 0, FALSE, ${cost}, '',
-      '[]'::jsonb, ${hours}, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM places), ${phone || null}
+      '[]'::jsonb, ${hours}, ${JSON.stringify(weeklyHours)}::jsonb,
+      (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM places), ${phone || null}
     ) RETURNING id, name, category, subtitle, location, address, map_url AS "mapUrl", images, logo,
       rating, review_count AS "reviewCount", is_open AS "isOpen", cost, distance,
-      good_to_know AS "goodToKnow", hours, lat, lng, phone`;
+      good_to_know AS "goodToKnow", hours, weekly_hours AS "weeklyHours", lat, lng, phone`;
     res.status(201).json({ ...place, images: Array.isArray(place.images) ? place.images : [] });
   } catch (error) {
     console.error('Could not create admin business:', error);
     res.status(500).json({ error: 'No se pudo guardar el negocio.' });
+  }
+});
+
+app.patch('/api/admin/places/:id', requireAdmin, requireNeon, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    await ensureDirectorySchema();
+    const body = req.body || {};
+    const name = typeof body.name === 'string' ? body.name.trim().slice(0, 180) : '';
+    const category = typeof body.category === 'string' ? body.category.trim().slice(0, 100) : '';
+    const subtitle = typeof body.subtitle === 'string' ? body.subtitle.trim().slice(0, 500) : '';
+    const location = typeof body.location === 'string' ? body.location.trim().slice(0, 180) : '';
+    const address = typeof body.address === 'string' ? body.address.trim().slice(0, 300) : '';
+    const phone = typeof body.phone === 'string' ? body.phone.trim().slice(0, 60) : '';
+    const cost = Number(body.cost || 1);
+    const weeklyHours = normalizeWeeklyHours(body.weeklyHours);
+    if (!name || !category || !location) return res.status(400).json({ error: 'Nombre, categoría y ubicación son obligatorios.' });
+    if (!weeklyHours) return res.status(400).json({ error: 'Completa un horario válido para cada día.' });
+    if (!Number.isInteger(cost) || cost < 1 || cost > 4) return res.status(400).json({ error: 'El rango de precio debe ser de 1 a 4.' });
+    const hasImageUpdate = Object.prototype.hasOwnProperty.call(body, 'imageUrl');
+    const imageUrl = typeof body.imageUrl === 'string' && body.imageUrl.trim() ? parseImageUrl(body.imageUrl) : null;
+    if (hasImageUpdate && body.imageUrl && !imageUrl) return res.status(400).json({ error: 'La imagen debe tener una URL HTTP o HTTPS válida.' });
+    const [existing] = await sql`SELECT id, images FROM places WHERE id = ${req.params.id}`;
+    if (!existing) return res.status(404).json({ error: 'No se encontró el negocio.' });
+    const oldImages = Array.isArray(existing.images) ? existing.images : [];
+    const images = hasImageUpdate
+      ? imageUrl ? [imageUrl, ...oldImages.filter((item) => item !== imageUrl)] : []
+      : oldImages;
+    const hours = formatWeeklyHours(weeklyHours);
+    const [place] = await sql`UPDATE places SET
+      name = ${name}, category = ${category}, subtitle = ${subtitle || null},
+      location = ${location}, address = ${address || null}, phone = ${phone || null},
+      cost = ${cost}, hours = ${hours}, weekly_hours = ${JSON.stringify(weeklyHours)}::jsonb,
+      images = ${JSON.stringify(images)}::jsonb
+      WHERE id = ${req.params.id}
+      RETURNING id, name, category, subtitle, location, address, map_url AS "mapUrl", images,
+        logo, rating, review_count AS "reviewCount", is_open AS "isOpen", cost, distance,
+        good_to_know AS "goodToKnow", hours, weekly_hours AS "weeklyHours", lat, lng, phone`;
+    res.json({ ...place, images: Array.isArray(place.images) ? place.images : [] });
+  } catch (error) {
+    console.error('Could not update admin business:', error);
+    res.status(500).json({ error: 'No se pudieron guardar los cambios del negocio.' });
   }
 });
 

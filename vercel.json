@@ -9,7 +9,10 @@
     { "source": "/api/admin/logout", "destination": "/api/admin-dispatch?__adminPath=logout" },
     { "source": "/api/admin/business-claims", "destination": "/api/admin-dispatch?__adminPath=business-claims" },
     { "source": "/api/admin/business-claims/:id", "destination": "/api/admin-dispatch?__adminPath=business-claims/:id" },
+    { "source": "/api/admin/business-edit-suggestions", "destination": "/api/admin-dispatch?__adminPath=business-edit-suggestions" },
+    { "source": "/api/admin/business-edit-suggestions/:id", "destination": "/api/admin-dispatch?__adminPath=business-edit-suggestions/:id" },
     { "source": "/api/admin/places", "destination": "/api/admin-dispatch?__adminPath=places" },
+    { "source": "/api/admin/places/:id", "destination": "/api/admin-dispatch?__adminPath=places/:id" },
     { "source": "/api/admin/places/:id/image", "destination": "/api/admin-dispatch?__adminPath=places/:id/image" },
     { "source": "/:path((?!api/).*)", "destination": "/index.html" }
   ],
