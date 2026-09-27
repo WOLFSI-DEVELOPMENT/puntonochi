@@ -16,12 +16,12 @@ export function OnboardingMap({ center = [-102.8456, 21.3653] }: OnboardingMapPr
 
     map.current = new maplibregl.Map({
       container: mapContainer.current,
-      style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+      style: 'https://tiles.openfreemap.org/styles/liberty',
       center: center,
       zoom: 15,
       pitch: 0,
       bearing: 0,
-      attributionControl: false
+      attributionControl: true
     });
 
     const resizeObserver = new ResizeObserver(() => {

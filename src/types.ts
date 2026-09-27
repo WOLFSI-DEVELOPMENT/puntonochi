@@ -19,6 +19,7 @@ export interface Place {
   lat?: number;
   lng?: number;
   phone?: string;
+  createdAt?: string | null;
   reviews?: Review[];
 }
 

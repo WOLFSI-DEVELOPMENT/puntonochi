@@ -12,13 +12,13 @@
   "background_color": "#121212",
   "icons": [
     {
-      "src": "/pwa-192.png",
+      "src": "https://res.cloudinary.com/dwthgcx5j/image/upload/c_fill,g_center,w_192,h_192,f_png/v1790522679/ChatGPT_Image_Sep_25_2026_01_13_43_PM_jsff7g.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/favicon.png",
+      "src": "https://res.cloudinary.com/dwthgcx5j/image/upload/c_fill,g_center,w_512,h_512,f_png/v1790522679/ChatGPT_Image_Sep_25_2026_01_13_43_PM_jsff7g.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { categories, visits, mockPlaces } from './data';
-import { Bookmark, ChevronRight, Search, Mic, MoreHorizontal, Flame, Sparkles, MapPin, Star } from 'lucide-react';
+import { Bookmark, ChevronRight, Search, Mic, MoreHorizontal, Flame, Sparkles, MapPin, Star, Store } from 'lucide-react';
 import { BottomNav } from './components/BottomNav';
 import { ColoniasPage } from './components/ColoniasPage';
 import { DiscoverPage } from './components/DiscoverPage';
@@ -141,6 +141,8 @@ export default function App() {
   const [showWelcome, setShowWelcome] = useState(false);
   const [directoryVersion, setDirectoryVersion] = useState(0);
   const [suggestionVersion, setSuggestionVersion] = useState(0);
+  const [popularPlaces, setPopularPlaces] = useState<Place[]>([]);
+  const [recentlyAddedPlaces, setRecentlyAddedPlaces] = useState<Place[]>([]);
   const [dailyUse, setDailyUse] = useState<DailyUse>(() => recordDailyUse());
   const streakDateRef = useRef(dailyUse.lastOpened);
 
@@ -182,6 +184,16 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    fetch('/api/places/recent').then(async (response) => {
+      if (!response.ok) return [];
+      const data: unknown = await response.json();
+      return Array.isArray(data) ? data as Place[] : [];
+    }).then((places) => { if (active) setRecentlyAddedPlaces(places); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [directoryVersion]);
+
   const [destacadosState, setDestacadosState] = useState({ index: 0, direction: 0 });
 
   const suggestedPlaces = useMemo(() => {
@@ -216,6 +228,7 @@ export default function App() {
       if (!showSearch || term.length < 2) return;
       const recent = readLocalList(RECENT_SEARCHES_KEY).filter((item) => item.toLocaleLowerCase('es') !== term.toLocaleLowerCase('es'));
       try { localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify([term, ...recent].slice(0, 12))); } catch { /* Suggestions still work without storage. */ }
+      void fetch('/api/activity/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: term }) }).catch(() => undefined);
       setSuggestionVersion((version) => version + 1);
     }, 700);
     return () => window.clearTimeout(timer);
@@ -231,8 +244,21 @@ export default function App() {
     if (!selectedBusiness) return;
     const recent = readLocalList(RECENT_PLACES_KEY).filter((id) => id !== selectedBusiness.id);
     try { localStorage.setItem(RECENT_PLACES_KEY, JSON.stringify([selectedBusiness.id, ...recent].slice(0, 20))); } catch { /* Optional personalization. */ }
+    void fetch('/api/activity/click', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ placeId: selectedBusiness.id }) }).catch(() => undefined);
     setSuggestionVersion((version) => version + 1);
   }, [selectedBusiness]);
+
+  useEffect(() => {
+    let active = true;
+    const loadPopular = () => fetch('/api/places/popular-week').then(async (response) => {
+      if (!response.ok) return [];
+      const data: unknown = await response.json();
+      return Array.isArray(data) ? data as Place[] : [];
+    }).then((places) => { if (active) setPopularPlaces(places); }).catch(() => undefined);
+    void loadPopular();
+    const timer = window.setInterval(() => { void loadPopular(); }, 5 * 60 * 1000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'inicio') {
@@ -548,6 +574,37 @@ export default function App() {
                 </button>
               ))}
             </div>
+          </section>
+
+          {/* Popular this week */}
+          {popularPlaces.length > 0 && <section className="mb-10">
+            <div className="mb-4 px-5">
+              <h2 className="text-2xl font-bold tracking-tight">Popular esta semana</h2>
+              <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Lo que la comunidad está buscando y visitando</p>
+            </div>
+            <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 scrollbar-hide">
+              {popularPlaces.map((place) => <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
+                <img src={place.images[0]} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
+                <span className="absolute left-4 top-4 inline-flex items-center gap-1 bg-[#f97316] px-2.5 py-1 text-[11px] font-bold text-white"><Flame className="h-3.5 w-3.5 fill-white"/>EN TENDENCIA</span>
+                <div className="absolute bottom-4 left-4 right-4"><h3 className="line-clamp-2 text-lg font-bold leading-tight">{place.name}</h3><p className="mt-1 truncate text-xs text-white/80">{place.category} · {place.location || place.address || 'Nochistlán'}</p>{place.rating > 0 && <p className="mt-1 flex items-center gap-1 text-xs text-white/85"><Star className="h-3 w-3 fill-current text-yellow-300"/>{place.rating.toFixed(1)}{place.reviewCount ? ` · ${place.reviewCount} reseñas` : ''}</p>}</div>
+              </button>)}
+            </div>
+          </section>}
+
+          <section className="mb-10">
+            <div className="mb-4 px-5">
+              <h2 className="text-2xl font-bold tracking-tight">Nuevo en Nochistlán</h2>
+              <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Negocios agregados recientemente</p>
+            </div>
+            {recentlyAddedPlaces.length ? <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 scrollbar-hide">
+              {recentlyAddedPlaces.map((place) => <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
+                {place.images?.[0] ? <img src={place.images[0]} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 flex items-center justify-center bg-[#303135]"><Store className="h-12 w-12 text-white/25"/></div>}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
+                <span className="absolute left-4 top-4 bg-[#1a73e8] px-2.5 py-1 text-[11px] font-bold text-white">NUEVO</span>
+                <div className="absolute bottom-4 left-4 right-4"><h3 className="line-clamp-2 text-lg font-bold leading-tight">{place.name}</h3><p className="mt-1 truncate text-xs text-white/80">{place.category} · {place.location || place.address || 'Nochistlán'}</p>{place.createdAt && <time className="mt-1 block text-[11px] text-white/65">Agregado el {new Date(place.createdAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}</time>}</div>
+              </button>)}
+            </div> : <p className="mx-5 rounded-[22px] bg-neutral-100 px-4 py-4 text-sm text-neutral-500">Los negocios nuevos que agreguemos aparecerán aquí.</p>}
           </section>
 
           {/* All saved businesses */}

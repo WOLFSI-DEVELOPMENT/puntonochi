@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Bell, X, LoaderCircle } from 'lucide-react';
 
+const DISMISSED_KEY = 'puntonochi-push-banner-dismissed-v1';
+
 function isInstalledPwa() {
   return window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
 }
@@ -18,6 +20,7 @@ export function NotificationOptInBanner() {
 
   useEffect(() => {
     if (!isInstalledPwa() || !('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    try { if (localStorage.getItem(DISMISSED_KEY) === 'true') return; } catch { /* Continue if storage is unavailable. */ }
     let active = true;
     navigator.serviceWorker.ready.then((registration) => registration.pushManager.getSubscription()).then(async (subscription) => {
       if (!active) return;
@@ -25,8 +28,15 @@ export function NotificationOptInBanner() {
         const response = await fetch('/api/notifications/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: subscription.toJSON() }) }).catch(() => null);
         if (active && response?.ok) return;
       }
-      if (active) setVisible(true);
-    }).catch(() => { if (active) setVisible(true); });
+      if (active) {
+        try { if (localStorage.getItem(DISMISSED_KEY) === 'true') return; } catch { /* Continue if storage is unavailable. */ }
+        setVisible(true);
+      }
+    }).catch(() => {
+      if (!active) return;
+      try { if (localStorage.getItem(DISMISSED_KEY) === 'true') return; } catch { /* Continue if storage is unavailable. */ }
+      setVisible(true);
+    });
     return () => { active = false; };
   }, []);
 
@@ -56,8 +66,13 @@ export function NotificationOptInBanner() {
     } finally { setBusy(false); }
   };
 
+  const dismiss = () => {
+    try { localStorage.setItem(DISMISSED_KEY, 'true'); } catch { /* The banner still closes for this session. */ }
+    setVisible(false);
+  };
+
   if (!visible) return null;
   return <aside className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-[110] mx-auto max-w-2xl rounded-2xl bg-blue-600 px-4 py-3 text-white shadow-lg" aria-label="Activar notificaciones">
-    <div className="flex items-start gap-3"><Bell className="mt-0.5 h-5 w-5 shrink-0" /><div className="min-w-0 flex-1"><p className="text-sm font-bold">Recibe noticias y novedades</p><p className="mt-0.5 text-xs leading-relaxed text-blue-100">Activa avisos por la mañana y durante el día. Tú eliges si los permites.</p>{error && <p role="alert" className="mt-2 text-xs font-medium text-white">{error}</p>}<button type="button" disabled={busy} onClick={enableNotifications} className="mt-2 flex items-center gap-2 rounded-full bg-white px-3.5 py-2 text-xs font-bold text-blue-700 disabled:opacity-70">{busy && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}Activar notificaciones</button></div><button type="button" onClick={() => setVisible(false)} aria-label="Cerrar aviso" className="-mr-1 -mt-1 rounded-full p-1.5 text-white/80 hover:bg-white/15"><X className="h-4 w-4" /></button></div>
+    <div className="flex items-start gap-3"><Bell className="mt-0.5 h-5 w-5 shrink-0" /><div className="min-w-0 flex-1"><p className="text-sm font-bold">Recibe noticias y novedades</p><p className="mt-0.5 text-xs leading-relaxed text-blue-100">Activa avisos por la mañana y durante el día. Tú eliges si los permites.</p>{error && <p role="alert" className="mt-2 text-xs font-medium text-white">{error}</p>}<button type="button" disabled={busy} onClick={enableNotifications} className="mt-2 flex items-center gap-2 rounded-full bg-white px-3.5 py-2 text-xs font-bold text-blue-700 disabled:opacity-70">{busy && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}Activar notificaciones</button></div><button type="button" onClick={dismiss} aria-label="Cerrar aviso" className="-mr-1 -mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/80 hover:bg-white/15"><X className="h-4 w-4" /></button></div>
   </aside>;
 }

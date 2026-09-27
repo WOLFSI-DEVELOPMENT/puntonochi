@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Share, Phone, Globe, ShoppingBag, MoreHorizontal, Navigation, BookOpen, Link, MapPin, Map as MapIcon, MessageCircle, Twitter, Facebook, QrCode, Star } from 'lucide-react';
-import { Place } from '../types';
+import { Place, Review } from '../types';
 import CornerKit from '@cornerkit/core';
 import { CommunityActionsSheet } from './CommunityActionsSheet';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
@@ -9,7 +9,20 @@ import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 const BusinessLocationMap = lazy(() => import('./BusinessLocationMap').then((module) => ({ default: module.BusinessLocationMap })));
 const BusinessMapOverlay = lazy(() => import('./BusinessLocationMap').then((module) => ({ default: module.BusinessMapOverlay })));
 
+type GoogleReview = {
+  rating: number;
+  text: string;
+  relativePublishTimeDescription: string;
+  author: { name: string; uri: string; photoUri: string };
+  googleMapsUri: string;
+  flagContentUri: string;
+};
+type GooglePlaceDetails = { weekdayDescriptions: string[]; reviews: GoogleReview[]; googleMapsUri: string };
+
 export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose: () => void }) {
+  const [communityReviews, setCommunityReviews] = useState<Review[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [googleDetails, setGoogleDetails] = useState<GooglePlaceDetails | null>(null);
   const [showMapSelector, setShowMapSelector] = useState(false);
   const [showMapOverlay, setShowMapOverlay] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -28,6 +41,25 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
   const menuDrag = useSheetDrag(() => setShowMenuModal(false));
   const shareDrag = useSheetDrag(() => setShowShareModal(false));
 
+  useEffect(() => {
+    let active = true;
+    setCommunityReviews([]);
+    setReviewsLoading(true);
+    setGoogleDetails(null);
+    const id = encodeURIComponent(place.id);
+    void fetch(`/api/places/${id}/reviews`).then(async (response) => {
+      if (!response.ok) throw new Error('reviews');
+      return response.json() as Promise<Review[]>;
+    }).then((reviews) => { if (active) setCommunityReviews(Array.isArray(reviews) ? reviews : []); })
+      .catch(() => undefined)
+      .finally(() => { if (active) setReviewsLoading(false); });
+    void fetch(`/api/places/${id}/google-details`).then(async (response) => {
+      if (!response.ok) throw new Error('google details');
+      return response.json() as Promise<GooglePlaceDetails>;
+    }).then((details) => { if (active) setGoogleDetails(details); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [place.id]);
+
   const todayName = new Intl.DateTimeFormat('es-MX', { weekday: 'long' }).format(new Date());
   const todaySchedule = place.weeklyHours?.[todayName.charAt(0).toLocaleUpperCase('es') + todayName.slice(1)];
   const closingTime = todaySchedule?.intervals?.at(-1)?.close;
@@ -35,6 +67,13 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
     const [hour, minute] = time.split(':').map(Number);
     return new Date(2000, 0, 1, hour, minute).toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' });
   };
+
+  const fallbackSchedule = place.weeklyHours
+    ? Object.entries(place.weeklyHours).sort(([a], [b]) => {
+      const order = ['lunes', 'martes', 'miércoles', 'miercoles', 'jueves', 'viernes', 'sábado', 'sabado', 'domingo'];
+      return order.indexOf(a.toLocaleLowerCase('es')) - order.indexOf(b.toLocaleLowerCase('es'));
+    }).map(([day, schedule]) => `${day}: ${schedule.closed ? 'Cerrado' : schedule.intervals.map(({ open, close }) => `${formatTime(open)}–${formatTime(close)}`).join(', ') || 'Horario no disponible'}`)
+    : [];
 
   const copyBusinessLink = async () => {
     try {
@@ -214,10 +253,45 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
                   <span className="text-[15px] font-medium leading-snug">{place.address || place.location || 'Dirección no disponible'}</span>
                 </div>
               </div>
-              <div className="flex flex-col">
-                <span className="text-[13px] text-neutral-500 font-semibold mb-1">Horario regular</span>
-                <span className="text-[15px] text-neutral-900 font-medium">{place.hours}</span>
-              </div>
+              <section aria-labelledby="place-hours-title" className="pt-1 text-white">
+                <h3 id="place-hours-title" className="mb-2 text-[17px] font-bold">Horario</h3>
+                <div className="divide-y divide-white/[0.07]">
+                  {(googleDetails?.weekdayDescriptions?.length ? googleDetails.weekdayDescriptions : fallbackSchedule.length ? fallbackSchedule : [place.hours || 'Horario no disponible'])
+                    .map((entry, index) => {
+                      const separator = entry.indexOf(':');
+                      const day = separator >= 0 ? entry.slice(0, separator).trim() : (fallbackSchedule.length ? '' : 'Horario regular');
+                      const time = separator >= 0 ? entry.slice(separator + 1).trim() : entry;
+                      const isToday = day && day.toLocaleLowerCase('es').startsWith(todayName.slice(0, 3).toLocaleLowerCase('es'));
+                      return <div key={`${entry}-${index}`} className="flex min-h-10 items-center justify-between gap-4 py-2 text-[14px]">
+                        <span className={isToday ? 'font-semibold text-white' : 'text-white/65'}>{day || 'Horario regular'}{isToday ? ' · Hoy' : ''}</span>
+                        <span className={`text-right ${/cerrado|closed/i.test(time) ? 'text-white/45' : 'text-white/85'}`}>{time}</span>
+                      </div>;
+                    })}
+                </div>
+                {googleDetails?.googleMapsUri && <a href={googleDetails.googleMapsUri} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-[12px] font-medium text-white/55 underline decoration-white/25 underline-offset-2" translate="no">Google Maps</a>}
+              </section>
+              <section aria-labelledby="community-reviews-title" className="pt-1 text-white">
+                <div className="mb-3 flex items-baseline justify-between gap-3">
+                  <h3 id="community-reviews-title" className="text-[17px] font-bold">Reseñas de la comunidad</h3>
+                  <span className="text-[12px] text-white/45">{communityReviews.length}</span>
+                </div>
+                {reviewsLoading ? <div className="space-y-3" role="status" aria-label="Cargando reseñas"><div className="h-3 w-2/3 animate-pulse rounded-full bg-white/10"/><div className="h-3 w-full animate-pulse rounded-full bg-white/[0.07]"/></div>
+                  : communityReviews.length ? <div className="space-y-4">{communityReviews.map((review) => <article key={review.id} className="border-b border-white/[0.07] pb-4 last:border-0">
+                    <div className="mb-1 flex items-center justify-between gap-3"><span className="text-[14px] font-semibold">{review.author}</span><span className="flex shrink-0 items-center gap-1 text-[12px] text-white/70"><Star className="h-3 w-3 fill-amber-400 text-amber-400"/>{review.rating}</span></div>
+                    <p className="text-[14px] leading-relaxed text-white/75">{review.text}</p>
+                    {review.createdAt && <time className="mt-1 block text-[11px] text-white/40">{new Date(review.createdAt).toLocaleDateString('es-MX')}</time>}
+                  </article>)}</div>
+                  : <p className="text-[14px] text-white/55">Aún no hay reseñas. Comparte tu experiencia con la comunidad.</p>}
+              </section>
+              {googleDetails?.reviews?.length ? <section aria-labelledby="google-reviews-title" className="pt-1 text-white">
+                <div className="mb-3 flex items-baseline justify-between gap-3"><h3 id="google-reviews-title" className="text-[17px] font-bold">Reseñas de Google Maps</h3><a href={googleDetails.googleMapsUri} target="_blank" rel="noreferrer" className="text-[12px] text-white/55 underline underline-offset-2" translate="no">Google Maps</a></div>
+                <div className="space-y-4">{googleDetails.reviews.map((review, index) => <article key={`${review.author.name}-${index}`} className="border-b border-white/[0.07] pb-4 last:border-0">
+                  <div className="mb-1 flex items-center gap-2.5">{review.author.photoUri && <img src={review.author.photoUri} alt="" className="h-7 w-7 rounded-full object-cover"/>}<div className="min-w-0 flex-1"><a href={review.author.uri || review.googleMapsUri || googleDetails.googleMapsUri} target="_blank" rel="noreferrer" className="block truncate text-[13px] font-semibold">{review.author.name}</a>{review.relativePublishTimeDescription && <span className="text-[11px] text-white/45">{review.relativePublishTimeDescription}</span>}</div><span className="flex shrink-0 items-center gap-1 text-[12px] text-white/70"><Star className="h-3 w-3 fill-amber-400 text-amber-400"/>{review.rating}</span></div>
+                  {review.text && <p className="text-[14px] leading-relaxed text-white/75">{review.text}</p>}
+                  <a href={review.googleMapsUri || googleDetails.googleMapsUri} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-white/45 underline underline-offset-2">Ver reseña en Google Maps</a>
+                </article>)}</div>
+                <p className="mt-2 text-[11px] leading-relaxed text-white/40">Reseñas ordenadas por relevancia. Google no verifica todas las reseñas.</p>
+              </section> : null}
               <div className="flex flex-col">
                 <span className="text-[13px] text-neutral-500 font-semibold mb-1">Lo que debes saber</span>
                 <div className="flex flex-wrap gap-1.5 mt-1">

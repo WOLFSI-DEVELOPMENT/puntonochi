@@ -270,6 +270,8 @@ const ensureDirectorySchema = () => {
       sort_order INTEGER NOT NULL DEFAULT 0
     )`;
     await sql`ALTER TABLE places ADD COLUMN IF NOT EXISTS weekly_hours JSONB`;
+    await sql`ALTER TABLE places ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ`;
+    await sql`CREATE INDEX IF NOT EXISTS places_created_at_idx ON places (created_at DESC)`;
     for (const [id, name, emoji, gradient] of requestedCategories) {
       await sql`INSERT INTO categories (id, name, visits, gradient, emoji, sort_order)
         VALUES (${`suggested-${id}`}, ${name}, 0, ${gradient}, ${emoji},
@@ -490,6 +492,52 @@ app.post('/api/business-claims', requireNeon, async (req, res) => {
   } catch (error) {
     console.error('Business claim create failed:', error);
     res.status(500).json({ error: 'No se pudo enviar la solicitud de reclamación.' });
+  }
+});
+
+app.get('/api/places/:id/google-details', requireNeon, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'Google Places no está configurado en el servidor.' });
+  try {
+    await ensureDirectorySchema();
+    const [place] = await sql`SELECT id FROM places WHERE id = ${req.params.id}`;
+    if (!place) return res.status(404).json({ error: 'No encontramos el negocio.' });
+    const response = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(place.id)}?languageCode=es-MX`, {
+      headers: {
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'id,googleMapsUri,regularOpeningHours.weekdayDescriptions,reviews',
+      },
+      signal: AbortSignal.timeout(9000),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error('Google Places details request failed:', response.status, data?.error?.status || 'upstream error');
+      return res.status(response.status === 404 ? 404 : 502).json({ error: response.status === 404 ? 'Google Maps no encontró esta ficha.' : 'No se pudieron cargar los datos de Google Maps.' });
+    }
+    const reviews = Array.isArray(data.reviews) ? data.reviews.slice(0, 5).map((review) => ({
+      rating: Number(review.rating || 0),
+      text: review.text?.text || review.originalText?.text || '',
+      languageCode: review.text?.languageCode || review.originalText?.languageCode || '',
+      relativePublishTimeDescription: review.relativePublishTimeDescription || '',
+      author: {
+        name: review.authorAttribution?.displayName || 'Usuario de Google Maps',
+        uri: review.authorAttribution?.uri || '',
+        photoUri: review.authorAttribution?.photoUri || '',
+      },
+      googleMapsUri: review.googleMapsUri || data.googleMapsUri || '',
+      flagContentUri: review.flagContentUri || '',
+    })) : [];
+    res.set('Cache-Control', 'no-store');
+    return res.json({
+      weekdayDescriptions: Array.isArray(data.regularOpeningHours?.weekdayDescriptions) ? data.regularOpeningHours.weekdayDescriptions : [],
+      reviews,
+      googleMapsUri: data.googleMapsUri || `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(place.id)}`,
+      source: 'google-maps',
+    });
+  } catch (error) {
+    console.error('Could not load Google Places details:', error);
+    return res.status(502).json({ error: 'No se pudieron cargar los datos de Google Maps.' });
   }
 });
 
@@ -1030,7 +1078,7 @@ app.get('/api/places', requireNeon, async (req, res) => {
     const places = await sql`SELECT id, name, category, subtitle, location, address,
       map_url AS "mapUrl", images, logo, rating, review_count AS "reviewCount",
       is_open AS "isOpen", cost, distance, good_to_know AS "goodToKnow", hours, weekly_hours AS "weeklyHours",
-      lat, lng, phone FROM places ORDER BY sort_order`;
+      lat, lng, phone, created_at AS "createdAt" FROM places ORDER BY sort_order`;
     const publishedPosts = await sql`SELECT id, place_id FROM community_posts WHERE status = 'published' ORDER BY created_at DESC`;
     const postImagesByPlace = new Map();
     for (const post of publishedPosts) {
@@ -1046,6 +1094,97 @@ app.get('/api/places', requireNeon, async (req, res) => {
   } catch (error) {
     console.error('Could not load places from Neon:', error);
     res.status(500).json({ error: 'No se pudieron cargar los negocios.' });
+  }
+});
+
+app.get('/api/places/recent', requireNeon, async (_req, res) => {
+  try {
+    await ensureDirectorySchema();
+    const places = await sql`SELECT id, name, category, subtitle, location, address, images,
+      rating, review_count AS "reviewCount", created_at AS "createdAt"
+      FROM places WHERE created_at IS NOT NULL
+      ORDER BY created_at DESC LIMIT 10`;
+    res.set('Cache-Control', 'no-store');
+    res.json(places.map((place) => ({ ...place, images: Array.isArray(place.images) ? place.images : [] })));
+  } catch (error) {
+    console.error('Could not load recently added businesses:', error);
+    res.status(500).json({ error: 'No se pudieron cargar los negocios recientes.' });
+  }
+});
+
+let placeActivitySchemaReady;
+const ensurePlaceActivitySchema = () => {
+  if (!placeActivitySchemaReady) placeActivitySchemaReady = (async () => {
+    await ensureDirectorySchema();
+    await sql`CREATE TABLE IF NOT EXISTS place_activity (
+      id BIGSERIAL PRIMARY KEY,
+      place_id TEXT REFERENCES places(id) ON DELETE CASCADE,
+      action TEXT NOT NULL CHECK (action IN ('search', 'click')),
+      query TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+    await sql`CREATE INDEX IF NOT EXISTS place_activity_recent_idx ON place_activity (created_at DESC)`;
+    await sql`CREATE INDEX IF NOT EXISTS place_activity_place_recent_idx ON place_activity (place_id, created_at DESC)`;
+  })().catch((error) => { placeActivitySchemaReady = undefined; throw error; });
+  return placeActivitySchemaReady;
+};
+
+app.post('/api/activity/search', requireNeon, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  const query = typeof req.body?.query === 'string' ? req.body.query.trim().replace(/\s+/g, ' ').slice(0, 120) : '';
+  if (query.length < 2) return res.status(204).end();
+  try {
+    await ensurePlaceActivitySchema();
+    await sql`INSERT INTO place_activity (action, query) VALUES ('search', ${query})`;
+    res.status(204).end();
+  } catch (error) {
+    console.error('Could not record a search signal:', error);
+    res.status(503).end();
+  }
+});
+
+app.post('/api/activity/click', requireNeon, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  const placeId = typeof req.body?.placeId === 'string' ? req.body.placeId.slice(0, 180) : '';
+  if (!placeId) return res.status(400).json({ error: 'Falta el negocio.' });
+  try {
+    await ensurePlaceActivitySchema();
+    const [place] = await sql`SELECT id FROM places WHERE id = ${placeId}`;
+    if (!place) return res.status(404).end();
+    await sql`INSERT INTO place_activity (place_id, action) VALUES (${place.id}, 'click')`;
+    res.status(204).end();
+  } catch (error) {
+    console.error('Could not record a business click signal:', error);
+    res.status(503).end();
+  }
+});
+
+app.get('/api/places/popular-week', requireNeon, async (_req, res) => {
+  try {
+    await Promise.all([ensureDirectorySchema(), ensurePlaceActivitySchema()]);
+    const [places, activity] = await Promise.all([
+      sql`SELECT id, name, category, subtitle, location, address, images, rating, review_count AS "reviewCount"
+        FROM places WHERE images IS NOT NULL AND jsonb_array_length(images) > 0`,
+      sql`SELECT place_id AS "placeId", action, query FROM place_activity WHERE created_at >= NOW() - INTERVAL '7 days'`,
+    ]);
+    const popular = places.map((place) => {
+      const fields = [place.name, place.category, place.subtitle, place.location, place.address].filter(Boolean).join(' ').toLocaleLowerCase('es');
+      let clicks = 0;
+      let searchInterest = 0;
+      for (const event of activity) {
+        if (event.action === 'click' && event.placeId === place.id) clicks += 1;
+        if (event.action === 'search') {
+          const terms = String(event.query || '').toLocaleLowerCase('es').split(/\s+/).filter((term) => term.length > 1);
+          if (terms.some((term) => fields.includes(term))) searchInterest += 1;
+        }
+      }
+      return { ...place, popularity: clicks * 3 + searchInterest };
+    }).sort((a, b) => b.popularity - a.popularity || (b.rating || 0) - (a.rating || 0)).slice(0, 8);
+    res.set('Cache-Control', 'no-store');
+    res.json(popular);
+  } catch (error) {
+    console.error('Could not load popular businesses:', error);
+    res.status(503).json({ error: 'No se pudo cargar lo más popular esta semana.' });
   }
 });
 
@@ -1102,12 +1241,16 @@ app.post('/api/ask-nochi', requireNeon, async (req, res) => {
 let placeOverviewSchemaReady;
 const ensurePlaceOverviewSchema = () => {
   if (!sql) throw new Error('DATABASE_URL is not configured.');
-  if (!placeOverviewSchemaReady) placeOverviewSchemaReady = sql`CREATE TABLE IF NOT EXISTS place_ai_overviews (
-    place_id TEXT PRIMARY KEY REFERENCES places(id) ON DELETE CASCADE,
-    overview TEXT NOT NULL,
-    source_hash TEXT NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  )`.catch((error) => { placeOverviewSchemaReady = undefined; throw error; });
+  if (!placeOverviewSchemaReady) placeOverviewSchemaReady = (async () => {
+    await sql`CREATE TABLE IF NOT EXISTS place_ai_overviews (
+      place_id TEXT PRIMARY KEY REFERENCES places(id) ON DELETE CASCADE,
+      overview TEXT NOT NULL,
+      source_hash TEXT NOT NULL,
+      generation_status TEXT NOT NULL DEFAULT 'ready',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+    await sql`ALTER TABLE place_ai_overviews ADD COLUMN IF NOT EXISTS generation_status TEXT NOT NULL DEFAULT 'ready'`;
+  })().catch((error) => { placeOverviewSchemaReady = undefined; throw error; });
   return placeOverviewSchemaReady;
 };
 
@@ -1122,25 +1265,61 @@ app.get('/api/places/:id/overview', requireNeon, async (req, res) => {
 
     const source = JSON.stringify(place);
     const sourceHash = createHash('sha256').update(`overview-v2:${source}`).digest('hex');
-    const [cached] = await sql`SELECT overview, source_hash AS "sourceHash" FROM place_ai_overviews WHERE place_id = ${place.id}`;
-    if (cached?.sourceHash === sourceHash) {
+    const [cached] = await sql`SELECT overview, source_hash AS "sourceHash", generation_status AS "generationStatus" FROM place_ai_overviews WHERE place_id = ${place.id}`;
+    if (cached?.sourceHash === sourceHash && cached.generationStatus === 'ready' && cached.overview) {
       res.set('Cache-Control', 'private, max-age=86400');
       return res.json({ overview: cached.overview, cached: true });
     }
 
-    const client = new GoogleGenAI({ apiKey });
-    const response = await client.models.generateContent({
-      model: 'gemini-3.1-flash-lite',
-      contents: `Escribe exactamente 2 o 3 frases breves en español para presentar este negocio. Basa cada afirmación únicamente en los datos proporcionados: no inventes servicios, precios, calidad, horarios ni recomendaciones. Incluye detalles concretos disponibles, como giro, ubicación, horario, contacto o calificación. Si faltan datos para una segunda frase, di de forma neutral que la ficha no incluye más información. No reveles razonamiento ni agregues listas o introducciones; devuelve solo el resumen (máximo 65 palabras).\n\nDatos del negocio:\n${source}`,
-      config: { maxOutputTokens: 180, thinkingConfig: { thinkingLevel: 'low', includeThoughts: false } },
-    });
-    const overview = response.text?.trim();
-    if (!overview) return res.status(502).json({ error: 'Gemini no devolvió un resumen.' });
-    await sql`INSERT INTO place_ai_overviews (place_id, overview, source_hash, updated_at)
-      VALUES (${place.id}, ${overview}, ${sourceHash}, NOW())
-      ON CONFLICT (place_id) DO UPDATE SET overview = EXCLUDED.overview, source_hash = EXCLUDED.source_hash, updated_at = NOW()`;
-    res.set('Cache-Control', 'private, max-age=86400');
-    res.json({ overview, cached: false });
+    const claimGeneration = () => sql`INSERT INTO place_ai_overviews (place_id, overview, source_hash, generation_status, updated_at)
+      VALUES (${place.id}, '', ${sourceHash}, 'generating', NOW())
+      ON CONFLICT (place_id) DO UPDATE SET overview = '', source_hash = EXCLUDED.source_hash,
+        generation_status = 'generating', updated_at = NOW()
+      WHERE place_ai_overviews.source_hash <> EXCLUDED.source_hash
+        OR place_ai_overviews.generation_status = 'failed'
+        OR (place_ai_overviews.generation_status = 'generating' AND place_ai_overviews.updated_at < NOW() - INTERVAL '2 minutes')
+      RETURNING place_id`;
+    let [claim] = await claimGeneration();
+    if (!claim) {
+      for (let attempt = 0; attempt < 24; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        const [inProgress] = await sql`SELECT overview, source_hash AS "sourceHash", generation_status AS "generationStatus", updated_at AS "updatedAt" FROM place_ai_overviews WHERE place_id = ${place.id}`;
+        if (inProgress?.sourceHash === sourceHash && inProgress.generationStatus === 'ready' && inProgress.overview) {
+          res.set('Cache-Control', 'private, max-age=86400');
+          return res.json({ overview: inProgress.overview, cached: true });
+        }
+        const generationStale = inProgress?.generationStatus === 'generating' && Date.now() - new Date(inProgress.updatedAt).getTime() > 120_000;
+        if (!inProgress || inProgress.sourceHash !== sourceHash || inProgress.generationStatus === 'failed' || generationStale) {
+          [claim] = await claimGeneration();
+          if (claim) break;
+        }
+      }
+    }
+    if (!claim) return res.status(202).json({ generating: true });
+
+    try {
+      const client = new GoogleGenAI({ apiKey });
+      const response = await client.models.generateContent({
+        model: 'gemini-3.1-flash-lite',
+        contents: `Escribe exactamente 2 o 3 frases breves en español para presentar este negocio. Basa cada afirmación únicamente en los datos proporcionados: no inventes servicios, precios, calidad, horarios ni recomendaciones. Incluye detalles concretos disponibles, como giro, ubicación, horario, contacto o calificación. Si faltan datos para una segunda frase, di de forma neutral que la ficha no incluye más información. No reveles razonamiento ni agregues listas o introducciones; devuelve solo el resumen (máximo 65 palabras).\n\nDatos del negocio:\n${source}`,
+        config: { maxOutputTokens: 180, thinkingConfig: { thinkingLevel: 'low', includeThoughts: false } },
+      });
+      const overview = response.text?.trim();
+      if (!overview) throw new Error('Gemini no devolvió un resumen.');
+      const [saved] = await sql`UPDATE place_ai_overviews SET overview = ${overview}, generation_status = 'ready', updated_at = NOW()
+        WHERE place_id = ${place.id} AND source_hash = ${sourceHash} AND generation_status = 'generating' RETURNING place_id`;
+      if (!saved) {
+        const [newer] = await sql`SELECT overview, source_hash AS "sourceHash", generation_status AS "generationStatus" FROM place_ai_overviews WHERE place_id = ${place.id}`;
+        if (newer?.sourceHash === sourceHash && newer.generationStatus === 'ready' && newer.overview) return res.json({ overview: newer.overview, cached: true });
+        return res.status(202).json({ generating: true });
+      }
+      res.set('Cache-Control', 'private, max-age=86400');
+      res.json({ overview, cached: false });
+    } catch (error) {
+      await sql`UPDATE place_ai_overviews SET generation_status = 'failed', updated_at = NOW()
+        WHERE place_id = ${place.id} AND source_hash = ${sourceHash} AND generation_status = 'generating'`.catch(() => undefined);
+      throw error;
+    }
   } catch (error) {
     console.error('Could not generate a business overview:', error);
     res.status(502).json({ error: 'No se pudo generar el resumen con IA.' });
@@ -1154,7 +1333,7 @@ app.get('/api/admin/places', requireAdmin, requireNeon, async (_req, res) => {
     const places = await sql`SELECT id, name, category, subtitle, location, address,
       map_url AS "mapUrl", images, logo, rating, review_count AS "reviewCount",
       is_open AS "isOpen", cost, distance, good_to_know AS "goodToKnow", hours,
-      weekly_hours AS "weeklyHours", lat, lng, phone FROM places ORDER BY sort_order, name`;
+      weekly_hours AS "weeklyHours", lat, lng, phone, created_at AS "createdAt" FROM places ORDER BY sort_order, name`;
     res.json(places.map((place) => ({
       ...place,
       images: Array.isArray(place.images) ? place.images : [],
@@ -1163,6 +1342,26 @@ app.get('/api/admin/places', requireAdmin, requireNeon, async (_req, res) => {
   } catch (error) {
     console.error('Could not load admin business list:', error);
     res.status(500).json({ error: 'No se pudieron cargar los negocios.' });
+  }
+});
+
+const normalizeDuplicateAddress = (value) => String(value || '')
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es')
+  .replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
+
+app.get('/api/admin/places/check-address', requireAdmin, requireNeon, async (req, res) => {
+  const address = typeof req.query.address === 'string' ? req.query.address.trim().slice(0, 300) : '';
+  if (!address) return res.json({ duplicate: null });
+  try {
+    await ensureDirectorySchema();
+    const places = await sql`SELECT id, name, address FROM places WHERE address IS NOT NULL AND address <> ''`;
+    const normalizedAddress = normalizeDuplicateAddress(address);
+    const duplicate = places.find((place) => normalizeDuplicateAddress(place.address) === normalizedAddress) || null;
+    res.set('Cache-Control', 'no-store');
+    res.json({ duplicate: duplicate ? { id: duplicate.id, name: duplicate.name, address: duplicate.address } : null });
+  } catch (error) {
+    console.error('Could not check for a duplicate business address:', error);
+    res.status(500).json({ error: 'No se pudo comprobar si la dirección ya está registrada.' });
   }
 });
 
@@ -1183,22 +1382,27 @@ app.post('/api/admin/places', requireAdmin, requireNeon, async (req, res) => {
     const cost = Number(body.cost || 1);
     const imageUrl = body.imageUrl ? parseImageUrl(body.imageUrl) : null;
     if (!name || !category || !location) return res.status(400).json({ error: 'Nombre, categoría y ubicación son obligatorios.' });
+    if (address) {
+      const existingPlaces = await sql`SELECT id, name, address FROM places WHERE address IS NOT NULL AND address <> ''`;
+      const duplicate = existingPlaces.find((place) => normalizeDuplicateAddress(place.address) === normalizeDuplicateAddress(address));
+      if (duplicate) return res.status(409).json({ error: `Esta dirección ya está registrada para ${duplicate.name}.` });
+    }
     if (body.imageUrl && !imageUrl) return res.status(400).json({ error: 'La imagen debe tener una URL HTTP o HTTPS válida.' });
     if (!Number.isInteger(cost) || cost < 1 || cost > 4) return res.status(400).json({ error: 'El rango de precio debe ser de 1 a 4.' });
 
     const id = `admin-${randomUUID()}`;
     const images = imageUrl ? [imageUrl] : [];
     const [place] = await sql`INSERT INTO places (
-      id, name, category, subtitle, location, address, images, logo, rating,
+      id, name, category, subtitle, location, address, images, logo, rating, created_at,
       review_count, is_open, cost, distance, good_to_know, hours, weekly_hours, sort_order, phone
     ) VALUES (
       ${id}, ${name}, ${category}, ${subtitle || null}, ${location}, ${address || null},
-      ${JSON.stringify(images)}::jsonb, NULL, 0, 0, FALSE, ${cost}, '',
+      ${JSON.stringify(images)}::jsonb, NULL, 0, NOW(), 0, FALSE, ${cost}, '',
       '[]'::jsonb, ${hours}, ${JSON.stringify(weeklyHours)}::jsonb,
       (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM places), ${phone || null}
     ) RETURNING id, name, category, subtitle, location, address, map_url AS "mapUrl", images, logo,
       rating, review_count AS "reviewCount", is_open AS "isOpen", cost, distance,
-      good_to_know AS "goodToKnow", hours, weekly_hours AS "weeklyHours", lat, lng, phone`;
+      good_to_know AS "goodToKnow", hours, weekly_hours AS "weeklyHours", lat, lng, phone, created_at AS "createdAt"`;
     res.status(201).json({ ...place, images: Array.isArray(place.images) ? place.images : [] });
   } catch (error) {
     console.error('Could not create admin business:', error);

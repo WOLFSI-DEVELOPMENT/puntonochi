@@ -81,7 +81,7 @@ export function MapPage({ onSelectBusiness }: MapPageProps) {
 
     map.current = new maplibregl.Map({
       container: mapContainer.current,
-      style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+      style: 'https://tiles.openfreemap.org/styles/liberty',
       center: nochistlanCenter,
       zoom: 16.5,
       pitch: 60, // 3D tilt!

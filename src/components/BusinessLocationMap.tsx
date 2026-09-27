@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { X } from 'lucide-react';
@@ -6,50 +6,24 @@ import { motion } from 'motion/react';
 import type { Place } from '../types';
 
 const NOCHISTLAN: [number, number] = [-102.8456, 21.3653];
-const mapboxToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN || '';
-
-function mapStyle() {
-  return mapboxToken
-    ? `https://api.mapbox.com/styles/v1/mapbox/streets-v12?access_token=${encodeURIComponent(mapboxToken)}`
-    : 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
-}
+const mapStyle = 'https://tiles.openfreemap.org/styles/liberty';
 
 function BusinessMapCanvas({ place, expanded = false }: { place: Place; expanded?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const [point, setPoint] = useState<{ center: [number, number]; exact: boolean }>(() =>
+  const point = useMemo(() =>
     Number.isFinite(place.lat) && Number.isFinite(place.lng)
       ? { center: [place.lng as number, place.lat as number], exact: true }
       : { center: NOCHISTLAN, exact: false },
+    [place.lat, place.lng],
   );
-
-  useEffect(() => {
-    if (Number.isFinite(place.lat) && Number.isFinite(place.lng)) {
-      setPoint({ center: [place.lng as number, place.lat as number], exact: true });
-      return;
-    }
-    if (!mapboxToken || !place.address) {
-      setPoint({ center: NOCHISTLAN, exact: false });
-      return;
-    }
-    const controller = new AbortController();
-    const query = encodeURIComponent(`${place.name}, ${place.address}, Nochistlán, Zacatecas, México`);
-    fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?access_token=${encodeURIComponent(mapboxToken)}&country=mx&limit=1&proximity=${NOCHISTLAN.join(',')}`, { signal: controller.signal })
-      .then((response) => response.ok ? response.json() : Promise.reject(new Error('No se pudo localizar el domicilio.')))
-      .then((data) => {
-        const center = data?.features?.[0]?.center;
-        if (Array.isArray(center) && center.length === 2 && center.every(Number.isFinite)) setPoint({ center: [center[0], center[1]], exact: true });
-      })
-      .catch(() => undefined);
-    return () => controller.abort();
-  }, [place.id, place.name, place.address, place.lat, place.lng]);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
     const map = new maplibregl.Map({
       container,
-      style: mapStyle(),
+      style: mapStyle,
       center: point.center,
       zoom: point.exact ? 16 : 12.5,
       pitch: 0,

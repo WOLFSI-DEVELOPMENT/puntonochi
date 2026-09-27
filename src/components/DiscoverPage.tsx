@@ -33,27 +33,34 @@ function AIOverview({ place }: { place: Place }) {
     const host = hostRef.current;
     if (!host) return;
     let active = true;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const loadOverview = async () => {
+      try {
+        const response = await fetch(`/api/places/${encodeURIComponent(place.id)}/overview`);
+        const data = await response.json().catch(() => ({}));
+        if (!active) return;
+        if (response.status === 202 || data.generating) {
+          retryTimer = setTimeout(loadOverview, 1200);
+          return;
+        }
+        if (!response.ok) throw new Error(data.error || 'No se pudo generar el resumen.');
+        if (typeof data.overview !== 'string' || !data.overview.trim()) throw new Error('Resumen no disponible.');
+        const text = data.overview.trim();
+        setOverview(text);
+        setState('idle');
+        try { localStorage.setItem(overviewStorageKey(place.id), text); } catch { /* Cache is optional. */ }
+      } catch {
+        if (active) setState('error');
+      }
+    };
     const observer = new IntersectionObserver((entries) => {
       if (!entries.some((entry) => entry.isIntersecting)) return;
       observer.disconnect();
       setState('loading');
-      fetch(`/api/places/${encodeURIComponent(place.id)}/overview`)
-        .then(async (response) => {
-          const data = await response.json().catch(() => ({}));
-          if (!response.ok) throw new Error(data.error || 'No se pudo generar el resumen.');
-          if (typeof data.overview !== 'string' || !data.overview.trim()) throw new Error('Resumen no disponible.');
-          return data.overview.trim();
-        })
-        .then((text) => {
-          if (!active) return;
-          setOverview(text);
-          setState('idle');
-          try { localStorage.setItem(overviewStorageKey(place.id), text); } catch { /* Cache is optional. */ }
-        })
-        .catch(() => { if (active) setState('error'); });
+      void loadOverview();
     }, { rootMargin: '140px 0px', threshold: 0.05 });
     observer.observe(host);
-    return () => { active = false; observer.disconnect(); };
+    return () => { active = false; observer.disconnect(); if (retryTimer) clearTimeout(retryTimer); };
   }, [overview, place.id]);
 
   return <div ref={hostRef} className="mt-3 w-full" aria-live="polite">

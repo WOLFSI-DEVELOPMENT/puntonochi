@@ -21,6 +21,7 @@ type BusinessForm = {
 };
 type BusinessClaim = { id: string; placeId: string; name: string; address: string; phone: string; description: string; email: string; hours: Record<string, { closed: boolean; intervals: { open: string; close: string }[] }>; proofName: string; proofMimeType: string; proofBase64: string; createdAt: string };
 type CommunityEdit = { id: string; placeId: string; placeName: string; author: string; email: string; changes: Record<string, unknown>; createdAt: string };
+type DuplicateAddress = { id: string; name: string; address: string };
 
 const makeEmptyForm = (category = ''): BusinessForm => ({
   name: '', category, subtitle: '', location: 'Nochistlán de Mejía, Zacatecas',
@@ -55,6 +56,9 @@ export function AdminPage({ onClose }: AdminPageProps) {
   const [notice, setNotice] = useState('');
   const [claims, setClaims] = useState<BusinessClaim[]>([]);
   const [communityEdits, setCommunityEdits] = useState<CommunityEdit[]>([]);
+  const [addressDuplicate, setAddressDuplicate] = useState<DuplicateAddress | null>(null);
+  const [addressChecking, setAddressChecking] = useState(false);
+  const [addressCheckError, setAddressCheckError] = useState('');
 
   const loadPlaces = async (): Promise<AdminPlace[]> => {
     const result = await apiRequest<AdminPlace[]>('/api/admin/places');
@@ -98,8 +102,34 @@ export function AdminPage({ onClose }: AdminPageProps) {
     return () => { active = false; };
   }, []);
 
+  useEffect(() => {
+    const address = form.address.trim();
+    let active = true;
+    if (!address) {
+      setAddressDuplicate(null);
+      setAddressChecking(false);
+      setAddressCheckError('');
+      return () => { active = false; };
+    }
+    setAddressChecking(true);
+    setAddressCheckError('');
+    const timer = window.setTimeout(() => {
+      apiRequest<{ duplicate: DuplicateAddress | null }>(`/api/admin/places/check-address?address=${encodeURIComponent(address)}`)
+        .then((result) => { if (active) setAddressDuplicate(result.duplicate); })
+        .catch((checkError: unknown) => {
+          if (active) {
+            setAddressDuplicate(null);
+            setAddressCheckError(checkError instanceof Error ? checkError.message : 'No se pudo comprobar la dirección.');
+          }
+        })
+        .finally(() => { if (active) setAddressChecking(false); });
+    }, 350);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [form.address]);
+
   const createBusiness = async (event: FormEvent) => {
     event.preventDefault();
+    if (addressChecking || addressDuplicate || addressCheckError) return;
     setBusy(true);
     setError('');
     setNotice('');
@@ -242,7 +272,9 @@ export function AdminPage({ onClose }: AdminPageProps) {
               <AdminField label="Nombre del negocio"><input required maxLength={180} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Ej. Café de la Plaza" /></AdminField>
               <AdminField label="Categoría"><input required maxLength={100} value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} placeholder="Restaurante, hotel…" /></AdminField>
               <AdminField label="Ubicación"><input required maxLength={180} value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} /></AdminField>
-              <AdminField label="Dirección"><input maxLength={300} value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} placeholder="Calle, colonia" /></AdminField>
+              <AdminField label="Dirección"><input maxLength={300} value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} placeholder="Calle, colonia" />
+                <span className="mt-1 block text-[11px] font-medium" aria-live="polite">{addressChecking ? <span className="inline-flex items-center gap-1.5 text-white/45"><LoaderCircle className="h-3 w-3 animate-spin"/>Comprobando dirección…</span> : addressDuplicate ? <span className="text-rose-300">Esta dirección ya está registrada para {addressDuplicate.name}. No puedes crear un duplicado.</span> : addressCheckError ? <span className="text-rose-300">{addressCheckError} Corrige la dirección o vuelve a intentarlo.</span> : address ? <span className="text-emerald-300">No encontramos otro negocio con esta dirección.</span> : null}</span>
+              </AdminField>
               <AdminField label="Teléfono"><input type="tel" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="(346) …" /></AdminField>
               <AdminField label="Descripción corta"><input maxLength={500} value={form.subtitle} onChange={(event) => setForm({ ...form, subtitle: event.target.value })} placeholder="Qué ofrece este negocio" /></AdminField>
               <AdminField label="Rango de precio"><select value={form.cost} onChange={(event) => setForm({ ...form, cost: event.target.value })}><option value="1">$</option><option value="2">$$</option><option value="3">$$$</option><option value="4">$$$$</option></select></AdminField>
@@ -251,7 +283,7 @@ export function AdminPage({ onClose }: AdminPageProps) {
             <WeeklyHoursEditor value={form.weeklyHours} onChange={(weeklyHours) => setForm((current) => ({ ...current, weeklyHours }))} />
             {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
             {notice && <p role="status" className="text-sm text-emerald-300">{notice}</p>}
-            <button type="submit" disabled={busy} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white font-semibold text-black disabled:opacity-60"><Plus className="h-4 w-4" />Crear y guardar</button>
+            <button type="submit" disabled={busy || addressChecking || Boolean(addressDuplicate) || Boolean(addressCheckError)} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white font-semibold text-black disabled:opacity-60"><Plus className="h-4 w-4" />{addressChecking ? 'Comprobando dirección…' : addressDuplicate ? 'Dirección ya registrada' : 'Crear y guardar'}</button>
           </form>
 
           <section className="space-y-3">
