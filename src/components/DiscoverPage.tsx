@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { Bookmark, MapPin, Plus, Star } from 'lucide-react';
+import { ArrowUpRight, Bookmark, MapPin, Plus, Star, Store } from 'lucide-react';
 import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react';
 import CornerKit, { type SquircleConfig } from '@cornerkit/core';
 import { mockPlaces } from '../data';
@@ -98,8 +98,9 @@ function ExplorePlaceCard({ place, index, saved, onOpen, onToggleBookmark, reduc
 }
 
 function FeedAd() {
+  const adRef = useRef<HTMLModElement>(null);
   useEffect(() => {
-    const ad = document.querySelector<HTMLModElement>('[data-explore-feed-ad]');
+    const ad = adRef.current;
     if (!ad || ad.dataset.initialized) return;
     ad.dataset.initialized = 'true';
     try {
@@ -110,7 +111,23 @@ function FeedAd() {
       console.error('AdSense feed unit could not be initialized.', error);
     }
   }, []);
-  return <div className="my-2 w-full" aria-label="Publicidad"><ins data-explore-feed-ad className="adsbygoogle block w-full" style={{ display: 'block' }} data-ad-format="fluid" data-ad-layout-key="-6t+ed+2i-1n-4w" data-ad-client={adClient} data-ad-slot="7895105729" /></div>;
+  return <div data-explore-squircle className="relative isolate my-0 snap-start [scroll-snap-stop:always] aspect-[9/16] w-full overflow-hidden rounded-[28px] bg-[#1a1b1e] shadow-xl shadow-black/25" aria-label="Publicidad">
+    <img src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=900&q=80" alt="" aria-hidden="true" className="absolute inset-0 h-full w-full scale-125 object-cover opacity-25 blur-3xl" />
+    <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.12)_0%,rgba(10,11,13,0.32)_44%,rgba(17,18,20,0.92)_100%)]" />
+    <div className="absolute inset-x-0 top-0 z-[1] p-2.5" aria-hidden="true"><div data-explore-squircle className="relative aspect-video overflow-hidden rounded-[24px] bg-[#25272a]"><img src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=900&q=80" alt="" className="h-full w-full animate-pulse object-cover opacity-55"/><div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent"/></div></div>
+    <div className="absolute right-5 top-5 z-[2] rounded-full bg-black/45 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/75 backdrop-blur-md">Anuncio</div>
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] flex h-[68%] flex-col items-start justify-start p-5 pt-7" aria-hidden="true"><span className="mb-3 h-6 w-20 animate-pulse rounded-full bg-white/[0.12]"/><span className="h-7 w-[82%] animate-pulse rounded-full bg-white/[0.12]"/><span className="mt-2 h-7 w-[58%] animate-pulse rounded-full bg-white/[0.09]"/><span className="mt-4 h-4 w-[90%] animate-pulse rounded-full bg-white/[0.08]"/><span className="mt-2 h-4 w-[72%] animate-pulse rounded-full bg-white/[0.07]"/><span className="mt-4 w-full border-t border-white/15 pt-3"><span className="block h-3 w-24 animate-pulse rounded-full bg-white/[0.08]"/></span><span className="mt-4 h-3 w-[92%] animate-pulse rounded-full bg-white/[0.07]"/><span className="mt-2 h-3 w-[68%] animate-pulse rounded-full bg-white/[0.06]"/></div>
+    <ins ref={adRef} data-explore-feed-ad className="adsbygoogle absolute inset-0 z-[3] block h-full w-full" style={{ display: 'block', height: '100%' }} data-ad-format="fluid" data-ad-layout-key="-6t+ed+2i-1n-4w" data-ad-client={adClient} data-ad-slot="7895105729" />
+  </div>;
+}
+
+function PromoteBusinessCard({ onClick }: { onClick: () => void }) {
+  return <button type="button" onClick={onClick} data-explore-squircle className="relative isolate my-0 snap-start [scroll-snap-stop:always] aspect-[9/16] w-full overflow-hidden rounded-[28px] bg-[#1a1b1e] text-left text-white shadow-xl shadow-black/25 active:scale-[0.99] transition-transform">
+    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_65%_20%,rgba(44,117,226,.45),transparent_45%),linear-gradient(155deg,#283244_0%,#202226_52%,#111214_100%)]" />
+    <div className="absolute inset-x-0 top-0 z-[1] p-2.5"><div data-explore-squircle className="relative flex aspect-video items-center justify-center overflow-hidden rounded-[24px] bg-[linear-gradient(145deg,#374967,#242a34_56%,#18202d)]"><div className="absolute -right-8 -top-12 h-40 w-40 rounded-full bg-blue-400/25 blur-3xl"/><span className="relative flex h-20 w-20 items-center justify-center rounded-[26px] bg-white/10 text-blue-100 backdrop-blur-sm"><Store className="h-10 w-10"/></span></div></div>
+    <div className="absolute right-5 top-5 z-[2] rounded-full bg-black/35 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/80 backdrop-blur-md">Para negocios</div>
+    <div className="absolute inset-x-0 bottom-0 z-[2] flex h-[68%] flex-col items-start justify-start p-5 pt-7"><span className="mb-3 rounded-full bg-blue-400/15 px-3 py-1.5 text-[11px] font-semibold text-blue-100">Promoción local</span><h3 className="text-[26px] font-bold leading-tight tracking-tight">Haz que más personas te encuentren</h3><p className="mt-2 flex items-center gap-1.5 text-sm leading-relaxed text-white/65">Conecta con la comunidad y destaca tu negocio en PuntoNochi.</p><div className="mt-4 flex w-full items-center justify-between border-t border-white/15 pt-3 text-xs text-white/55"><span>Alcance local</span><span>Campaña patrocinada</span></div><span className="mt-5 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-[#151619]">Promocionar negocio <ArrowUpRight className="h-4 w-4"/></span></div>
+  </button>;
 }
 
 export function DiscoverPage({ onSelectBusiness }: { onSelectBusiness: (place: Place) => void }) {
@@ -172,14 +189,15 @@ export function DiscoverPage({ onSelectBusiness }: { onSelectBusiness: (place: P
         const saved = bookmarkIds.includes(place.id);
         return <Fragment key={`${place.id}-${feedVersion}`}>
           <ExplorePlaceCard place={place} index={index} saved={saved} onOpen={onSelectBusiness} onToggleBookmark={toggleBookmark} reduceMotion={reduceMotion}/>
-          {(index + 1) % 7 === 0 && <div className="mt-4"><button type="button" onClick={openPromotion} data-explore-squircle className="w-full rounded-[24px] bg-[#202124] p-4 text-left"><p className="text-sm font-bold">¿Tienes un negocio?</p><p className="mt-1 text-xs text-white/50">Promociónalo en PuntoNochi</p><span className="mt-3 inline-flex rounded-full bg-white px-4 py-2 text-xs font-bold text-black">Promocionar</span></button><FeedAd/></div>}
+          {(index + 1) % 5 === 0 && <FeedAd/>}
+          {(index + 1) % 10 === 0 && <PromoteBusinessCard onClick={openPromotion}/>}
         </Fragment>;
       })}
       {!places.length && <div className="aspect-[9/16] animate-pulse rounded-[28px] bg-[#202124]" aria-label="Cargando lugares" role="status"/>}
     </div>
 
     <AnimatePresence>{showPromotion && <BusinessPromotionSheet onClose={() => setShowPromotion(false)} />}</AnimatePresence>
-    <AnimatePresence>{showCreateFlow && <CreatePostFlow onClose={() => setShowCreateFlow(false)} />}</AnimatePresence>
+    <AnimatePresence>{showCreateFlow && <CreatePostFlow onClose={() => setShowCreateFlow(false)} onPromoteBusiness={() => { setShowCreateFlow(false); setShowPromotion(true); }} />}</AnimatePresence>
     <AnimatePresence>{showProfile && <ProfileSheet onClose={() => setShowProfile(false)} onSelectBusiness={onSelectBusiness} />}</AnimatePresence>
   </motion.main>;
 }

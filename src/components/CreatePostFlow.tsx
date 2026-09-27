@@ -1,19 +1,21 @@
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, Camera, Check, Images, LoaderCircle, RotateCcw, Search, X } from 'lucide-react';
+import { ArrowLeft, Camera, Check, Images, LoaderCircle, Megaphone, RotateCcw, Search, X } from 'lucide-react';
 import { mockPlaces } from '../data';
 import { Place } from '../types';
 import { apiFetch } from '../api';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 
-type FlowStep = 'camera' | 'preview' | 'compose' | 'published';
+type FlowStep = 'choice' | 'camera' | 'preview' | 'compose' | 'published';
+type CameraRatio = '16:9' | '1:1' | '9:16';
 
-export function CreatePostFlow({ onClose }: { onClose: () => void }) {
+export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => void; onPromoteBusiness: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const photoPickerRef = useRef<HTMLInputElement>(null);
   const coverPickerRef = useRef<HTMLInputElement>(null);
-  const [step, setStep] = useState<FlowStep>('camera');
+  const [step, setStep] = useState<FlowStep>('choice');
+  const [cameraRatio, setCameraRatio] = useState<CameraRatio>('9:16');
   const [cameraError, setCameraError] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
   const [facing, setFacing] = useState<'environment' | 'user'>('environment');
@@ -86,14 +88,20 @@ export function CreatePostFlow({ onClose }: { onClose: () => void }) {
     if (!video || !video.videoWidth) return;
     setCapturing(true);
     const canvas = document.createElement('canvas');
-    const side = Math.min(video.videoWidth, video.videoHeight, 1600);
-    canvas.width = side;
-    canvas.height = side;
+    const ratio = cameraRatio === '16:9' ? 16 / 9 : cameraRatio === '9:16' ? 9 / 16 : 1;
+    const sourceRatio = video.videoWidth / video.videoHeight;
+    const cropWidth = sourceRatio > ratio ? video.videoHeight * ratio : video.videoWidth;
+    const cropHeight = sourceRatio > ratio ? video.videoHeight : video.videoWidth / ratio;
+    const sx = (video.videoWidth - cropWidth) / 2;
+    const sy = (video.videoHeight - cropHeight) / 2;
+    const outputWidth = ratio >= 1 ? 1600 : Math.round(1600 * ratio);
+    const outputHeight = Math.round(outputWidth / ratio);
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
     const context = canvas.getContext('2d');
     if (!context) { setCapturing(false); return; }
-    context.translate(side, 0);
-    context.scale(-1, 1);
-    context.drawImage(video, (video.videoWidth - side) / 2, (video.videoHeight - side) / 2, side, side, 0, 0, side, side);
+    if (facing === 'user') { context.translate(outputWidth, 0); context.scale(-1, 1); }
+    context.drawImage(video, sx, sy, cropWidth, cropHeight, 0, 0, outputWidth, outputHeight);
     window.setTimeout(() => {
       acceptPhoto(canvas.toDataURL('image/jpeg', 0.82), 'captured-photo.jpg');
       setCapturing(false);
@@ -182,9 +190,23 @@ export function CreatePostFlow({ onClose }: { onClose: () => void }) {
     <motion.div className="fixed inset-0 z-[80] overflow-y-auto bg-black text-white" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_50%_43%,rgba(255,255,255,0.08),transparent_48%),linear-gradient(180deg,#050505_0%,#000_50%,#090909_100%)]" />
 
+      {step === 'choice' && <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-[560px] flex-col justify-center px-5 pb-10 pt-16">
+        <button type="button" onClick={onClose} aria-label="Cerrar" className="absolute left-5 top-5 flex h-11 w-11 items-center justify-center rounded-full bg-[#292929]"><X className="h-5 w-5"/></button>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">PuntoNochi · Crear</p>
+        <h1 className="text-3xl font-bold tracking-tight">¿Qué quieres compartir?</h1>
+        <p className="mt-2 text-sm leading-relaxed text-white/55">Elige cómo quieres participar en la comunidad.</p>
+        <div className="mt-7 space-y-3">
+          <button type="button" onClick={() => setStep('camera')} className="flex w-full items-center gap-4 rounded-[28px] bg-[#292a2d] p-5 text-left transition-colors active:bg-[#343539] [corner-shape:squircle]"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10"><Camera className="h-6 w-6"/></span><span className="min-w-0 flex-1"><span className="block text-lg font-bold">Publicar una foto</span><span className="mt-1 block text-sm leading-relaxed text-white/50">Comparte una imagen con la comunidad, como en tus redes sociales.</span></span><ArrowLeft className="h-5 w-5 rotate-180 text-white/40"/></button>
+          <button type="button" onClick={onPromoteBusiness} className="flex w-full items-center gap-4 rounded-[28px] bg-[#292a2d] p-5 text-left transition-colors active:bg-[#343539] [corner-shape:squircle]"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10"><Megaphone className="h-6 w-6"/></span><span className="min-w-0 flex-1"><span className="block text-lg font-bold">Promocionar un negocio</span><span className="mt-1 block text-sm leading-relaxed text-white/50">Solicita una promoción para que más personas descubran un negocio local.</span></span><ArrowLeft className="h-5 w-5 rotate-180 text-white/40"/></button>
+        </div>
+      </div>}
+
       {step === 'camera' && <div className="relative z-10 flex min-h-[100dvh] flex-col items-center justify-center px-5 pb-8 pt-16">
         <button type="button" onClick={onClose} className="absolute left-5 top-5 rounded-full bg-[#292929] px-4 py-2.5 text-sm font-semibold text-white"><ArrowLeft className="mr-2 inline h-4 w-4" />Volver</button>
-        <div className="relative aspect-square w-full max-w-[min(78vw,440px)] overflow-hidden rounded-[34px] bg-[#171717] [corner-shape:squircle]">
+        <div className="mb-4 flex items-center gap-1.5 rounded-full bg-[#202020] p-1.5" role="group" aria-label="Proporción de cámara">
+          {(['16:9', '1:1', '9:16'] as CameraRatio[]).map((ratio) => <button key={ratio} type="button" aria-pressed={cameraRatio === ratio} onClick={() => setCameraRatio(ratio)} className={`rounded-full px-4 py-2 text-xs font-semibold transition-colors ${cameraRatio === ratio ? 'bg-white text-black' : 'text-white/55'}`}>{ratio}</button>)}
+        </div>
+        <div className={`relative w-full overflow-hidden rounded-[34px] bg-[#171717] [corner-shape:squircle] ${cameraRatio === '16:9' ? 'aspect-video max-w-[440px]' : cameraRatio === '1:1' ? 'aspect-square max-w-[min(78vw,440px)]' : 'h-[min(58dvh,560px)] aspect-[9/16]'}`}>
           <video ref={videoRef} playsInline muted className={`h-full w-full object-cover ${facing === 'user' ? '-scale-x-100' : ''}`} />
           {!cameraReady && <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#111] px-7 text-center"><Camera className="h-9 w-9 text-white/55" />{cameraError ? <p className="text-sm text-white/65">{cameraError}</p> : <><LoaderCircle className="h-5 w-5 animate-spin text-white/55" /><p className="text-sm text-white/55">Abriendo cámara…</p></>}</div>}
           {capturing && <motion.div className="absolute inset-0 bg-white" initial={{ opacity: 0.95 }} animate={{ opacity: 0 }} transition={{ duration: 0.35 }} />}
@@ -199,7 +221,7 @@ export function CreatePostFlow({ onClose }: { onClose: () => void }) {
 
       {step === 'preview' && <div className="relative z-10 flex min-h-[100dvh] flex-col items-center px-5 pb-7 pt-5">
         <div className="flex w-full max-w-[520px] items-center"><button type="button" onClick={() => setStep('camera')} className="rounded-full bg-[#292929] px-4 py-2.5 text-sm font-semibold"><ArrowLeft className="mr-2 inline h-4 w-4" />Volver</button></div>
-        <div className="flex flex-1 items-center justify-center py-6"><motion.img src={photo} alt="Foto capturada" initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', damping: 22 }} className="aspect-square w-full max-w-[min(78vw,440px)] rounded-[34px] object-cover [corner-shape:squircle]" /></div>
+        <div className="flex flex-1 items-center justify-center py-6"><motion.img src={photo} alt="Foto capturada" initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', damping: 22 }} className={`rounded-[34px] object-cover [corner-shape:squircle] ${cameraRatio === '16:9' ? 'aspect-video w-full max-w-[min(92vw,620px)]' : cameraRatio === '1:1' ? 'aspect-square w-full max-w-[min(78vw,440px)]' : 'h-[min(62dvh,600px)] aspect-[9/16] w-auto max-w-full'}`} /></div>
         <button type="button" onClick={() => setStep('compose')} style={{ backgroundColor: '#ffffff', color: '#000000' }} className="w-full max-w-[520px] rounded-full !bg-white py-3.5 text-[15px] font-bold !text-black">Continuar</button>
       </div>}
 

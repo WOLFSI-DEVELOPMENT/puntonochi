@@ -998,9 +998,35 @@ app.get('/api/colonias', requireNeon, async (_req, res) => {
   }
 });
 
+let placeCategoryCorrections;
+function ensurePlaceCategoryCorrections() {
+  if (!sql) throw new Error('DATABASE_URL is not configured.');
+  if (!placeCategoryCorrections) placeCategoryCorrections = sql`
+    UPDATE places SET category = CASE
+      WHEN name ~* '(hotel|hostal|hospedaje)' THEN 'Hoteles y Rentas'
+      WHEN name ~* '(cl[ií]nica de belleza|spa|est[eé]tica|nerea spa)' THEN 'Belleza'
+      WHEN name ~* '(farmacia|superfarmacia)' THEN 'Farmacia'
+      WHEN name ~* '(hospital|centro m[eé]dico|consultorio m[eé]dico|cl[ií]nica|ginec[oó]log|traumat[oó]log|kinesi[oó]log|psicol[oó]g|nutricional|bienestar animal)' THEN 'Salud Esp.'
+      WHEN name ~* '(ferreter[ií]a|herramientas|centro ferretero|mallas nochistlan)' THEN 'Construcción'
+      WHEN name ~* '(celulares|ciber|cyber|comput|tecnocentro|internet|intercom|fix-it celular)' THEN 'Tecnología'
+      WHEN name ~* '(boutique|zapater[ií]a|lencer[ií]a|joyer[ií]a)' THEN 'Moda y Regalos'
+      WHEN name ~* '(muebler[ií]a)' THEN 'Hogar'
+      WHEN name ~* '(forrajes)' THEN 'Agricultura'
+      WHEN name ~* '(fitness|fit zone|gimnasio|vivero)' THEN 'Estilo de Vida'
+      WHEN name ~* '(fruter[ií]a|bodega aurrera|oxxo)' THEN 'Supermercados'
+      WHEN name ~* '(dulcer[ií]a)' THEN 'Comida'
+      WHEN name ~* '(basa comercializadora de equipos y herramientas)' THEN 'Construcción'
+      ELSE category
+    END
+    WHERE name ~* '(hotel|hostal|hospedaje|cl[ií]nica de belleza|spa|est[eé]tica|nerea spa|farmacia|superfarmacia|hospital|centro m[eé]dico|consultorio m[eé]dico|cl[ií]nica|ginec[oó]log|traumat[oó]log|kinesi[oó]log|psicol[oó]g|nutricional|bienestar animal|ferreter[ií]a|herramientas|centro ferretero|mallas nochistlan|celulares|ciber|cyber|comput|tecnocentro|internet|intercom|fix-it celular|boutique|zapater[ií]a|lencer[ií]a|joyer[ií]a|muebler[ií]a|forrajes|fitness|fit zone|gimnasio|vivero|fruter[ií]a|bodega aurrera|oxxo|dulcer[ií]a|basa comercializadora de equipos y herramientas)'
+  `.catch((error) => { placeCategoryCorrections = undefined; throw error; });
+  return placeCategoryCorrections;
+}
+
 app.get('/api/places', requireNeon, async (req, res) => {
   try {
     await Promise.all([ensureDirectorySchema(), ensureSubmissionSchema()]);
+    await ensurePlaceCategoryCorrections();
     const places = await sql`SELECT id, name, category, subtitle, location, address,
       map_url AS "mapUrl", images, logo, rating, review_count AS "reviewCount",
       is_open AS "isOpen", cost, distance, good_to_know AS "goodToKnow", hours, weekly_hours AS "weeklyHours",
@@ -1020,6 +1046,56 @@ app.get('/api/places', requireNeon, async (req, res) => {
   } catch (error) {
     console.error('Could not load places from Neon:', error);
     res.status(500).json({ error: 'No se pudieron cargar los negocios.' });
+  }
+});
+
+app.post('/api/ask-nochi', requireNeon, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'Ask Nochi todavía no está configurado. Agrega GEMINI_API_KEY en las variables del servidor.' });
+  const query = typeof req.body?.query === 'string' ? req.body.query.trim().slice(0, 700) : '';
+  if (!query) return res.status(400).json({ error: 'Escribe qué tipo de lugar estás buscando.' });
+
+  try {
+    await ensureDirectorySchema();
+    const rows = await sql`SELECT id, name, category, subtitle, location, address,
+      map_url AS "mapUrl", images, logo, rating, review_count AS "reviewCount",
+      is_open AS "isOpen", cost, distance, good_to_know AS "goodToKnow", hours,
+      weekly_hours AS "weeklyHours", lat, lng, phone FROM places ORDER BY sort_order`;
+    const terms = query.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '').match(/[\p{L}\p{N}]{3,}/gu) || [];
+    const ranked = rows.map((place) => {
+      const searchable = [place.name, place.category, place.subtitle, place.location, place.address, ...(Array.isArray(place.goodToKnow) ? place.goodToKnow : [])]
+        .filter(Boolean).join(' ').toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const score = terms.reduce((sum, term) => sum + (searchable.includes(term) ? (String(place.name).toLocaleLowerCase('es').includes(term) ? 5 : 2) : 0), 0);
+      return { place, score };
+    }).sort((a, b) => b.score - a.score || Number(b.place.rating || 0) - Number(a.place.rating || 0) || Number(b.place.reviewCount || 0) - Number(a.place.reviewCount || 0));
+    const topMatches = ranked.filter(({ score }) => score > 0).slice(0, 4);
+    const selected = (topMatches.length ? topMatches : ranked.slice(0, 3)).map(({ place }) => ({
+      id: place.id, name: place.name, category: place.category, subtitle: place.subtitle, location: place.location,
+      address: place.address, mapUrl: place.mapUrl, images: Array.isArray(place.images) ? place.images : [], logo: place.logo,
+      rating: Number(place.rating || 0), reviewCount: Number(place.reviewCount || 0), isOpen: Boolean(place.isOpen),
+      cost: Number(place.cost || 0), distance: place.distance || '', goodToKnow: Array.isArray(place.goodToKnow) ? place.goodToKnow : [],
+      hours: place.hours || '', weeklyHours: place.weeklyHours || null, lat: place.lat == null ? undefined : Number(place.lat),
+      lng: place.lng == null ? undefined : Number(place.lng), phone: place.phone || undefined,
+    }));
+    const history = Array.isArray(req.body?.history) ? req.body.history.slice(-8).map((item) => ({
+      role: item?.role === 'assistant' ? 'assistant' : 'user', content: typeof item?.content === 'string' ? item.content.slice(0, 1200) : '',
+    })).filter((item) => item.content) : [];
+    const historyText = history.map((item) => `${item.role === 'user' ? 'Usuario' : 'Nochi'}: ${item.content}`).join('\n');
+    const source = JSON.stringify(selected);
+    const client = new GoogleGenAI({ apiKey });
+    const response = await client.models.generateContent({
+      model: 'gemini-3.1-flash-lite',
+      contents: `Eres Ask Nochi, un asistente local que ayuda a encontrar negocios en Nochistlán, Zacatecas. Responde en español claro, de forma concisa y útil, usando Markdown ligero (negritas y listas breves cuando ayuden). Contesta la pregunta actual teniendo en cuenta el contexto. Usa exclusivamente los datos de negocios proporcionados; no inventes ubicaciones, horarios, servicios, precios, calificaciones ni distancias. Si recomiendas lugares, menciona solo nombres que aparezcan en los datos. Cuando no haya coincidencias claras, dilo honestamente y ofrece las opciones disponibles solo si pueden ayudar. No afirmes que estás mostrando un mapa: la interfaz puede mostrar uno junto a las fichas. No reveles razonamiento interno.\n\nContexto reciente:\n${historyText || '(conversación nueva)'}\n\nPregunta actual:\n${query}\n\nNegocios disponibles (fuente de verdad):\n${source}`,
+      config: { maxOutputTokens: 420, thinkingConfig: { thinkingLevel: 'low', includeThoughts: false } },
+    });
+    const answer = response.text?.trim();
+    if (!answer) return res.status(502).json({ error: 'Nochi no pudo generar una respuesta. Inténtalo de nuevo.' });
+    res.set('Cache-Control', 'no-store');
+    return res.json({ answer, places: selected });
+  } catch (error) {
+    console.error('Could not answer Ask Nochi query:', error);
+    return res.status(502).json({ error: 'No se pudo consultar Ask Nochi. Inténtalo de nuevo en un momento.' });
   }
 });
 

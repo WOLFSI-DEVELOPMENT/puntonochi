@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { categories, colonias, visits, mockPlaces } from './data';
-import { ChevronRight, Search, Mic, MoreHorizontal, Flame } from 'lucide-react';
+import { categories, visits, mockPlaces } from './data';
+import { Bookmark, ChevronRight, Search, Mic, MoreHorizontal, Flame, Sparkles, MapPin, Star } from 'lucide-react';
 import { BottomNav } from './components/BottomNav';
 import { ColoniasPage } from './components/ColoniasPage';
 import { DiscoverPage } from './components/DiscoverPage';
@@ -18,13 +18,24 @@ import { AdminPage } from './components/AdminPage';
 import { SplashScreen } from './components/SplashScreen';
 import { InstallAppPrompt } from './components/InstallAppPrompt';
 import { NotificationOptInBanner } from './components/NotificationOptInBanner';
+import { WelcomePage } from './components/WelcomePage';
 import CornerKit from '@cornerkit/core';
 import { Category, Place, Colonia } from './types';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { DAILY_USE_KEY, recordProfileActiveSeconds } from './profileStorage';
+import { DAILY_USE_KEY, getBookmarkedPlaceIds, recordProfileActiveSeconds } from './profileStorage';
 
 const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
+const WELCOME_SEEN_KEY = 'puntonochi-welcome-seen-v1';
 type DailyUse = { lastOpened: string; totalDays: number; currentStreak: number };
+const RECENT_SEARCHES_KEY = 'puntonochi-recent-searches-v1';
+const RECENT_PLACES_KEY = 'puntonochi-recent-places-v1';
+
+function readLocalList(key: string): string[] {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+  } catch { return []; }
+}
 
 function localDateKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -127,9 +138,25 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showWelcome, setShowWelcome] = useState(false);
   const [directoryVersion, setDirectoryVersion] = useState(0);
+  const [suggestionVersion, setSuggestionVersion] = useState(0);
   const [dailyUse, setDailyUse] = useState<DailyUse>(() => recordDailyUse());
   const streakDateRef = useRef(dailyUse.lastOpened);
+
+  const finishSplash = () => {
+    setLoading(false);
+    try {
+      if (localStorage.getItem(WELCOME_SEEN_KEY) !== 'true') setShowWelcome(true);
+    } catch {
+      setShowWelcome(true);
+    }
+  };
+
+  const finishWelcome = () => {
+    try { localStorage.setItem(WELCOME_SEEN_KEY, 'true'); } catch { /* Welcome still closes if storage is unavailable. */ }
+    setShowWelcome(false);
+  };
 
   useEffect(() => {
     let lastActivityCheck = Date.now();
@@ -157,6 +184,56 @@ export default function App() {
 
   const [destacadosState, setDestacadosState] = useState({ index: 0, direction: 0 });
 
+  const suggestedPlaces = useMemo(() => {
+    const searches = readLocalList(RECENT_SEARCHES_KEY);
+    const recentPlaces = readLocalList(RECENT_PLACES_KEY);
+    const bookmarks = getBookmarkedPlaceIds();
+    const score = (place: Place) => {
+      const searchable = [place.name, place.category, place.subtitle, place.location, place.address].filter(Boolean).join(' ').toLocaleLowerCase('es');
+      const searchScore = searches.reduce((total, term, index) => {
+        const normalized = term.toLocaleLowerCase('es');
+        return total + (normalized && searchable.includes(normalized) ? 8 - Math.min(index, 6) : 0);
+      }, 0);
+      const bookmarkScore = bookmarks.includes(place.id) ? 12 : 0;
+      const viewedIndex = recentPlaces.indexOf(place.id);
+      const viewedScore = viewedIndex >= 0 ? 6 - Math.min(viewedIndex, 5) : 0;
+      return searchScore + bookmarkScore + viewedScore + Math.min(place.reviewCount || 0, 100) / 100 + (place.rating || 0) / 10;
+    };
+    return [...mockPlaces]
+      .filter((place) => place.images?.length)
+      .sort((a, b) => score(b) - score(a))
+      .slice(0, 8);
+  }, [directoryVersion, suggestionVersion]);
+
+  const favoritePlaces = useMemo(() => {
+    const ids = getBookmarkedPlaceIds();
+    return ids.map((id) => mockPlaces.find((place) => place.id === id)).filter((place): place is Place => Boolean(place));
+  }, [directoryVersion, suggestionVersion]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const term = searchQuery.trim().replace(/\s+/g, ' ');
+      if (!showSearch || term.length < 2) return;
+      const recent = readLocalList(RECENT_SEARCHES_KEY).filter((item) => item.toLocaleLowerCase('es') !== term.toLocaleLowerCase('es'));
+      try { localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify([term, ...recent].slice(0, 12))); } catch { /* Suggestions still work without storage. */ }
+      setSuggestionVersion((version) => version + 1);
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery, showSearch]);
+
+  useEffect(() => {
+    const refreshSuggestions = () => setSuggestionVersion((version) => version + 1);
+    window.addEventListener('puntonochi-bookmarks-updated', refreshSuggestions);
+    return () => window.removeEventListener('puntonochi-bookmarks-updated', refreshSuggestions);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedBusiness) return;
+    const recent = readLocalList(RECENT_PLACES_KEY).filter((id) => id !== selectedBusiness.id);
+    try { localStorage.setItem(RECENT_PLACES_KEY, JSON.stringify([selectedBusiness.id, ...recent].slice(0, 20))); } catch { /* Optional personalization. */ }
+    setSuggestionVersion((version) => version + 1);
+  }, [selectedBusiness]);
+
   useEffect(() => {
     if (activeTab === 'inicio') {
       const timer = setTimeout(() => {
@@ -164,8 +241,8 @@ export default function App() {
         ck.applyAll('.ck-app-card', { radius: 26, smoothing: 1 });
         ck.applyAll('.ck-app-card-inner', { radius: 21, smoothing: 1 });
         ck.applyAll('.ck-home-category-card', { radius: 24, smoothing: 1 });
-        ck.applyAll('.ck-home-colonia-featured', { radius: 60, smoothing: 1 });
-        ck.applyAll('.ck-home-colonia-card', { radius: 32, smoothing: 1 });
+        ck.applyAll('.ck-home-suggested-card', { radius: 28, smoothing: 1 });
+        ck.applyAll('.ck-home-favorite-card', { radius: 24, smoothing: 1 });
       }, 300);
       return () => clearTimeout(timer);
     }
@@ -375,7 +452,7 @@ export default function App() {
       {/* Dynamic Main Content based on activeTab */}
       <AnimatePresence mode="wait" initial={false}>
       {activeTab === 'inicio' && (
-        <motion.main key="home-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }} className="pt-16">
+        <motion.main key="home-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }} className="pt-8">
           {/* Header Section */}
           <section className="relative px-5 mb-8">
             <div aria-label={`${dailyUse.totalDays} días usando PuntoNochi. Racha actual de ${dailyUse.currentStreak} días.`} title={`${dailyUse.totalDays} días usando PuntoNochi · racha de ${dailyUse.currentStreak} días`} className="absolute right-5 top-[-4px] flex min-h-9 items-center gap-1.5 rounded-full bg-[#292a2d] px-2.5 py-1 text-white shadow-sm">
@@ -447,57 +524,46 @@ export default function App() {
             </div>
           </section>
 
-          {/* By City (Colonia) Section */}
+          {/* Personalized suggestions */}
           <section className="mb-10">
-            <div 
-              className="px-5 mb-4 flex justify-between items-center cursor-pointer active:opacity-70 transition-opacity"
-              onClick={() => !loading && setShowColonias(true)}
-            >
-              <div>
-                <h2 className="text-2xl font-bold flex items-center gap-1">
-                  Por Colonias <ChevronRight className="w-5 h-5 text-neutral-400 mt-1" strokeWidth={1.5} />
-                </h2>
-                <p className="text-[15px] text-neutral-500 font-medium mt-0.5">Explora la ciudad por zonas</p>
-              </div>
+            <div className="px-5 mb-4">
+              <h2 className="text-2xl font-bold flex items-center gap-2"><Sparkles className="h-5 w-5 text-[#1a73e8]"/>Sugeridos</h2>
+              <p className="text-[15px] text-neutral-500 font-medium mt-0.5">Negocios para ti, según lo que buscas y guardas</p>
             </div>
-            
-            <div className="px-5 flex gap-4 h-[280px]">
-              {loading ? (
-                <>
-                  <div className="w-[60%] h-full squircle-60 bg-neutral-200 animate-pulse" />
-                  <div className="w-[40%] flex flex-col gap-4 h-full">
-                    <div className="flex-1 squircle-32 bg-neutral-200 animate-pulse" />
-                    <div className="flex-1 squircle-32 bg-neutral-200 animate-pulse" />
+
+            <div className="flex gap-4 overflow-x-auto px-5 pb-2 scrollbar-hide snap-x snap-mandatory">
+              {loading ? [1, 2, 3].map((item) => <div key={item} className="h-[220px] w-[250px] shrink-0 animate-pulse rounded-[28px] bg-neutral-200 snap-start" />) : suggestedPlaces.map((place) => (
+                <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
+                  <img src={place.images[0]} alt={place.name} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
+                  <div className="absolute left-4 right-4 top-4 flex items-center justify-between">
+                    <span className="rounded-full bg-black/35 px-3 py-1 text-xs font-semibold backdrop-blur-sm">{place.category}</span>
+                    {getBookmarkedPlaceIds().includes(place.id) && <Bookmark className="h-4 w-4 fill-white drop-shadow" />}
                   </div>
-                </>
-              ) : (
-                <>
-                  {/* Main large card */}
-                  <div className="ck-home-colonia-featured w-[60%] h-full squircle-60 relative overflow-hidden shadow-sm">
-                    <img src={colonias[0]?.image} alt={colonias[0]?.name} className="absolute inset-0 w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-                    <div className="absolute bottom-5 left-5 right-5 text-white">
-                      <h3 className="font-bold text-xl leading-tight">{colonias[0]?.name}</h3>
-                      <p className="text-white/80 text-[13px] font-medium">Descubrir</p>
-                    </div>
+                  <div className="absolute bottom-4 left-4 right-4">
+                    <h3 className="line-clamp-2 text-lg font-bold leading-tight">{place.name}</h3>
+                    <p className="mt-1 flex items-center gap-1 truncate text-xs text-white/80"><MapPin className="h-3 w-3 shrink-0"/>{place.location || place.address || 'Nochistlán'}</p>
+                    {place.rating > 0 && <p className="mt-1 flex items-center gap-1 text-xs text-white/85"><Star className="h-3 w-3 fill-current text-yellow-300"/>{place.rating.toFixed(1)}{place.reviewCount ? ` · ${place.reviewCount} reseñas` : ''}</p>}
                   </div>
-                  
-                  {/* Stacked right cards */}
-                  <div className="w-[40%] flex flex-col gap-4 h-full">
-                    {colonias.slice(1, 3).map((colonia) => (
-                      <div key={colonia.id} className="ck-home-colonia-card flex-1 squircle-32 relative overflow-hidden shadow-sm">
-                        <img src={colonia.image} alt={colonia.name} className="absolute inset-0 w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-                        <div className="absolute bottom-4 left-4 right-4 text-white">
-                          <h3 className="font-bold text-base leading-tight">{colonia.name}</h3>
-                          <p className="text-white/80 text-[11px] font-medium">Descubrir</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
+                </button>
+              ))}
             </div>
+          </section>
+
+          {/* All saved businesses */}
+          <section className="mb-10">
+            <div className="mb-4 px-5">
+              <h2 className="flex items-center gap-2 text-2xl font-bold"><Bookmark className="h-5 w-5 fill-[#1a73e8] text-[#1a73e8]"/>Favoritos</h2>
+              <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Tus negocios guardados</p>
+            </div>
+            {favoritePlaces.length ? <div className="flex gap-3 overflow-x-auto px-5 pb-2 scrollbar-hide snap-x snap-mandatory">
+              {favoritePlaces.map((place) => <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-favorite-card relative h-[150px] w-[190px] shrink-0 snap-start overflow-hidden rounded-[24px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
+                {place.images?.[0] && <img src={place.images[0]} alt={place.name} loading="lazy" className="absolute inset-0 h-full w-full object-cover"/>}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent"/>
+                <Bookmark className="absolute right-3 top-3 h-4 w-4 fill-white drop-shadow"/>
+                <div className="absolute bottom-3 left-3 right-3"><h3 className="line-clamp-2 text-sm font-bold leading-tight">{place.name}</h3><p className="mt-1 truncate text-[11px] text-white/75">{place.category} · {place.location || 'Nochistlán'}</p></div>
+              </button>)}
+            </div> : <div className="mx-5 rounded-[22px] bg-neutral-100 px-4 py-5 text-sm text-neutral-500">Aún no tienes favoritos. Guarda un negocio con el marcador para encontrarlo aquí.</div>}
           </section>
 
           {/* All Visits Section */}
@@ -698,10 +764,11 @@ export default function App() {
 
         {/* PuntoNochi Animated Brand Splash Screen */}
         {loading && !showAdminPage && (
-          <SplashScreen key="splash-screen" onFinish={() => setLoading(false)} />
+          <SplashScreen key="splash-screen" onFinish={finishSplash} />
         )}
         <InstallAppPrompt enabled={!loading} />
         <NotificationOptInBanner />
+        {showWelcome && !showAdminPage && <WelcomePage onContinue={finishWelcome} />}
       </AnimatePresence>
     </div>
   );

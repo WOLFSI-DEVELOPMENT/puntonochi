@@ -1,11 +1,23 @@
+import { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { ChevronLeft, MoreHorizontal, Star } from 'lucide-react';
 import { Category, Place } from '../types';
 import { mockPlaces } from '../data';
+import CornerKit from '@cornerkit/core';
+
+const categoryCorners = new CornerKit();
 
 export function CategoryPage({ category, onClose, onSelectBusiness }: { category: Category, onClose: () => void, onSelectBusiness: (place: Place) => void }) {
   // Filter places based on the exact category name
   const places = mockPlaces.filter(p => p.category === category.name);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      categoryCorners.applyAll('[data-category-place-card]', { radius: 28, smoothing: 1 });
+      categoryCorners.applyAll('[data-category-place-image]', { radius: 23, smoothing: 1 });
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [category.id, places.length]);
 
   return (
     <motion.div 
@@ -23,12 +35,10 @@ export function CategoryPage({ category, onClose, onSelectBusiness }: { category
           <ChevronLeft className="w-7 h-7 text-neutral-800" strokeWidth={1.5} />
         </button>
         <div className="font-semibold text-lg flex items-center gap-2">
-          {category.emoji ? (
-            <img src={category.emoji} alt="" className="w-7 h-7 object-contain" />
+          {category.emoji && (category.emoji.startsWith('http') || category.emoji.startsWith('/')) ? (
+            <img src={category.emoji} alt="" className="h-7 w-7 object-contain" />
           ) : (
-            <div className="w-7 h-7 rounded-full bg-black/5 flex items-center justify-center">
-              <span className="text-black/60 text-sm font-bold">{category.name.charAt(0)}</span>
-            </div>
+            <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center text-xl leading-none">{category.emoji || '🏷️'}</span>
           )}
           {category.name}
         </div>
@@ -42,24 +52,23 @@ export function CategoryPage({ category, onClose, onSelectBusiness }: { category
           {places.map((place) => (
             <motion.button
               key={place.id}
+              data-category-place-card
               whileTap={{ scale: 0.97 }}
               onClick={() => onSelectBusiness(place)}
-              className="bg-white rounded-[24px] text-left flex flex-col active:opacity-80 transition-opacity"
+              className="flex flex-col rounded-[28px] bg-[#292a2d] p-[5px] text-left text-white active:opacity-80 transition-opacity"
             >
-              <div className="w-full p-[5px]">
-                <div className="w-full h-[180px] relative rounded-[20px] overflow-hidden">
-                  <img src={place.images[0]} alt={place.name} className="w-full h-full object-cover" />
-                  <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+              <div data-category-place-image className="relative h-[180px] w-full overflow-hidden rounded-[23px] bg-[#35363a]">
+                  {place.images?.[0] && <img src={place.images[0]} alt={place.name} loading="lazy" className="h-full w-full object-cover" />}
+                  <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-black/25 px-2.5 py-1 text-xs font-bold text-white backdrop-blur-xl">
                     <Star className="w-3.5 h-3.5 fill-orange-400 text-orange-400" />
-                    {place.rating}
+                    {place.rating > 0 ? place.rating.toFixed(1) : 'Nuevo'}
                   </div>
-                </div>
               </div>
-              <div className="px-4 pb-4 pt-2 flex items-center gap-4">
-                <img src={place.logo} alt="Logo" className="w-12 h-12 rounded-full border border-black/5 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-[17px] text-neutral-900 truncate">{place.name}</h3>
-                  <p className="text-[14px] text-neutral-500 font-medium truncate">{place.subtitle || `${place.category} • ${place.location}`}</p>
+              <div className="flex items-center gap-3 px-3 pb-3 pt-3">
+                {place.logo && <img src={place.logo} alt="" loading="lazy" className="h-11 w-11 shrink-0 rounded-full bg-[#35363a] object-cover" />}
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-[17px] font-bold text-white">{place.name}</h3>
+                  <p className="truncate text-[14px] font-medium text-white/55">{place.subtitle || `${place.category} • ${place.location}`}</p>
                 </div>
               </div>
             </motion.button>

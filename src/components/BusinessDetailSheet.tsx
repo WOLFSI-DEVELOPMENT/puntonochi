@@ -1,13 +1,17 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Share, Phone, Globe, ShoppingBag, MoreHorizontal, Navigation, BookOpen, Link, MessageCircle, Twitter, Facebook, QrCode } from 'lucide-react';
+import { X, Share, Phone, Globe, ShoppingBag, MoreHorizontal, Navigation, BookOpen, Link, MapPin, Map as MapIcon, MessageCircle, Twitter, Facebook, QrCode, Star } from 'lucide-react';
 import { Place } from '../types';
 import CornerKit from '@cornerkit/core';
 import { CommunityActionsSheet } from './CommunityActionsSheet';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 
+const BusinessLocationMap = lazy(() => import('./BusinessLocationMap').then((module) => ({ default: module.BusinessLocationMap })));
+const BusinessMapOverlay = lazy(() => import('./BusinessLocationMap').then((module) => ({ default: module.BusinessMapOverlay })));
+
 export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose: () => void }) {
   const [showMapSelector, setShowMapSelector] = useState(false);
+  const [showMapOverlay, setShowMapOverlay] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [viewerState, setViewerState] = useState<{ index: number; direction: number } | null>(null);
   const [showWebsiteWarning, setShowWebsiteWarning] = useState(false);
@@ -23,6 +27,14 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
   const phoneDrag = useSheetDrag(() => setShowPhoneModal(false));
   const menuDrag = useSheetDrag(() => setShowMenuModal(false));
   const shareDrag = useSheetDrag(() => setShowShareModal(false));
+
+  const todayName = new Intl.DateTimeFormat('es-MX', { weekday: 'long' }).format(new Date());
+  const todaySchedule = place.weeklyHours?.[todayName.charAt(0).toLocaleUpperCase('es') + todayName.slice(1)];
+  const closingTime = todaySchedule?.intervals?.at(-1)?.close;
+  const formatTime = (time: string) => {
+    const [hour, minute] = time.split(':').map(Number);
+    return new Date(2000, 0, 1, hour, minute).toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' });
+  };
 
   const copyBusinessLink = async () => {
     try {
@@ -104,6 +116,10 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
     setShowMapSelector(false);
   };
 
+  const viewMap = () => {
+    setShowMapOverlay(true);
+  };
+
   return (
     <>
       <motion.div
@@ -119,7 +135,7 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
         exit={{ y: "100%" }}
         transition={{ type: "spring", damping: 32, stiffness: 360, mass: 0.82 }}
         {...detailDrag}
-        className="fixed inset-x-0 bottom-0 z-[61] h-[92vh] bg-white rounded-t-[32px] overflow-hidden flex flex-col"
+        className="fixed inset-x-0 bottom-0 z-[61] h-[92vh] rounded-t-[32px] bg-[#171717] overflow-hidden flex flex-col"
       >
         <SheetDragHandle controls={detailDrag.dragControls} tone="dark" className="absolute inset-x-0 top-0 z-20" />
         
@@ -133,6 +149,7 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
               onPointerDownCapture={(e) => e.stopPropagation()}
               onClick={() => openViewer(0)} 
             />
+            <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-b from-transparent via-[#171717]/70 to-[#171717]" />
             <div className="absolute top-4 right-4 flex gap-2">
               <button onClick={(e) => { e.stopPropagation(); setShowShareModal(true); }} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/50 transition-colors">
                 <Share className="w-5 h-5" strokeWidth={1.5} />
@@ -143,7 +160,7 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
             </div>
             
             {/* Logo */}
-            <div className="absolute -bottom-10 left-5 w-20 h-20 rounded-full border-4 border-white bg-white overflow-hidden shadow-sm">
+            <div className="absolute -bottom-10 left-5 w-20 h-20 rounded-full border-4 border-[#171717] bg-[#292a2d] overflow-hidden">
               <img src={place.logo} alt={place.name} className="w-full h-full object-cover" />
             </div>
           </div>
@@ -153,77 +170,49 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
             <p className="text-[15px] font-medium text-neutral-600">
               {place.category} • <span className="text-[#1a73e8] hover:underline cursor-pointer">{place.location}</span>
             </p>
+            <div className="mt-1.5 flex items-center gap-1.5 text-[13px]" aria-label={`${place.rating > 0 ? `Calificación ${place.rating.toFixed(1)}, ` : ''}${place.reviewCount || 0} reseñas`}>
+              <Star aria-hidden="true" className={`h-3.5 w-3.5 ${place.rating > 0 ? 'fill-amber-400 text-amber-400' : 'text-white/35'}`} />
+              <span className="font-semibold text-white/85">{place.rating > 0 ? place.rating.toFixed(1) : 'Nuevo'}</span>
+              <span className="text-white/45">· {place.reviewCount || 0} {(place.reviewCount || 0) === 1 ? 'reseña' : 'reseñas'}</span>
+            </div>
+            <p className="mt-1 text-[13px]" aria-label={place.isOpen ? 'Abierto ahora' : 'Cerrado ahora'}><span className={place.isOpen ? 'font-semibold text-emerald-400' : 'font-semibold text-white/60'}>{place.isOpen ? 'Abierto ahora' : 'Cerrado ahora'}</span>{place.isOpen && closingTime && <span className="text-white/55"> hasta las {formatTime(closingTime)}</span>}</p>
 
             {/* Action Buttons */}
-            <div className="flex gap-2.5 overflow-x-auto scrollbar-hide py-5 snap-x">
-              <button 
-                onClick={() => setShowMapSelector(true)}
-                className="ck-apply shrink-0 flex flex-col items-center justify-center gap-1 bg-[#1a73e8] text-white py-2 px-5 min-w-[76px] snap-start hover:bg-[#1557b0] transition-colors"
-              >
-                <Navigation className="w-[22px] h-[22px]" strokeWidth={2} />
-                <span className="text-[11px] font-bold leading-none">Ir</span>
+            <div className="flex items-start gap-2 overflow-x-auto scrollbar-hide py-5 snap-x">
+              <button type="button" onClick={() => setShowPhoneModal(true)} disabled={!place.phone} className="flex min-w-[62px] flex-1 snap-start flex-col items-center gap-2 text-white disabled:opacity-40" aria-label="Llamar al negocio">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#292a2d]"><Phone className="h-5 w-5" strokeWidth={1.8}/></span>
+                <span className="whitespace-nowrap text-[11px] font-semibold">Llamar</span>
               </button>
-              <button 
-                onClick={() => setShowPhoneModal(true)}
-                disabled={!place.phone}
-                className={`ck-apply shrink-0 flex flex-col items-center justify-center gap-1 py-2 px-5 min-w-[76px] snap-start transition-colors ${
-                  place.phone ? 'bg-[#f1f3f4] text-[#1a73e8] hover:bg-[#e8eaed]' : 'bg-[#f5f5f5] text-[#b0b0b0]'
-                }`}
-              >
-                <Phone className="w-[22px] h-[22px]" strokeWidth={2} />
-                <span className="text-[11px] font-bold leading-none">Llamar</span>
+              <button type="button" onClick={viewMap} className="flex min-w-[62px] flex-1 snap-start flex-col items-center gap-2 text-white" aria-label="Ver ubicación en el mapa">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#292a2d]"><MapIcon className="h-5 w-5" strokeWidth={1.8}/></span>
+                <span className="whitespace-nowrap text-[11px] font-semibold">Ver mapa</span>
               </button>
-              <button 
-                onClick={() => {
-                  const name = place.name.toLowerCase();
-                  if (name.includes('aurrera') || name.includes('guadalajara') || name.includes('banorte') || name.includes('bbva') || name.includes('hotel nochistlán') || name.includes('hotel nochistlan')) {
-                    setShowWebsiteWarning(true);
-                  }
-                }}
-                disabled={!(place.name.toLowerCase().includes('aurrera') || place.name.toLowerCase().includes('guadalajara') || place.name.toLowerCase().includes('banorte') || place.name.toLowerCase().includes('bbva') || place.name.toLowerCase().includes('hotel nochistlán') || place.name.toLowerCase().includes('hotel nochistlan'))}
-                className={`ck-apply shrink-0 flex flex-col items-center justify-center gap-1 bg-[#f1f3f4] py-2 px-5 min-w-[76px] snap-start transition-colors ${
-                  (place.name.toLowerCase().includes('aurrera') || place.name.toLowerCase().includes('guadalajara') || place.name.toLowerCase().includes('banorte') || place.name.toLowerCase().includes('bbva') || place.name.toLowerCase().includes('hotel nochistlán') || place.name.toLowerCase().includes('hotel nochistlan'))
-                    ? 'text-[#1a73e8] hover:bg-[#e8eaed] active:opacity-70' 
-                    : 'text-neutral-400 opacity-60 cursor-not-allowed'
-                }`}
-              >
-                <Globe className="w-[22px] h-[22px]" strokeWidth={2} />
-                <span className="text-[11px] font-bold leading-none">Sitio</span>
+              <button type="button" onClick={() => setShowMapSelector(true)} className="flex min-w-[62px] flex-1 snap-start flex-col items-center gap-2 text-white" aria-label="Ir al negocio">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#292a2d]"><Navigation className="h-5 w-5" strokeWidth={1.8}/></span>
+                <span className="whitespace-nowrap text-[11px] font-semibold">Ir</span>
               </button>
-
-              <button onClick={() => setShowCommunityActions(true)} className="ck-apply shrink-0 flex flex-col items-center justify-center gap-1 bg-[#f1f3f4] text-[#1a73e8] py-2 px-5 min-w-[76px] snap-start hover:bg-[#e8eaed] transition-colors">
-                <MoreHorizontal className="w-[22px] h-[22px]" strokeWidth={2} />
-                <span className="text-[11px] font-bold leading-none">Más</span>
+              {(() => {
+                const name = place.name.toLowerCase();
+                const hasWebsite = name.includes('aurrera') || name.includes('guadalajara') || name.includes('banorte') || name.includes('bbva') || name.includes('hotel nochistlán') || name.includes('hotel nochistlan');
+                return <button type="button" onClick={() => setShowWebsiteWarning(true)} disabled={!hasWebsite} className="flex min-w-[62px] flex-1 snap-start flex-col items-center gap-2 text-white disabled:opacity-40" aria-label="Abrir sitio web del negocio">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#292a2d]"><Globe className="h-5 w-5" strokeWidth={1.8}/></span>
+                  <span className="whitespace-nowrap text-[11px] font-semibold">Sitio</span>
+                </button>;
+              })()}
+              <button type="button" onClick={() => setShowCommunityActions(true)} className="flex min-w-[62px] flex-1 snap-start flex-col items-center gap-2 text-white" aria-label="Más opciones">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#292a2d]"><MoreHorizontal className="h-5 w-5" strokeWidth={1.8}/></span>
+                <span className="whitespace-nowrap text-[11px] font-semibold">Más</span>
               </button>
-            </div>
-
-            {/* Stats Row */}
-            <div className="flex border-t border-b border-black/5 py-3 mb-6">
-              <div className="flex-1 flex flex-col items-center border-r border-black/5">
-                <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider mb-0.5">Horario</span>
-                <span className="text-[13px] font-bold text-[#34a853]">{place.isOpen ? 'Abierto' : 'Cerrado'}</span>
-              </div>
-              <div className="flex-1 flex flex-col items-center border-r border-black/5">
-                <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider mb-0.5">Rating</span>
-                <div className="flex items-center gap-1 text-[#1a73e8]">
-                  <span className="text-[13px] font-bold">{place.rating}</span>
-                </div>
-              </div>
-              <div className="flex-1 flex flex-col items-center border-r border-black/5">
-                <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider mb-0.5">Costo</span>
-                <span className="text-[13px] font-bold text-neutral-700">{'$'.repeat(place.cost)}<span className="text-neutral-300">{'$'.repeat(4 - place.cost)}</span></span>
-              </div>
-              <div className="flex-1 flex flex-col items-center">
-                <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider mb-0.5">Dist.</span>
-                <span className="text-[13px] font-bold text-neutral-700">{place.distance}</span>
-              </div>
             </div>
 
             {/* Info list */}
             <div className="space-y-4 mb-6">
-              <div className="flex flex-col">
-                <span className="text-[13px] text-neutral-500 font-semibold mb-1">Dirección</span>
-                <span className="text-[15px] text-neutral-900 font-medium leading-snug">{place.address}</span>
+              <div className="rounded-[18px] bg-[#292a2d] px-4 py-3.5 text-white shadow-sm">
+                <span className="mb-2 block text-[11px] font-semibold text-white/50">Dirección</span>
+                <div className="flex items-start gap-2.5">
+                  <MapPin aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-white/75" />
+                  <span className="text-[15px] font-medium leading-snug">{place.address || place.location || 'Dirección no disponible'}</span>
+                </div>
               </div>
               <div className="flex flex-col">
                 <span className="text-[13px] text-neutral-500 font-semibold mb-1">Horario regular</span>
@@ -242,6 +231,10 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
               </div>
             </div>
             
+            <Suspense fallback={<section className="mb-6"><h3 className="mb-3 text-[18px] font-bold text-white">Mapa</h3><div className="h-[210px] animate-pulse rounded-[24px] bg-[#292a2d]"/></section>}>
+              <BusinessLocationMap place={place} />
+            </Suspense>
+
             {/* Photos */}
             <h3 className="text-[18px] font-bold text-neutral-900 mb-3">Fotos</h3>
             <div className="flex overflow-x-auto gap-3 pb-4 scrollbar-hide snap-x">
@@ -337,48 +330,52 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 32, stiffness: 360, mass: 0.82 }}
               {...mapDrag}
-              className="fixed inset-x-0 bottom-0 z-[73] bg-white rounded-t-[24px] overflow-hidden flex flex-col p-5 pb-8 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]"
+              className="fixed inset-x-0 bottom-0 z-[73] rounded-t-[24px] bg-[#202124] p-5 pb-8 text-white shadow-[0_-10px_40px_rgba(0,0,0,0.35)]"
             >
-              <SheetDragHandle controls={mapDrag.dragControls} tone="dark" className="-mx-5 -mt-5 mb-2" />
+              <SheetDragHandle controls={mapDrag.dragControls} className="-mx-5 -mt-5 mb-2" />
               
               <div className="flex justify-between items-center mt-3 mb-6">
-                <h3 className="font-bold text-lg text-neutral-900">Abrir en...</h3>
+                <h3 className="font-bold text-lg text-white">Abrir en...</h3>
                 <button 
                   onClick={() => setShowMapSelector(false)}
-                  className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500 hover:bg-neutral-200"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.08] text-white/70 transition-colors hover:bg-white/[0.14]"
                 >
                   <X className="w-4 h-4" strokeWidth={2} />
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4 rounded-[24px] bg-[#2b2c30] p-4">
                 <button 
                   onClick={() => openMap('apple')}
-                  className="flex flex-col items-center justify-center gap-3 bg-[#f8f9fa] rounded-2xl p-5 active:opacity-70 transition-opacity"
+                  className="flex flex-col items-center justify-center gap-3 rounded-2xl p-4 text-white transition-colors hover:bg-white/[0.04] active:opacity-70"
                 >
                   <img 
                     src="https://upload.wikimedia.org/wikipedia/commons/2/21/Apple_Maps_iOS_26_icon.png?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=original" 
                     alt="Apple Maps" 
                     className="w-14 h-14 object-contain"
                   />
-                  <span className="font-semibold text-[15px] text-neutral-900">Apple Maps</span>
+                  <span className="text-[15px] font-semibold text-white">Apple Maps</span>
                 </button>
 
                 <button 
                   onClick={() => openMap('google')}
-                  className="flex flex-col items-center justify-center gap-3 bg-[#f8f9fa] rounded-2xl p-5 active:opacity-70 transition-opacity"
+                  className="flex flex-col items-center justify-center gap-3 rounded-2xl p-4 text-white transition-colors hover:bg-white/[0.04] active:opacity-70"
                 >
                   <img 
-                    src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS3hFKrhuTeClXXQfAvizjlCEdqqFEEyk1ThzLrhjWzIA&s=10" 
+                    src="https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a3/Google_Maps_icon_%282026%29.svg/1280px-Google_Maps_icon_%282026%29.svg.png?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=thumbnail"
                     alt="Google Maps" 
-                    className="w-14 h-14 object-contain"
+                    className="h-14 w-14 object-contain"
                   />
-                  <span className="font-semibold text-[15px] text-neutral-900">Google Maps</span>
+                  <span className="text-[15px] font-semibold text-white">Google Maps</span>
                 </button>
               </div>
             </motion.div>
           </>
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showMapOverlay && <Suspense fallback={<div className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-2xl"/>}><BusinessMapOverlay place={place} onClose={() => setShowMapOverlay(false)} /></Suspense>}
       </AnimatePresence>
 
       <AnimatePresence>
