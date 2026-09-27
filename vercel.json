@@ -24,9 +24,6 @@
     { "source": "/api/account/oauth/start", "destination": "/api/account-dispatch?__accountPath=oauth/start" },
     { "source": "/api/account/oauth/callback", "destination": "/api/account-dispatch?__accountPath=oauth/callback" },
     { "source": "/api/account/logout", "destination": "/api/account-dispatch?__accountPath=logout" },
-    { "source": "/api/profiles/:id/activity", "destination": "/api/profile-dispatch?__profilePath=:id/activity" },
-    { "source": "/api/profiles/:id/follow", "destination": "/api/profile-dispatch?__profilePath=:id/follow" },
-    { "source": "/api/profiles/:id", "destination": "/api/profile-dispatch?__profilePath=:id" },
     { "source": "/:path((?!api/).*)", "destination": "/index.html" }
   ],
   "crons": [
