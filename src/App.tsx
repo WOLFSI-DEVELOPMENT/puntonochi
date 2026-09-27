@@ -23,6 +23,7 @@ import CornerKit from '@cornerkit/core';
 import { Category, Place, Colonia } from './types';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { DAILY_USE_KEY, getBookmarkedPlaceIds, recordProfileActiveSeconds } from './profileStorage';
+import { PublicProfileSheet } from './components/PublicProfileSheet';
 
 const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
 const WELCOME_SEEN_KEY = 'puntonochi-welcome-seen-v1';
@@ -139,12 +140,22 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [publicProfileId, setPublicProfileId] = useState<string | null>(null);
   const [directoryVersion, setDirectoryVersion] = useState(0);
   const [suggestionVersion, setSuggestionVersion] = useState(0);
   const [popularPlaces, setPopularPlaces] = useState<Place[]>([]);
   const [recentlyAddedPlaces, setRecentlyAddedPlaces] = useState<Place[]>([]);
   const [dailyUse, setDailyUse] = useState<DailyUse>(() => recordDailyUse());
   const streakDateRef = useRef(dailyUse.lastOpened);
+
+  useEffect(() => {
+    const openProfile = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      if (typeof id === 'string' && id) setPublicProfileId(id);
+    };
+    window.addEventListener('open-public-profile', openProfile);
+    return () => window.removeEventListener('open-public-profile', openProfile);
+  }, []);
 
   const finishSplash = () => {
     setLoading(false);
@@ -871,6 +882,7 @@ export default function App() {
         <InstallAppPrompt enabled={!loading} />
         <NotificationOptInBanner />
         {showWelcome && !showAdminPage && <WelcomePage onContinue={finishWelcome} />}
+        {publicProfileId && <PublicProfileSheet profileId={publicProfileId} onClose={() => setPublicProfileId(null)} />}
       </AnimatePresence>
     </div>
   );

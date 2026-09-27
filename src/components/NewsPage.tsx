@@ -6,6 +6,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import { YouTubeVideoOverlay } from './YouTubeVideoOverlay';
 import { apiFetch } from '../api';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
+import { AccountRequiredPrompt } from './AccountSheets';
 
 const cornerKit = new CornerKit();
 const newsCardCorners: SquircleConfig = { radius: 24, smoothing: 1 };
@@ -13,7 +14,7 @@ const newsCardCorners: SquircleConfig = { radius: 24, smoothing: 1 };
 type Article = { title: string; description: string; content: string; url: string; image: string; publishedAt: string; source: string };
 type WeatherDay = { date: string; weatherCode: number; high: number | null; low: number | null; precipitationChance: number | null };
 type NewsVideo = { id: string; title: string; channel: string; publishedAt: string; thumbnail: string; isShort: boolean };
-type PublicEvent = { id: string; title: string; date: string; endDate: string | null; time: string | null; location: string; description: string; imageUrl: string; createdAt?: string };
+type PublicEvent = { id: string; title: string; date: string; endDate: string | null; time: string | null; location: string; description: string; imageUrl: string; createdAt?: string; profileId?: string | null; authorName?: string | null; authorPicture?: string | null };
 
 function eventDateLabel(event: PublicEvent) {
   const start = new Intl.DateTimeFormat('es-MX', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(`${event.date}T12:00:00Z`));
@@ -167,6 +168,7 @@ export function NewsPage() {
   const [selectedEvent, setSelectedEvent] = useState<PublicEvent | null>(null);
   const [eventDetailLoading, setEventDetailLoading] = useState(false);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
+  const [showAccountPrompt, setShowAccountPrompt] = useState(false);
   const reduceMotion = useReducedMotion();
 
   const loadWeather = () => {
@@ -238,6 +240,15 @@ export function NewsPage() {
     setSelectedEvent(event);
     window.history.pushState({}, '', `/eventos/${encodeURIComponent(event.id)}`);
     window.scrollTo({ top: 0, behavior: 'instant' });
+  };
+
+  const requestCreateEvent = async () => {
+    try {
+      const response = await fetch('/api/account/session', { cache: 'no-store', credentials: 'same-origin' });
+      const session = await response.json().catch(() => ({}));
+      if (!response.ok || !session.authenticated) { setShowAccountPrompt(true); return; }
+      setShowCreateEvent(true);
+    } catch { setShowAccountPrompt(true); }
   };
 
   const closeEvent = () => {
@@ -371,8 +382,8 @@ export function NewsPage() {
         </section>
 
         <section aria-label="Eventos de la comunidad" className="mt-8">
-          <div className="mb-4 flex items-end justify-between gap-3"><div><h2 className="text-lg font-semibold">Eventos</h2><p className="mt-1 text-xs text-white/45">Qué hacer en Nochistlán</p></div><button type="button" onClick={() => setShowCreateEvent(true)} className="flex shrink-0 items-center gap-1.5 rounded-full bg-white px-3.5 py-2.5 text-sm font-bold text-black"><Plus className="h-4 w-4"/>Crear</button></div>
-          {eventsLoading ? <div className="space-y-3">{[0, 1].map((item) => <EventSkeleton key={item}/>)}</div> : eventsError ? <div className="rounded-[24px] bg-[#202124] p-4"><p role="alert" className="text-sm text-white/65">{eventsError}</p><button type="button" onClick={loadEvents} className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black">Reintentar</button></div> : events.length ? <div className="space-y-3">{events.map((event) => <button data-news-squircle key={event.id} type="button" onClick={() => openEvent(event)} className="group relative block w-full overflow-hidden rounded-[24px] bg-[#202124] text-left"><img src={event.imageUrl} alt="" loading="lazy" className="aspect-[16/9] w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"/><div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"/><div className="absolute inset-x-0 bottom-0 p-4"><p className="flex items-center gap-1.5 text-xs font-semibold capitalize text-white/70"><CalendarDays className="h-3.5 w-3.5"/>{eventDateLabel(event)}{event.time ? ` · ${event.time}` : ''}</p><h3 className="mt-1 line-clamp-2 text-lg font-bold leading-snug">{event.title}</h3><p className="mt-1 flex items-center gap-1 truncate text-xs text-white/65"><MapPin className="h-3.5 w-3.5 shrink-0"/>{event.location}</p></div></button>)}</div> : <div className="relative"><EventSkeleton empty/><button type="button" onClick={() => setShowCreateEvent(true)} className="absolute bottom-5 left-4 z-10 text-xs font-semibold text-[#ff7956] underline underline-offset-4">Crear evento</button></div>}
+          <div className="mb-4 flex items-end justify-between gap-3"><div><h2 className="text-lg font-semibold">Eventos</h2><p className="mt-1 text-xs text-white/45">Qué hacer en Nochistlán</p></div><button type="button" onClick={() => void requestCreateEvent()} className="flex shrink-0 items-center gap-1.5 rounded-full bg-white px-3.5 py-2.5 text-sm font-bold text-black"><Plus className="h-4 w-4"/>Crear</button></div>
+          {eventsLoading ? <div className="space-y-3">{[0, 1].map((item) => <EventSkeleton key={item}/>)}</div> : eventsError ? <div className="rounded-[24px] bg-[#202124] p-4"><p role="alert" className="text-sm text-white/65">{eventsError}</p><button type="button" onClick={loadEvents} className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black">Reintentar</button></div> : events.length ? <div className="space-y-3">{events.map((event) => <div data-news-squircle key={event.id} role="button" tabIndex={0} onClick={() => openEvent(event)} onKeyDown={(keyEvent) => { if (keyEvent.target === keyEvent.currentTarget && (keyEvent.key === 'Enter' || keyEvent.key === ' ')) openEvent(event); }} className="group relative block w-full cursor-pointer overflow-hidden rounded-[24px] bg-[#202124] text-left"><img src={event.imageUrl} alt="" loading="lazy" className="aspect-[16/9] w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"/><div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"/><div className="absolute inset-x-0 top-3 z-[2] px-4">{event.profileId && <button type="button" onClick={(clickEvent) => { clickEvent.stopPropagation(); window.dispatchEvent(new CustomEvent('open-public-profile', { detail: event.profileId })); }} className="flex items-center gap-2 rounded-full bg-black/45 py-1.5 pl-1.5 pr-3 text-xs font-semibold text-white backdrop-blur"><span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-white/20">{event.authorPicture ? <img src={event.authorPicture} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover"/> : (event.authorName || '?').slice(0, 1)}</span>{event.authorName || 'Comunidad'}</button>}</div><div className="absolute inset-x-0 bottom-0 p-4"><p className="flex items-center gap-1.5 text-xs font-semibold capitalize text-white/70"><CalendarDays className="h-3.5 w-3.5"/>{eventDateLabel(event)}{event.time ? ` · ${event.time}` : ''}</p><h3 className="mt-1 line-clamp-2 text-lg font-bold leading-snug">{event.title}</h3><p className="mt-1 flex items-center gap-1 truncate text-xs text-white/65"><MapPin className="h-3.5 w-3.5 shrink-0"/>{event.location}</p></div></div>)}</div> : <div className="relative"><EventSkeleton empty/><button type="button" onClick={() => void requestCreateEvent()} className="absolute bottom-5 left-4 z-10 text-xs font-semibold text-[#ff7956] underline underline-offset-4">Crear evento</button></div>}
         </section>
 
         <h1 className="mb-2 mt-7 text-2xl font-bold tracking-tight">Noticias</h1>
@@ -407,6 +418,7 @@ export function NewsPage() {
         } : null}
         onClose={() => setSelectedVideo(null)}
       />
+      {showAccountPrompt && <AccountRequiredPrompt onClose={() => setShowAccountPrompt(false)} message="Inicia sesión con Google para publicar eventos en la comunidad."/>}
       {showCreateEvent && <EventCreateSheet onClose={() => setShowCreateEvent(false)} onCreated={(event) => { setEvents((current) => [event, ...current.filter((item) => item.id !== event.id)]); setShowCreateEvent(false); openEvent(event); }} />}
     </main>
   );

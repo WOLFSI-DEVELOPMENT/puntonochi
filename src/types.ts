@@ -21,6 +21,7 @@ export interface Place {
   phone?: string;
   createdAt?: string | null;
   reviews?: Review[];
+  communityPosts?: { id: string; imageUrl: string; caption: string; createdAt: string; profileId?: string | null; authorName?: string | null; authorPicture?: string | null }[];
 }
 
 export interface Review {
@@ -31,6 +32,7 @@ export interface Review {
   rating: number;
   text: string;
   avatar?: string;
+  profileId?: string | null;
 }
 
 export interface Guide {

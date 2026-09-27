@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { MapPin } from 'lucide-react';
+import { OPENFREEMAP_STYLE } from '../mapConfig';
 
 interface OnboardingMapProps {
   center?: [number, number];
@@ -16,12 +17,13 @@ export function OnboardingMap({ center = [-102.8456, 21.3653] }: OnboardingMapPr
 
     map.current = new maplibregl.Map({
       container: mapContainer.current,
-      style: 'https://tiles.openfreemap.org/styles/liberty',
+      style: OPENFREEMAP_STYLE,
       center: center,
       zoom: 15,
       pitch: 0,
       bearing: 0,
-      attributionControl: true
+      attributionControl: true,
+      antialias: true
     });
 
     const resizeObserver = new ResizeObserver(() => {

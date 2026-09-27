@@ -6,10 +6,16 @@ import { mockPlaces } from '../data';
 import { DAILY_USE_KEY, getBookmarkedPlaceIds, getNavDesign, getProfileActivity, profileDateKey, setBookmarkedPlaceIds, setNavDesign, type NavDesign, type ProfileActivity } from '../profileStorage';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 import CornerKit from '@cornerkit/core';
+import { AccountAuthSheet } from './AccountSheets';
 
 const profileCorners = new CornerKit();
 type DailyUse = { totalDays: number; currentStreak: number };
 type UserAccount = { id: string; name: string; email: string; picture: string | null };
+type AccountContent = {
+  reviews: { id: string; placeName: string; rating: number; text: string; createdAt: string }[];
+  posts: { id: string; imageUrl: string; caption: string; createdAt: string; placeName?: string | null }[];
+  events: { id: string; title: string; date: string; location: string; imageUrl: string }[];
+};
 
 function readDailyUse(): DailyUse {
   try {
@@ -35,29 +41,14 @@ function recentDays() {
   });
 }
 
-function AccountAuthSheet({ onClose }: { onClose: () => void }) {
-  const drag = useSheetDrag(onClose);
-  const [mode, setMode] = useState<'signup' | 'login'>('signup');
-  const continueWithGoogle = () => window.location.assign(`/api/account/oauth/start?mode=${mode}`);
-
-  return <>
-    <motion.button type="button" aria-label="Cerrar Perfiles" onClick={onClose} className="fixed inset-0 z-[100] bg-black/65 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
-    <motion.section {...drag} role="dialog" aria-modal="true" aria-label="Perfiles beta" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360 }} className="fixed inset-x-0 bottom-0 z-[101] mx-auto w-full max-w-[640px] rounded-t-[30px] bg-[#202124] px-5 pb-[calc(env(safe-area-inset-bottom)+24px)] pt-2 text-white shadow-2xl">
-      <SheetDragHandle controls={drag.dragControls}/>
-      <div className="mb-5 flex items-start justify-between gap-4"><div><span className="inline-flex rounded-md bg-blue-500 px-2 py-1 text-[10px] font-extrabold tracking-wide text-white">BETA</span><h2 className="mt-2 text-2xl font-bold">Perfiles</h2><p className="mt-1 max-w-sm text-sm leading-relaxed text-white/55">Crea tu cuenta para tener tu perfil y tus datos disponibles en PuntoNochi.</p></div><button type="button" onClick={onClose} aria-label="Cerrar" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.08]"><X className="h-5 w-5"/></button></div>
-      <div className="mb-4 flex rounded-full bg-[#151618] p-1"><button type="button" onClick={() => setMode('signup')} aria-pressed={mode === 'signup'} className={`flex-1 rounded-full py-2.5 text-sm font-semibold ${mode === 'signup' ? 'bg-[#35363a] text-white' : 'text-white/50'}`}>Crear cuenta</button><button type="button" onClick={() => setMode('login')} aria-pressed={mode === 'login'} className={`flex-1 rounded-full py-2.5 text-sm font-semibold ${mode === 'login' ? 'bg-[#35363a] text-white' : 'text-white/50'}`}>Iniciar sesión</button></div>
-      <button type="button" onClick={continueWithGoogle} className="flex h-12 w-full items-center justify-center gap-3 rounded-full bg-white text-sm font-bold text-[#202124]"><span className="bg-gradient-to-r from-blue-600 via-red-500 to-yellow-500 bg-clip-text text-xl font-extrabold text-transparent">G</span>{mode === 'signup' ? 'Crear cuenta con Google' : 'Continuar con Google'}</button>
-      <p className="mt-3 text-center text-[11px] leading-relaxed text-white/40">Usaremos tu nombre, correo y foto de perfil de Google.</p>
-    </motion.section>
-  </>;
-}
-
 export function ProfileSheet({ onClose, onSelectBusiness }: { onClose: () => void; onSelectBusiness: (place: Place) => void }) {
   const [daily, setDaily] = useState(readDailyUse);
   const [activity, setActivity] = useState<ProfileActivity>(getProfileActivity);
   const [bookmarkIds, setBookmarkIds] = useState<string[]>(getBookmarkedPlaceIds);
   const [navDesign, setCurrentNavDesign] = useState<NavDesign>(getNavDesign);
   const [account, setAccount] = useState<UserAccount | null>(null);
+  const [accountContent, setAccountContent] = useState<AccountContent | null>(null);
+  const [contentLoading, setContentLoading] = useState(false);
   const [accountLoading, setAccountLoading] = useState(true);
   const [showAccountAuth, setShowAccountAuth] = useState(false);
   const [accountError, setAccountError] = useState(() => new URLSearchParams(window.location.search).get('accountAuthError') || '');
@@ -84,6 +75,18 @@ export function ProfileSheet({ onClose, onSelectBusiness }: { onClose: () => voi
       body.style.overscrollBehavior = previous.bodyOverscroll;
     };
   }, []);
+
+  useEffect(() => {
+    if (!account) { setAccountContent(null); return; }
+    let active = true;
+    setContentLoading(true);
+    fetch('/api/account/content', { cache: 'no-store', credentials: 'same-origin' })
+      .then(async (response) => { const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || 'No se pudo cargar tu actividad.'); return data as AccountContent; })
+      .then((data) => { if (active) setAccountContent(data); })
+      .catch(() => { if (active) setAccountContent({ reviews: [], posts: [], events: [] }); })
+      .finally(() => { if (active) setContentLoading(false); });
+    return () => { active = false; };
+  }, [account?.id]);
 
   useEffect(() => {
     let active = true;
@@ -153,6 +156,13 @@ export function ProfileSheet({ onClose, onSelectBusiness }: { onClose: () => voi
           </div> : <button type="button" onClick={() => { setAccountError(''); setShowAccountAuth(true); }} className="flex w-full items-center gap-3 rounded-[18px] bg-[#202124] p-3 text-left transition-colors hover:bg-[#24262a]"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500 text-white"><UserRound className="h-5 w-5"/></span><span className="min-w-0 flex-1"><span className="block text-sm font-bold">Crear una cuenta</span><span className="mt-0.5 block text-xs text-white/50">Guarda tu perfil en PuntoNochi</span></span><ArrowRight className="h-4 w-4 text-white/45"/></button>}
           {accountError && <p role="alert" className="mt-2 text-xs text-red-300">{accountError}</p>}
         </section>
+
+        {account && <section className="space-y-3">
+          <div className="flex items-center justify-between"><h3 className="text-lg font-bold">Tu actividad pública</h3><button type="button" onClick={() => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: account.id }))} className="text-xs font-semibold text-blue-300">Ver perfil</button></div>
+          <section data-profile-squircle className="rounded-[22px] bg-[#292a2d] p-4"><div className="mb-2 flex items-center justify-between"><h4 className="text-sm font-bold">Publicaciones creadas</h4><span className="text-xs text-white/40">{accountContent?.posts.length || 0}</span></div>{contentLoading ? <div className="h-14 animate-pulse rounded-2xl bg-white/[0.06]"/> : accountContent?.posts.length ? <div className="flex gap-2 overflow-x-auto">{accountContent.posts.slice(0, 8).map((post) => <button key={post.id} type="button" onClick={() => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: account.id }))} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-[18px] bg-[#202124]"><img src={post.imageUrl} alt={post.caption} className="h-full w-full object-cover"/></button>)}</div> : <p className="text-xs text-white/45">Tus fotos compartidas aparecerán aquí.</p>}</section>
+          <section data-profile-squircle className="rounded-[22px] bg-[#292a2d] p-4"><div className="mb-2 flex items-center justify-between"><h4 className="text-sm font-bold">Reseñas creadas</h4><span className="text-xs text-white/40">{accountContent?.reviews.length || 0}</span></div>{contentLoading ? <div className="h-14 animate-pulse rounded-2xl bg-white/[0.06]"/> : accountContent?.reviews.length ? <div className="space-y-2">{accountContent.reviews.slice(0, 3).map((review) => <div key={review.id} className="rounded-2xl bg-[#202124] p-3"><p className="text-xs font-semibold">{review.placeName} <span className="text-blue-300">· {review.rating}.0★</span></p><p className="mt-1 line-clamp-2 text-xs text-white/55">{review.text}</p></div>)}</div> : <p className="text-xs text-white/45">Tus opiniones de negocios aparecerán aquí.</p>}</section>
+          <section data-profile-squircle className="rounded-[22px] bg-[#292a2d] p-4"><div className="mb-2 flex items-center justify-between"><h4 className="text-sm font-bold">Eventos creados</h4><span className="text-xs text-white/40">{accountContent?.events.length || 0}</span></div>{contentLoading ? <div className="h-14 animate-pulse rounded-2xl bg-white/[0.06]"/> : accountContent?.events.length ? <div className="space-y-2">{accountContent.events.slice(0, 3).map((event) => <div key={event.id} className="flex items-center gap-3 rounded-2xl bg-[#202124] p-2"><img src={event.imageUrl} alt="" className="h-12 w-12 rounded-xl object-cover"/><div className="min-w-0"><p className="truncate text-xs font-semibold">{event.title}</p><p className="mt-1 truncate text-[11px] text-white/45">{event.location}</p></div></div>)}</div> : <p className="text-xs text-white/45">Los eventos que publiques aparecerán aquí.</p>}</section>
+        </section>}
 
         {isIndexing && <section data-profile-squircle className="rounded-[24px] bg-[#292a2d] p-4"><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-400/10 text-blue-200"><Activity className="h-5 w-5"/></span><div><h3 className="text-sm font-bold">Estamos conociendo tu actividad</h3><p className="mt-1 text-xs leading-relaxed text-white/55">Tu perfil se está preparando. Sigue usando PuntoNochi y pronto verás aquí tus estadísticas semanales.</p></div></div><div className="mt-4 grid grid-cols-3 gap-2">{[0, 1, 2].map((item) => <div key={item} className="h-16 animate-pulse rounded-2xl bg-white/[0.05]"/>)} </div></section>}
 

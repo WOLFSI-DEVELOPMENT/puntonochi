@@ -5,6 +5,7 @@ import { ArrowLeft, Camera, Check, Clock3, MessageSquareText, Pencil, Send, Star
 import type { Place, Review } from '../types';
 import { createDefaultWeeklySchedule, formatWeeklyHours, WeeklyHoursEditor, type WeeklyHours } from './WeeklyHoursEditor';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
+import { AccountRequiredPrompt } from './AccountSheets';
 
 type Props = { place: Place; onClose: () => void; initialMode?: 'menu' | 'reviews'; onReviewCreated?: (review: Review) => void };
 type Mode = 'menu' | 'reviews' | 'edit';
@@ -22,10 +23,9 @@ const dateLabel = (value: string) => new Date(value).toLocaleDateString('es-MX',
 
 export function CommunityActionsSheet({ place, onClose, initialMode = 'menu', onReviewCreated }: Props) {
   const sheetDrag = useSheetDrag(onClose);
-  const [mode, setMode] = useState<Mode>(initialMode);
+  const [mode, setMode] = useState<Mode>(initialMode === 'reviews' ? 'menu' : initialMode);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
-  const [author, setAuthor] = useState('');
   const [reviewText, setReviewText] = useState('');
   const [rating, setRating] = useState(0);
   const [editAuthor, setEditAuthor] = useState('');
@@ -37,6 +37,26 @@ export function CommunityActionsSheet({ place, onClose, initialMode = 'menu', on
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [showAccountPrompt, setShowAccountPrompt] = useState(false);
+
+  useEffect(() => {
+    if (initialMode !== 'reviews') return;
+    let active = true;
+    fetch('/api/account/session', { cache: 'no-store', credentials: 'same-origin' })
+      .then(async (response) => ({ ok: response.ok, data: await response.json().catch(() => ({})) }))
+      .then(({ ok, data }) => { if (!active) return; if (ok && data.authenticated) setMode('reviews'); else { setMode('menu'); setShowAccountPrompt(true); } })
+      .catch(() => { if (active) { setMode('menu'); setShowAccountPrompt(true); } });
+    return () => { active = false; };
+  }, [initialMode]);
+
+  const openReviews = async () => {
+    try {
+      const response = await fetch('/api/account/session', { cache: 'no-store', credentials: 'same-origin' });
+      const session = await response.json().catch(() => ({}));
+      if (!response.ok || !session.authenticated) { setShowAccountPrompt(true); return; }
+      setMode('reviews'); setNotice(''); setError('');
+    } catch { setShowAccountPrompt(true); }
+  };
 
   useEffect(() => {
     if (mode !== 'reviews') return;
@@ -79,9 +99,9 @@ export function CommunityActionsSheet({ place, onClose, initialMode = 'menu', on
     event.preventDefault(); setBusy(true); setError(''); setNotice('');
     try {
       const review = await request<Review>(`/api/places/${encodeURIComponent(place.id)}/reviews`, {
-        method: 'POST', body: JSON.stringify({ author, rating, text: reviewText }),
+        method: 'POST', body: JSON.stringify({ rating, text: reviewText }),
       });
-      setReviews((current) => [review, ...current]); onReviewCreated?.(review); setAuthor(''); setRating(0); setReviewText('');
+      setReviews((current) => [review, ...current]); onReviewCreated?.(review); setRating(0); setReviewText('');
       setNotice('Tu reseña ya aparece en la ficha del negocio.');
     } catch (submitError) { setError(submitError instanceof Error ? submitError.message : 'No se pudo guardar la reseña.'); }
     finally { setBusy(false); }
@@ -108,12 +128,12 @@ export function CommunityActionsSheet({ place, onClose, initialMode = 'menu', on
     <motion.section {...sheetDrag} role="dialog" aria-modal="true" aria-label={title} initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360, mass: 0.82 }} className="fixed inset-x-0 bottom-0 z-[85] flex max-h-[90dvh] flex-col overflow-hidden rounded-t-[30px] bg-[#202124] text-white shadow-2xl">
       <div className="relative shrink-0 border-b border-white/[0.08] px-5 pb-4 pt-7"><SheetDragHandle controls={sheetDrag.dragControls} className="absolute inset-x-0 top-0"/><div className="flex items-center gap-3">{mode !== 'menu' && <button type="button" onClick={() => { setMode('menu'); setError(''); setNotice(''); }} aria-label="Volver" className="rounded-full bg-white/[0.08] p-2"><ArrowLeft className="h-4 w-4"/></button>}<div className="min-w-0 flex-1"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40">{place.name}</p><h2 className="mt-0.5 text-xl font-bold">{title}</h2></div><button type="button" onClick={onClose} aria-label="Cerrar" className="rounded-full bg-white/[0.08] p-2"><X className="h-5 w-5"/></button></div></div>
       <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-5 py-5">
-        {mode === 'menu' && <div className="space-y-3"><p className="mb-4 text-sm text-white/55">Ayuda a mantener actualizada la información de {place.name}.</p><button type="button" onClick={() => { setMode('reviews'); setNotice(''); setError(''); }} className="flex w-full items-center gap-4 rounded-[22px] bg-[#2b2c30] p-4 text-left"><span className="rounded-2xl bg-amber-300/15 p-3 text-amber-200"><Star className="h-5 w-5"/></span><span className="flex-1"><span className="block font-bold">Dejar una reseña</span><span className="mt-1 block text-xs text-white/50">Comparte tu experiencia y lee opiniones</span></span><MessageSquareText className="h-5 w-5 text-white/35"/></button><button type="button" onClick={() => { setMode('edit'); setNotice(''); setError(''); }} className="flex w-full items-center gap-4 rounded-[22px] bg-[#2b2c30] p-4 text-left"><span className="rounded-2xl bg-blue-300/15 p-3 text-blue-200"><Pencil className="h-5 w-5"/></span><span className="flex-1"><span className="block font-bold">Sugerir una edición</span><span className="mt-1 block text-xs text-white/50">Toca los datos en la ficha para corregirlos</span></span><Camera className="h-5 w-5 text-white/35"/></button></div>}
+        {mode === 'menu' && <div className="space-y-3"><p className="mb-4 text-sm text-white/55">Ayuda a mantener actualizada la información de {place.name}.</p><button type="button" onClick={() => void openReviews()} className="flex w-full items-center gap-4 rounded-[22px] bg-[#2b2c30] p-4 text-left"><span className="rounded-2xl bg-amber-300/15 p-3 text-amber-200"><Star className="h-5 w-5"/></span><span className="flex-1"><span className="block font-bold">Dejar una reseña</span><span className="mt-1 block text-xs text-white/50">Comparte tu experiencia y lee opiniones</span></span><MessageSquareText className="h-5 w-5 text-white/35"/></button><button type="button" onClick={() => { setMode('edit'); setNotice(''); setError(''); }} className="flex w-full items-center gap-4 rounded-[22px] bg-[#2b2c30] p-4 text-left"><span className="rounded-2xl bg-blue-300/15 p-3 text-blue-200"><Pencil className="h-5 w-5"/></span><span className="flex-1"><span className="block font-bold">Sugerir una edición</span><span className="mt-1 block text-xs text-white/50">Toca los datos en la ficha para proponer una corrección</span></span><Camera className="h-5 w-5 text-white/35"/></button></div>}
 
         {mode === 'reviews' && <div>
-          <form onSubmit={submitReview} className="rounded-[22px] bg-[#2b2c30] p-4"><h3 className="font-bold">¿Cómo fue tu experiencia?</h3><div className="mt-3 flex gap-1" role="radiogroup" aria-label="Calificación">{[1, 2, 3, 4, 5].map((value) => <button key={value} type="button" role="radio" aria-checked={rating === value} aria-label={`${value} estrellas`} onClick={() => setRating(value)} className="rounded-lg p-1 text-amber-300"><Star className={`h-7 w-7 ${value <= rating ? 'fill-current' : ''}`}/></button>)}</div><input required maxLength={80} value={author} onChange={(event) => setAuthor(event.target.value)} placeholder="Tu nombre" className="mt-3 w-full rounded-2xl bg-[#202124] px-4 py-3 text-sm"/><textarea required maxLength={1500} rows={3} value={reviewText} onChange={(event) => setReviewText(event.target.value)} placeholder="Cuéntale a la comunidad…" className="mt-2 w-full resize-y rounded-2xl bg-[#202124] px-4 py-3 text-sm"/><button type="submit" disabled={busy || !rating} className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-white py-3 text-sm font-bold text-black disabled:opacity-50">{busy ? 'Guardando…' : <><Send className="h-4 w-4"/>Publicar reseña</>}</button></form>
+          <form onSubmit={submitReview} className="rounded-[22px] bg-[#2b2c30] p-4"><h3 className="font-bold">¿Cómo fue tu experiencia?</h3><div className="mt-3 flex gap-1" role="radiogroup" aria-label="Calificación">{[1, 2, 3, 4, 5].map((value) => <button key={value} type="button" role="radio" aria-checked={rating === value} aria-label={`${value} estrellas`} onClick={() => setRating(value)} className="rounded-lg p-1 text-amber-300"><Star className={`h-7 w-7 ${value <= rating ? 'fill-current' : ''}`}/></button>)}</div><textarea required maxLength={1500} rows={3} value={reviewText} onChange={(event) => setReviewText(event.target.value)} placeholder="Cuéntale a la comunidad…" className="mt-3 w-full resize-y rounded-2xl bg-[#202124] px-4 py-3 text-sm"/><button type="submit" disabled={busy || !rating} className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-white py-3 text-sm font-bold text-black disabled:opacity-50">{busy ? 'Guardando…' : <><Send className="h-4 w-4"/>Publicar reseña</>}</button></form>
           {error && <p role="alert" className="mt-3 text-sm text-rose-300">{error}</p>}{notice && <p role="status" className="mt-3 text-sm text-emerald-300">{notice}</p>}
-          <h3 className="mb-3 mt-6 font-bold">Opiniones de la comunidad <span className="text-white/40">{reviews.length}</span></h3>{reviewsLoading ? <p className="text-sm text-white/50">Cargando reseñas…</p> : reviews.length ? <div className="space-y-2">{reviews.map((review) => <article key={review.id} className="rounded-[20px] bg-[#2b2c30] p-4"><div className="flex items-start justify-between gap-2"><div><h4 className="text-sm font-bold">{review.author}</h4>{(review.date || review.createdAt) && <time className="text-xs text-white/40">{review.date || dateLabel(review.createdAt!)}</time>}</div><span className="flex items-center gap-1 text-sm font-bold text-amber-200"><Star className="h-3.5 w-3.5 fill-current"/>{review.rating}</span></div><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-white/75">{review.text}</p></article>)}</div> : <p className="rounded-[20px] bg-[#2b2c30] p-4 text-sm text-white/50">Aún no hay reseñas. ¡Sé la primera persona en compartir una!</p>}
+          <h3 className="mb-3 mt-6 font-bold">Opiniones de la comunidad <span className="text-white/40">{reviews.length}</span></h3>{reviewsLoading ? <p className="text-sm text-white/50">Cargando reseñas…</p> : reviews.length ? <div className="space-y-2">{reviews.map((review) => <article key={review.id} className="rounded-[20px] bg-[#2b2c30] p-4"><div className="flex items-start justify-between gap-2"><div>{review.profileId ? <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: review.profileId }))} className="text-left text-sm font-bold">{review.author}</button> : <h4 className="text-sm font-bold">{review.author}</h4>}{(review.date || review.createdAt) && <time className="block text-xs text-white/40">{review.date || dateLabel(review.createdAt!)}</time>}</div><span className="flex items-center gap-1 text-sm font-bold text-amber-200"><Star className="h-3.5 w-3.5 fill-current"/>{review.rating}</span></div><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-white/75">{review.text}</p></article>)}</div> : <p className="rounded-[20px] bg-[#2b2c30] p-4 text-sm text-white/50">Aún no hay reseñas. ¡Sé la primera persona en compartir una!</p>}
         </div>}
 
         {mode === 'edit' && <form onSubmit={submitSuggestion} className="space-y-4">
@@ -129,5 +149,6 @@ export function CommunityActionsSheet({ place, onClose, initialMode = 'menu', on
         </form>}
       </div>
     </motion.section>
+    <AnimatePresence>{showAccountPrompt && <AccountRequiredPrompt onClose={() => setShowAccountPrompt(false)} message="Inicia sesión con Google para dejar una reseña vinculada a tu perfil."/>}</AnimatePresence>
   </>;
 }

@@ -6,6 +6,7 @@ import { Place } from '../types';
 import { apiFetch } from '../api';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 import CornerKit from '@cornerkit/core';
+import { AccountRequiredPrompt } from './AccountSheets';
 
 type FlowStep = 'choice' | 'camera' | 'preview' | 'compose' | 'published';
 type PostType = 'business' | 'day';
@@ -34,6 +35,7 @@ export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => 
   const [coverName, setCoverName] = useState('');
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState('');
+  const [showAccountPrompt, setShowAccountPrompt] = useState(false);
   const placePickerDrag = useSheetDrag(() => setShowPlacePicker(false));
 
   useEffect(() => {
@@ -201,6 +203,16 @@ export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => 
   };
 
   const matchingPlaces = mockPlaces.filter((place) => place.name.toLocaleLowerCase('es').includes(search.toLocaleLowerCase('es')) || place.category.toLocaleLowerCase('es').includes(search.toLocaleLowerCase('es')));
+  const startPost = async (type: PostType) => {
+    try {
+      const response = await fetch('/api/account/session', { cache: 'no-store', credentials: 'same-origin' });
+      const session = await response.json().catch(() => ({}));
+      if (!response.ok || !session.authenticated) { setShowAccountPrompt(true); return; }
+    } catch { setShowAccountPrompt(true); return; }
+    setPostType(type);
+    if (type === 'day') setSelectedPlace(null);
+    setStep('camera');
+  };
 
   return (
     <motion.div className="fixed inset-0 z-[80] overflow-y-auto bg-black text-white" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -212,8 +224,8 @@ export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => 
         <h1 className="text-3xl font-bold tracking-tight">¿Qué quieres compartir?</h1>
         <p className="mt-2 text-sm leading-relaxed text-white/55">Elige cómo quieres participar en la comunidad.</p>
         <div className="mt-7 space-y-3">
-          <button type="button" data-create-choice-card onClick={() => { setPostType('business'); setStep('camera'); }} className="flex w-full items-center gap-4 rounded-[28px] bg-[#292a2d] p-5 text-left transition-colors active:bg-[#343539] [corner-shape:squircle]"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10"><Camera className="h-6 w-6"/></span><span className="min-w-0 flex-1"><span className="block text-lg font-bold">Publicar una foto</span><span className="mt-1 block text-sm leading-relaxed text-white/50">Comparte una imagen relacionada con un negocio.</span></span><ArrowLeft className="h-5 w-5 rotate-180 text-white/40"/></button>
-          <button type="button" data-create-choice-card onClick={() => { setPostType('day'); setSelectedPlace(null); setStep('camera'); }} className="flex w-full items-center gap-4 rounded-[28px] bg-[#292a2d] p-5 text-left transition-colors active:bg-[#343539] [corner-shape:squircle]"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10"><Images className="h-6 w-6"/></span><span className="min-w-0 flex-1"><span className="block text-lg font-bold">Una foto de mi día</span><span className="mt-1 block text-sm leading-relaxed text-white/50">Publica un momento de Nochistlán con una breve descripción, sin elegir negocio.</span></span><ArrowLeft className="h-5 w-5 rotate-180 text-white/40"/></button>
+          <button type="button" data-create-choice-card onClick={() => void startPost('business')} className="flex w-full items-center gap-4 rounded-[28px] bg-[#292a2d] p-5 text-left transition-colors active:bg-[#343539] [corner-shape:squircle]"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10"><Camera className="h-6 w-6"/></span><span className="min-w-0 flex-1"><span className="block text-lg font-bold">Publicar una foto</span><span className="mt-1 block text-sm leading-relaxed text-white/50">Comparte una imagen relacionada con un negocio.</span></span><ArrowLeft className="h-5 w-5 rotate-180 text-white/40"/></button>
+          <button type="button" data-create-choice-card onClick={() => void startPost('day')} className="flex w-full items-center gap-4 rounded-[28px] bg-[#292a2d] p-5 text-left transition-colors active:bg-[#343539] [corner-shape:squircle]"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10"><Images className="h-6 w-6"/></span><span className="min-w-0 flex-1"><span className="block text-lg font-bold">Una foto de mi día</span><span className="mt-1 block text-sm leading-relaxed text-white/50">Publica un momento de Nochistlán con una breve descripción, sin elegir negocio.</span></span><ArrowLeft className="h-5 w-5 rotate-180 text-white/40"/></button>
           <button type="button" data-create-choice-card onClick={onPromoteBusiness} className="flex w-full items-center gap-4 rounded-[28px] bg-[#292a2d] p-5 text-left transition-colors active:bg-[#343539] [corner-shape:squircle]"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10"><Megaphone className="h-6 w-6"/></span><span className="min-w-0 flex-1"><span className="block text-lg font-bold">Promocionar un negocio</span><span className="mt-1 block text-sm leading-relaxed text-white/50">Solicita una promoción para que más personas descubran un negocio local.</span></span><ArrowLeft className="h-5 w-5 rotate-180 text-white/40"/></button>
         </div>
       </div>}
@@ -260,6 +272,7 @@ export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => 
 
       {step === 'published' && <div className="relative z-10 flex min-h-[100dvh] flex-col items-center justify-center px-7 text-center"><div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-black"><Check className="h-8 w-8" /></div><h2 className="mt-5 text-2xl font-bold">¡Publicado!</h2><p className="mt-2 text-sm text-white/55">{postType === 'day' ? 'Tu foto ya aparece en Explorar para toda la comunidad.' : `La imagen ya aparece en Explorar y en las fotos de ${selectedPlace?.name}.`}</p><button type="button" onClick={onClose} style={{ backgroundColor: '#ffffff', color: '#000000' }} className="mt-7 rounded-full !bg-white px-8 py-3 text-sm font-bold !text-black">Listo</button></div>}
 
+      {showAccountPrompt && <AccountRequiredPrompt onClose={() => setShowAccountPrompt(false)} message="Inicia sesión con Google para publicar fotos y compartir contenido en PuntoNochi."/>}
       <AnimatePresence>
         {showPlacePicker && <>
           <motion.button aria-label="Cerrar selector" onClick={() => setShowPlacePicker(false)} className="fixed inset-0 z-[90] bg-black/65" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />

@@ -14,14 +14,17 @@ const cornerKit = new CornerKit();
 const feedCorners: SquircleConfig = { radius: 28, smoothing: 1 };
 const adClient = 'ca-pub-7029279570287128';
 const overviewStorageKey = (placeId: string) => `puntonochi-ai-overview-v2:${placeId}`;
-type DayPhotoPost = { id: string; caption: string; createdAt: string; imageUrl: string };
+type DayPhotoPost = { id: string; caption: string; createdAt: string; imageUrl: string; profileId?: string | null; authorName?: string | null; authorPicture?: string | null };
 
 function CommunityDayPhotoCard({ post }: { post: DayPhotoPost }) {
   return <motion.article data-explore-squircle className="relative isolate aspect-[9/16] w-full snap-start [scroll-snap-stop:always] overflow-hidden rounded-[28px] bg-[#1a1b1e]">
     <img src={post.imageUrl} alt="" loading="lazy" decoding="async" fetchPriority="low" className="absolute inset-0 h-full w-full object-cover" />
     <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/80" />
     <div className="absolute inset-x-0 top-0 flex items-center justify-between p-5"><span className="bg-black/40 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur">Foto de la comunidad</span><time className="text-xs font-medium text-white/80">{new Date(post.createdAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}</time></div>
-    {post.caption && <p className="absolute inset-x-0 bottom-0 line-clamp-5 p-5 text-[15px] font-medium leading-relaxed text-white">{post.caption}</p>}
+    <div className="absolute inset-x-0 bottom-0 p-5">
+      {post.profileId ? <button type="button" onClick={(event) => { event.stopPropagation(); window.dispatchEvent(new CustomEvent('open-public-profile', { detail: post.profileId })); }} className="mb-2 flex items-center gap-2 text-left text-sm font-bold text-white"><span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-white/15">{post.authorPicture ? <img src={post.authorPicture} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover"/> : <span>{(post.authorName || '?').slice(0, 1)}</span>}</span>{post.authorName || 'Perfil de la comunidad'}</button> : <span className="mb-2 block text-xs text-white/55">Publicación de la comunidad</span>}
+      {post.caption && <p className="line-clamp-5 text-[15px] font-medium leading-relaxed text-white">{post.caption}</p>}
+    </div>
   </motion.article>;
 }
 

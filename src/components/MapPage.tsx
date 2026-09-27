@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { OPENFREEMAP_STYLE } from '../mapConfig';
 import { mockPlaces, categories } from '../data';
 import { Place } from '../types';
 import { Protocol } from 'pmtiles';
@@ -81,7 +82,7 @@ export function MapPage({ onSelectBusiness }: MapPageProps) {
 
     map.current = new maplibregl.Map({
       container: mapContainer.current,
-      style: 'https://tiles.openfreemap.org/styles/liberty',
+      style: OPENFREEMAP_STYLE,
       center: nochistlanCenter,
       zoom: 16.5,
       pitch: 60, // 3D tilt!

@@ -5,10 +5,9 @@ import { X } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { Place } from '../types';
 import CornerKit from '@cornerkit/core';
+import { OPENFREEMAP_STYLE } from '../mapConfig';
 
 const NOCHISTLAN: [number, number] = [-102.8456, 21.3653];
-const mapStyle = 'https://tiles.openfreemap.org/styles/liberty';
-
 function BusinessMapCanvas({ place, expanded = false }: { place: Place; expanded?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -24,7 +23,7 @@ function BusinessMapCanvas({ place, expanded = false }: { place: Place; expanded
     if (!container) return;
     const map = new maplibregl.Map({
       container,
-      style: mapStyle,
+      style: OPENFREEMAP_STYLE,
       center: point.center,
       zoom: point.exact ? 16 : 12.5,
       pitch: 0,
@@ -33,6 +32,7 @@ function BusinessMapCanvas({ place, expanded = false }: { place: Place; expanded
       scrollZoom: expanded,
       doubleClickZoom: expanded,
       touchZoomRotate: true,
+      antialias: true,
     });
     mapRef.current = map;
 

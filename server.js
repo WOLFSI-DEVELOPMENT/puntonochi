@@ -19,13 +19,36 @@ app.use(cors());
 app.use(express.json({ limit: '8mb' }));
 
 const sql = process.env.DATABASE_URL ? neon(process.env.DATABASE_URL) : null;
-const storageReady = Boolean(process.env.AWS_ENDPOINT_URL_S3 && process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.AWS_REGION);
+const storageSettings = {
+  endpoint: process.env.NEON_STORAGE_ENDPOINT || process.env.AWS_ENDPOINT_URL_S3,
+  accessKeyId: process.env.NEON_STORAGE_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.NEON_STORAGE_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY,
+  region: process.env.NEON_STORAGE_REGION || '',
+};
+const storageRegionFromEndpoint = (endpoint) => {
+  try { return new URL(endpoint).hostname.match(/[a-z]{2}(?:-gov)?-[a-z]+-\d/)?.[0] || ''; }
+  catch { return ''; }
+};
+storageSettings.region ||= storageRegionFromEndpoint(storageSettings.endpoint) || process.env.AWS_REGION || '';
+const missingStorageSettings = () => [
+  ['NEON_STORAGE_ENDPOINT or AWS_ENDPOINT_URL_S3', storageSettings.endpoint],
+  ['NEON_STORAGE_ACCESS_KEY_ID or AWS_ACCESS_KEY_ID', storageSettings.accessKeyId],
+  ['NEON_STORAGE_SECRET_ACCESS_KEY or AWS_SECRET_ACCESS_KEY', storageSettings.secretAccessKey],
+  ['NEON_STORAGE_REGION or a region in the endpoint or AWS_REGION', storageSettings.region],
+].filter(([, value]) => !value).map(([name]) => name);
+const storageReady = missingStorageSettings().length === 0;
 const s3 = storageReady ? new S3Client({
-  region: process.env.AWS_REGION,
-  endpoint: process.env.AWS_ENDPOINT_URL_S3,
+  region: storageSettings.region,
+  endpoint: storageSettings.endpoint,
   forcePathStyle: true,
-  credentials: { accessKeyId: process.env.AWS_ACCESS_KEY_ID, secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY },
+  credentials: { accessKeyId: storageSettings.accessKeyId, secretAccessKey: storageSettings.secretAccessKey },
 }) : null;
+const storageUnavailableMessage = () => {
+  const missing = missingStorageSettings();
+  return missing.length
+    ? `Faltan variables privadas de Neon Object Storage en Vercel: ${missing.join(', ')}. Agrégalas al entorno Production y vuelve a desplegar.`
+    : 'Neon Object Storage no está disponible en este momento.';
+};
 
 const requireNeon = (req, res, next) => {
   if (!sql) return res.status(503).json({ error: 'Neon is not configured. Set DATABASE_URL in the server environment.' });
@@ -64,9 +87,11 @@ const ensureAccountSchema = () => {
       email TEXT NOT NULL,
       display_name TEXT NOT NULL,
       picture_url TEXT,
+      bio TEXT NOT NULL DEFAULT '',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
+    await sql`ALTER TABLE user_accounts ADD COLUMN IF NOT EXISTS bio TEXT NOT NULL DEFAULT ''`;
     await sql`CREATE INDEX IF NOT EXISTS user_accounts_email_idx ON user_accounts (LOWER(email))`;
     await sql`CREATE TABLE IF NOT EXISTS user_account_sessions (
       token_hash TEXT PRIMARY KEY,
@@ -75,6 +100,14 @@ const ensureAccountSchema = () => {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
     await sql`CREATE INDEX IF NOT EXISTS user_account_sessions_expiry_idx ON user_account_sessions (expires_at)`;
+    await sql`CREATE TABLE IF NOT EXISTS account_follows (
+      follower_google_sub TEXT NOT NULL REFERENCES user_accounts(google_sub) ON DELETE CASCADE,
+      followed_google_sub TEXT NOT NULL REFERENCES user_accounts(google_sub) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (follower_google_sub, followed_google_sub),
+      CHECK (follower_google_sub <> followed_google_sub)
+    )`;
+    await sql`CREATE INDEX IF NOT EXISTS account_follows_followed_idx ON account_follows (followed_google_sub)`;
   })().catch((error) => { accountSchemaReady = undefined; throw error; });
   return accountSchemaReady;
 };
@@ -88,6 +121,18 @@ const getAccountSession = async (req) => {
     JOIN user_accounts AS account ON account.google_sub = session.google_sub
     WHERE session.token_hash = ${hashAdminSessionToken(token)} AND session.expires_at > NOW()`;
   return account || null;
+};
+const requireAccount = async (req, res, next) => {
+  try {
+    if (!sql || !isGoogleOAuthConfigured()) return res.status(503).json({ error: 'La función de cuentas todavía no está configurada.' });
+    const account = await getAccountSession(req);
+    if (!account) return res.status(401).json({ code: 'ACCOUNT_REQUIRED', error: 'Inicia sesión para continuar.' });
+    req.account = account;
+    next();
+  } catch (error) {
+    console.error('Account authorization check failed:', error);
+    res.status(503).json({ error: 'No se pudo comprobar tu cuenta.' });
+  }
 };
 let adminSessionSchemaReady;
 const ensureAdminSessionSchema = () => {
@@ -277,6 +322,119 @@ app.get('/api/account/session', async (req, res) => {
   }
 });
 
+app.get('/api/account/content', requireNeon, requireAccount, async (req, res) => {
+  try {
+    await ensureSubmissionSchema();
+    const sub = req.account.id;
+    const base = `${req.protocol}://${req.get('host')}`;
+    const [reviews, posts, events] = await Promise.all([
+      sql`SELECT review.id, review.place_id AS "placeId", place.name AS "placeName", review.rating,
+        review.review_text AS text, review.created_at AS "createdAt"
+        FROM community_reviews AS review JOIN places AS place ON place.id = review.place_id
+        WHERE review.author_google_sub = ${sub} ORDER BY review.created_at DESC LIMIT 100`,
+      sql`SELECT id, post_type AS "postType", place_id AS "placeId", place_name AS "placeName", caption,
+        created_at AS "createdAt" FROM community_posts WHERE author_google_sub = ${sub} AND status = 'published'
+        ORDER BY created_at DESC LIMIT 100`,
+      sql`SELECT id, title, event_date::text AS date, end_date::text AS "endDate", event_time AS time,
+        location, description, created_at AS "createdAt" FROM public_events WHERE author_google_sub = ${sub}
+        ORDER BY created_at DESC LIMIT 100`,
+    ]);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      reviews,
+      posts: posts.map((post) => ({ ...post, imageUrl: `${base}/api/community-posts/${post.id}/image`, coverUrl: `${base}/api/community-posts/${post.id}/cover` })),
+      events: events.map((event) => eventResponse(req, event)),
+    });
+  } catch (error) {
+    console.error('Could not load account activity:', error);
+    res.status(500).json({ error: 'No se pudo cargar tu actividad.' });
+  }
+});
+
+app.get('/api/profiles/:id', requireNeon, async (req, res) => {
+  try {
+    await ensureSubmissionSchema();
+    const profileId = String(req.params.id).slice(0, 200);
+    const [profile] = await sql`SELECT google_sub AS id, display_name AS name, picture_url AS picture, bio,
+      created_at AS "createdAt" FROM user_accounts WHERE google_sub = ${profileId}`;
+    if (!profile) return res.status(404).json({ error: 'No encontramos este perfil.' });
+    const [counts] = await sql`SELECT
+      (SELECT COUNT(*)::int FROM community_posts WHERE author_google_sub = ${profileId} AND status = 'published') AS posts,
+      (SELECT COUNT(*)::int FROM community_reviews WHERE author_google_sub = ${profileId}) AS reviews,
+      (SELECT COUNT(*)::int FROM public_events WHERE author_google_sub = ${profileId}) AS events,
+      (SELECT COUNT(*)::int FROM account_follows WHERE followed_google_sub = ${profileId}) AS followers,
+      (SELECT COUNT(*)::int FROM account_follows WHERE follower_google_sub = ${profileId}) AS following`;
+    let viewer = null;
+    try { viewer = await getAccountSession(req); } catch { /* Public profiles remain available without a viewer session. */ }
+    const [relationship] = viewer && viewer.id !== profileId
+      ? await sql`SELECT TRUE AS following FROM account_follows WHERE follower_google_sub = ${viewer.id} AND followed_google_sub = ${profileId}`
+      : [{ following: false }];
+    res.set('Cache-Control', 'no-store');
+    res.json({ ...profile, ...counts, isFollowing: Boolean(relationship?.following), isSelf: viewer?.id === profileId });
+  } catch (error) {
+    console.error('Could not load public profile:', error);
+    res.status(500).json({ error: 'No se pudo cargar este perfil.' });
+  }
+});
+
+app.get('/api/profiles/:id/activity', requireNeon, async (req, res) => {
+  try {
+    await ensureSubmissionSchema();
+    const profileId = String(req.params.id).slice(0, 200);
+    const base = `${req.protocol}://${req.get('host')}`;
+    const [posts, reviews, events] = await Promise.all([
+      sql`SELECT id, post_type AS "postType", place_id AS "placeId", place_name AS "placeName", caption,
+        created_at AS "createdAt" FROM community_posts WHERE author_google_sub = ${profileId} AND status = 'published'
+        ORDER BY created_at DESC LIMIT 100`,
+      sql`SELECT review.id, review.place_id AS "placeId", place.name AS "placeName", review.rating,
+        review.review_text AS text, review.created_at AS "createdAt" FROM community_reviews AS review
+        JOIN places AS place ON place.id = review.place_id WHERE review.author_google_sub = ${profileId}
+        ORDER BY review.created_at DESC LIMIT 100`,
+      sql`SELECT id, title, event_date::text AS date, end_date::text AS "endDate", event_time AS time,
+        location, description, created_at AS "createdAt" FROM public_events WHERE author_google_sub = ${profileId}
+        ORDER BY created_at DESC LIMIT 100`,
+    ]);
+    res.set('Cache-Control', 'public, max-age=15, stale-while-revalidate=60');
+    res.json({
+      posts: posts.map((post) => ({ ...post, imageUrl: `${base}/api/community-posts/${post.id}/image`, coverUrl: `${base}/api/community-posts/${post.id}/cover` })),
+      reviews,
+      events: events.map((event) => eventResponse(req, event)),
+    });
+  } catch (error) {
+    console.error('Could not load public profile activity:', error);
+    res.status(500).json({ error: 'No se pudo cargar la actividad de este perfil.' });
+  }
+});
+
+app.post('/api/profiles/:id/follow', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    const target = String(req.params.id).slice(0, 200);
+    if (target === req.account.id) return res.status(400).json({ error: 'No puedes seguir tu propia cuenta.' });
+    await ensureAccountSchema();
+    const [profile] = await sql`SELECT google_sub FROM user_accounts WHERE google_sub = ${target}`;
+    if (!profile) return res.status(404).json({ error: 'No encontramos este perfil.' });
+    await sql`INSERT INTO account_follows (follower_google_sub, followed_google_sub)
+      VALUES (${req.account.id}, ${target}) ON CONFLICT DO NOTHING`;
+    res.status(201).json({ following: true });
+  } catch (error) {
+    console.error('Could not follow profile:', error);
+    res.status(500).json({ error: 'No se pudo seguir este perfil.' });
+  }
+});
+
+app.delete('/api/profiles/:id/follow', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    await ensureAccountSchema();
+    await sql`DELETE FROM account_follows WHERE follower_google_sub = ${req.account.id} AND followed_google_sub = ${String(req.params.id).slice(0, 200)}`;
+    res.json({ following: false });
+  } catch (error) {
+    console.error('Could not unfollow profile:', error);
+    res.status(500).json({ error: 'No se pudo dejar de seguir este perfil.' });
+  }
+});
+
 app.get('/api/account/oauth/start', async (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (!sql || !isGoogleOAuthConfigured()) return res.status(503).send('Configura DATABASE_URL, GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en el servidor.');
@@ -419,6 +577,7 @@ const ensureDirectorySchema = () => {
 let schemaReady;
 const ensureSubmissionSchema = () => {
   if (!schemaReady) schemaReady = (async () => {
+    await ensureAccountSchema();
     await ensureDirectorySchema();
     await sql`CREATE TABLE IF NOT EXISTS business_applications (
       id TEXT PRIMARY KEY,
@@ -487,6 +646,8 @@ const ensureSubmissionSchema = () => {
     await sql`ALTER TABLE community_posts ALTER COLUMN place_id DROP NOT NULL`;
     await sql`ALTER TABLE community_posts ALTER COLUMN place_name DROP NOT NULL`;
     await sql`ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS post_type TEXT NOT NULL DEFAULT 'business' CHECK (post_type IN ('business', 'day'))`;
+    await sql`ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS author_google_sub TEXT REFERENCES user_accounts(google_sub) ON DELETE SET NULL`;
+    await sql`CREATE INDEX IF NOT EXISTS community_posts_author_idx ON community_posts (author_google_sub, created_at DESC)`;
     await sql`CREATE TABLE IF NOT EXISTS community_reviews (
       id TEXT PRIMARY KEY,
       place_id TEXT NOT NULL REFERENCES places(id) ON DELETE CASCADE,
@@ -495,6 +656,8 @@ const ensureSubmissionSchema = () => {
       review_text TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
+    await sql`ALTER TABLE community_reviews ADD COLUMN IF NOT EXISTS author_google_sub TEXT REFERENCES user_accounts(google_sub) ON DELETE SET NULL`;
+    await sql`CREATE INDEX IF NOT EXISTS community_reviews_author_idx ON community_reviews (author_google_sub, created_at DESC)`;
     await sql`CREATE TABLE IF NOT EXISTS business_edit_suggestions (
       id TEXT PRIMARY KEY,
       place_id TEXT NOT NULL REFERENCES places(id) ON DELETE CASCADE,
@@ -518,6 +681,8 @@ const ensureSubmissionSchema = () => {
       image_mime_type TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
+    await sql`ALTER TABLE public_events ADD COLUMN IF NOT EXISTS author_google_sub TEXT REFERENCES user_accounts(google_sub) ON DELETE SET NULL`;
+    await sql`CREATE INDEX IF NOT EXISTS public_events_author_idx ON public_events (author_google_sub, created_at DESC)`;
   })().catch((error) => { schemaReady = undefined; throw error; });
   return schemaReady;
 };
@@ -574,7 +739,7 @@ app.post('/api/business-applications', requireNeon, async (req, res) => {
 
 app.post('/api/business-applications/:id/photos', requireNeon, async (req, res) => {
   try {
-    if (!s3) return res.status(503).json({ error: 'Neon private upload storage is not configured.' });
+    if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
     const { fileName, mimeType, base64 } = req.body || {};
     if (typeof base64 !== 'string' || !/^image\/(jpeg|png|webp|gif|heic|heif)$/.test(mimeType || '')) return res.status(400).json({ error: 'Choose a supported image file.' });
     const bytes = Buffer.from(base64, 'base64');
@@ -684,8 +849,10 @@ app.get('/api/places/:id/reviews', requireNeon, async (req, res) => {
     await ensureSubmissionSchema();
     const [place] = await sql`SELECT id FROM places WHERE id = ${req.params.id}`;
     if (!place) return res.status(404).json({ error: 'No encontramos este negocio.' });
-    const reviews = await sql`SELECT id, author, rating, review_text AS text, created_at AS "createdAt"
-      FROM community_reviews WHERE place_id = ${place.id} ORDER BY created_at DESC LIMIT 50`;
+    const reviews = await sql`SELECT review.id, review.author, review.author_google_sub AS "profileId",
+      account.picture_url AS avatar, review.rating, review.review_text AS text, review.created_at AS "createdAt"
+      FROM community_reviews AS review LEFT JOIN user_accounts AS account ON account.google_sub = review.author_google_sub
+      WHERE review.place_id = ${place.id} ORDER BY review.created_at DESC LIMIT 50`;
     res.set('Cache-Control', 'no-store');
     res.json(reviews);
   } catch (error) {
@@ -694,19 +861,18 @@ app.get('/api/places/:id/reviews', requireNeon, async (req, res) => {
   }
 });
 
-app.post('/api/places/:id/reviews', requireNeon, async (req, res) => {
+app.post('/api/places/:id/reviews', requireNeon, requireAccount, async (req, res) => {
   if (!ensureSameOrigin(req, res)) return;
   try {
-    const author = typeof req.body?.author === 'string' ? req.body.author.trim().slice(0, 80) : '';
     const text = typeof req.body?.text === 'string' ? req.body.text.trim().slice(0, 1500) : '';
     const rating = Number(req.body?.rating);
-    if (!author || !text || !Number.isInteger(rating) || rating < 1 || rating > 5) return res.status(400).json({ error: 'Escribe tu nombre, una reseña y elige de 1 a 5 estrellas.' });
+    if (!text || !Number.isInteger(rating) || rating < 1 || rating > 5) return res.status(400).json({ error: 'Escribe una reseña y elige de 1 a 5 estrellas.' });
     await ensureSubmissionSchema();
     const [place] = await sql`SELECT id FROM places WHERE id = ${req.params.id}`;
     if (!place) return res.status(404).json({ error: 'No encontramos este negocio.' });
-    const [review] = await sql`INSERT INTO community_reviews (id, place_id, author, rating, review_text)
-      VALUES (${randomUUID()}, ${place.id}, ${author}, ${rating}, ${text})
-      RETURNING id, author, rating, review_text AS text, created_at AS "createdAt"`;
+    const [review] = await sql`INSERT INTO community_reviews (id, place_id, author, author_google_sub, rating, review_text)
+      VALUES (${randomUUID()}, ${place.id}, ${req.account.name}, ${req.account.id}, ${rating}, ${text})
+      RETURNING id, author, author_google_sub AS "profileId", rating, review_text AS text, created_at AS "createdAt"`;
     res.status(201).json(review);
   } catch (error) {
     console.error('Community review create failed:', error);
@@ -897,16 +1063,21 @@ const eventResponse = (req, event) => ({
   description: event.description,
   imageUrl: eventImageUrl(req, event.id),
   createdAt: event.createdAt,
+  profileId: event.profileId || null,
+  authorName: event.authorName || req.account?.name || null,
+  authorPicture: event.authorPicture || req.account?.picture || null,
 });
 
 app.get('/api/events', requireNeon, async (req, res) => {
   try {
     await ensureSubmissionSchema();
-    const events = await sql`SELECT id, title, event_date::text AS date, end_date::text AS "endDate",
-      event_time AS time, location, description, created_at AS "createdAt"
-      FROM public_events ORDER BY CASE WHEN event_date >= CURRENT_DATE THEN 0 ELSE 1 END,
-        CASE WHEN event_date >= CURRENT_DATE THEN event_date END ASC,
-        CASE WHEN event_date < CURRENT_DATE THEN event_date END DESC, created_at DESC LIMIT 100`;
+    const events = await sql`SELECT event.id, event.title, event.event_date::text AS date, event.end_date::text AS "endDate",
+      event.event_time AS time, event.location, event.description, event.created_at AS "createdAt",
+      event.author_google_sub AS "profileId", account.display_name AS "authorName", account.picture_url AS "authorPicture"
+      FROM public_events AS event LEFT JOIN user_accounts AS account ON account.google_sub = event.author_google_sub
+      ORDER BY CASE WHEN event.event_date >= CURRENT_DATE THEN 0 ELSE 1 END,
+        CASE WHEN event.event_date >= CURRENT_DATE THEN event.event_date END ASC,
+        CASE WHEN event.event_date < CURRENT_DATE THEN event.event_date END DESC, event.created_at DESC LIMIT 100`;
     res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=120');
     res.json(events.map((event) => eventResponse(req, event)));
   } catch (error) {
@@ -915,7 +1086,7 @@ app.get('/api/events', requireNeon, async (req, res) => {
   }
 });
 
-app.post('/api/events', requireNeon, async (req, res) => {
+app.post('/api/events', requireNeon, requireAccount, async (req, res) => {
   if (!ensureSameOrigin(req, res)) return;
   try {
     const body = req.body || {};
@@ -935,7 +1106,7 @@ app.post('/api/events', requireNeon, async (req, res) => {
     if (!title || !description || !location || !validDate(date) || (endDate && (!validDate(endDate) || endDate < date)) || (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time))) {
       return res.status(400).json({ error: 'Revisa el nombre, descripción, lugar, fecha y horario del evento.' });
     }
-    if (!s3) return res.status(503).json({ error: 'El almacenamiento de imágenes no está configurado en el servidor.' });
+    if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType) || !base64) return res.status(400).json({ error: 'Agrega una portada JPG, PNG o WebP.' });
     const bytes = Buffer.from(base64, 'base64');
     if (!bytes.length || bytes.length > 5 * 1024 * 1024) return res.status(413).json({ error: 'La portada debe pesar 5 MB o menos.' });
@@ -944,9 +1115,9 @@ app.post('/api/events', requireNeon, async (req, res) => {
     const objectKey = `events/${id}/cover-${randomUUID()}`;
     await s3.send(new PutObjectCommand({ Bucket: 'uploads', Key: objectKey, Body: bytes, ContentType: mimeType }));
     try {
-      const [event] = await sql`INSERT INTO public_events (id, title, event_date, end_date, event_time, location, description, image_key, image_mime_type)
-        VALUES (${id}, ${title}, ${date}::date, ${endDate}::date, ${time}, ${location}, ${description}, ${objectKey}, ${mimeType})
-        RETURNING id, title, event_date::text AS date, end_date::text AS "endDate", event_time AS time, location, description, created_at AS "createdAt"`;
+      const [event] = await sql`INSERT INTO public_events (id, title, event_date, end_date, event_time, location, description, image_key, image_mime_type, author_google_sub)
+        VALUES (${id}, ${title}, ${date}::date, ${endDate}::date, ${time}, ${location}, ${description}, ${objectKey}, ${mimeType}, ${req.account.id})
+        RETURNING id, title, event_date::text AS date, end_date::text AS "endDate", event_time AS time, location, description, created_at AS "createdAt", author_google_sub AS "profileId"`;
       res.status(201).json(eventResponse(req, event));
     } catch (error) {
       await s3.send(new DeleteObjectCommand({ Bucket: 'uploads', Key: objectKey })).catch(() => undefined);
@@ -960,7 +1131,7 @@ app.post('/api/events', requireNeon, async (req, res) => {
 
 app.get('/api/events/:id/image', requireNeon, async (req, res) => {
   try {
-    if (!s3) return res.status(503).json({ error: 'El almacenamiento de imágenes no está configurado.' });
+    if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
     await ensureSubmissionSchema();
     const [event] = await sql`SELECT image_key, image_mime_type FROM public_events WHERE id = ${req.params.id}`;
     if (!event) return res.status(404).json({ error: 'No encontramos la portada del evento.' });
@@ -979,8 +1150,11 @@ app.get('/api/events/:id/image', requireNeon, async (req, res) => {
 app.get('/api/events/:id', requireNeon, async (req, res) => {
   try {
     await ensureSubmissionSchema();
-    const [event] = await sql`SELECT id, title, event_date::text AS date, end_date::text AS "endDate",
-      event_time AS time, location, description, created_at AS "createdAt" FROM public_events WHERE id = ${req.params.id}`;
+    const [event] = await sql`SELECT event.id, event.title, event.event_date::text AS date, event.end_date::text AS "endDate",
+      event.event_time AS time, event.location, event.description, event.created_at AS "createdAt",
+      event.author_google_sub AS "profileId", account.display_name AS "authorName", account.picture_url AS "authorPicture"
+      FROM public_events AS event LEFT JOIN user_accounts AS account ON account.google_sub = event.author_google_sub
+      WHERE event.id = ${req.params.id}`;
     if (!event) return res.status(404).json({ error: 'No encontramos este evento.' });
     res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=120');
     res.json(eventResponse(req, event));
@@ -990,7 +1164,8 @@ app.get('/api/events/:id', requireNeon, async (req, res) => {
   }
 });
 
-app.post('/api/community-posts', requireNeon, async (req, res) => {
+app.post('/api/community-posts', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
   try {
     const { placeId, placeName, caption = '', postType = 'business' } = req.body || {};
     if (!['business', 'day'].includes(postType) || typeof caption !== 'string' || caption.length > 400) {
@@ -1002,8 +1177,8 @@ app.post('/api/community-posts', requireNeon, async (req, res) => {
     }
     await ensureSubmissionSchema();
     const id = randomUUID();
-    await sql`INSERT INTO community_posts (id, place_id, place_name, post_type, caption)
-      VALUES (${id}, ${postType === 'business' ? placeId.trim() : null}, ${postType === 'business' ? placeName.trim() : null}, ${postType}, ${caption.trim()})`;
+    await sql`INSERT INTO community_posts (id, place_id, place_name, post_type, caption, author_google_sub)
+      VALUES (${id}, ${postType === 'business' ? placeId.trim() : null}, ${postType === 'business' ? placeName.trim() : null}, ${postType}, ${caption.trim()}, ${req.account.id})`;
     res.status(201).json({ id, postType });
   } catch (error) {
     console.error('Community post create failed:', error);
@@ -1011,16 +1186,17 @@ app.post('/api/community-posts', requireNeon, async (req, res) => {
   }
 });
 
-app.post('/api/community-posts/:id/:kind', requireNeon, async (req, res) => {
+app.post('/api/community-posts/:id/:kind', requireNeon, requireAccount, async (req, res, next) => {
+  if (!ensureSameOrigin(req, res)) return;
   try {
-    if (!['photo', 'cover'].includes(req.params.kind)) return res.status(404).json({ error: 'Upload type not found.' });
-    if (!s3) return res.status(503).json({ error: 'Neon private upload storage is not configured.' });
+    if (!['photo', 'cover'].includes(req.params.kind)) return next('route');
+    if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
     const { fileName, mimeType, base64 } = req.body || {};
     if (typeof base64 !== 'string' || !/^image\/(jpeg|png|webp|gif|heic|heif)$/.test(mimeType || '')) return res.status(400).json({ error: 'Elige un archivo de imagen válido.' });
     const bytes = Buffer.from(base64, 'base64');
     if (!bytes.length || bytes.length > 5 * 1024 * 1024) return res.status(413).json({ error: 'Cada imagen debe pesar 5 MB o menos.' });
     await ensureSubmissionSchema();
-    const [post] = await sql`SELECT id, status, image_key, cover_key FROM community_posts WHERE id = ${req.params.id}`;
+    const [post] = await sql`SELECT id, status, image_key, cover_key FROM community_posts WHERE id = ${req.params.id} AND author_google_sub = ${req.account.id}`;
     if (!post || post.status !== 'draft') return res.status(404).json({ error: 'No se encontró el borrador de publicación.' });
     const key = `${req.params.id}/${req.params.kind}-${randomUUID()}`;
     const objectKey = `community-posts/${key}`;
@@ -1043,12 +1219,13 @@ app.post('/api/community-posts/:id/:kind', requireNeon, async (req, res) => {
   }
 });
 
-app.post('/api/community-posts/:id/publish', requireNeon, async (req, res) => {
+app.post('/api/community-posts/:id/publish', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
   try {
     await ensureSubmissionSchema();
     const [post] = await sql`UPDATE community_posts SET status = 'published'
-      WHERE id = ${req.params.id} AND status = 'draft' AND image_key IS NOT NULL
-      RETURNING id, place_id, place_name, post_type AS "postType", caption, created_at AS "createdAt"`;
+      WHERE id = ${req.params.id} AND author_google_sub = ${req.account.id} AND status = 'draft' AND image_key IS NOT NULL
+      RETURNING id, place_id, place_name, post_type AS "postType", caption, author_google_sub AS "profileId", created_at AS "createdAt"`;
     if (!post) return res.status(404).json({ error: 'No se encontró la publicación o le falta su imagen.' });
     const base = `${req.protocol}://${req.get('host')}`;
     res.json({ ...post, imageUrl: `${base}/api/community-posts/${post.id}/image`, coverUrl: `${base}/api/community-posts/${post.id}/cover` });
@@ -1058,10 +1235,11 @@ app.post('/api/community-posts/:id/publish', requireNeon, async (req, res) => {
   }
 });
 
-app.delete('/api/community-posts/:id', requireNeon, async (req, res) => {
+app.delete('/api/community-posts/:id', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
   try {
     await ensureSubmissionSchema();
-    const [post] = await sql`DELETE FROM community_posts WHERE id = ${req.params.id} AND status = 'draft' RETURNING image_key, cover_key`;
+    const [post] = await sql`DELETE FROM community_posts WHERE id = ${req.params.id} AND author_google_sub = ${req.account.id} AND status = 'draft' RETURNING image_key, cover_key`;
     if (!post) return res.status(404).json({ deleted: false });
     for (const key of [post.image_key, post.cover_key]) {
       if (s3 && key) await s3.send(new DeleteObjectCommand({ Bucket: 'uploads', Key: String(key) })).catch(() => undefined);
@@ -1076,8 +1254,10 @@ app.delete('/api/community-posts/:id', requireNeon, async (req, res) => {
 app.get('/api/community-posts/day', requireNeon, async (req, res) => {
   try {
     await ensureSubmissionSchema();
-    const posts = await sql`SELECT id, caption, created_at AS "createdAt" FROM community_posts
-      WHERE status = 'published' AND post_type = 'day' ORDER BY created_at DESC LIMIT 20`;
+    const posts = await sql`SELECT post.id, post.caption, post.created_at AS "createdAt",
+      post.author_google_sub AS "profileId", account.display_name AS "authorName", account.picture_url AS "authorPicture"
+      FROM community_posts AS post LEFT JOIN user_accounts AS account ON account.google_sub = post.author_google_sub
+      WHERE post.status = 'published' AND post.post_type = 'day' ORDER BY post.created_at DESC LIMIT 20`;
     const base = `${req.protocol}://${req.get('host')}`;
     res.set('Cache-Control', 'no-store');
     res.json(posts.map((post) => ({ ...post, imageUrl: `${base}/api/community-posts/${post.id}/image`, coverUrl: `${base}/api/community-posts/${post.id}/cover` })));
@@ -1090,7 +1270,7 @@ app.get('/api/community-posts/day', requireNeon, async (req, res) => {
 app.get('/api/community-posts/:id/:kind', requireNeon, async (req, res) => {
   try {
     if (!['image', 'cover'].includes(req.params.kind)) return res.status(404).json({ error: 'Image not found.' });
-    if (!s3) return res.status(503).json({ error: 'Neon private storage is not configured.' });
+    if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
     await ensureSubmissionSchema();
     const [post] = await sql`SELECT image_key, cover_key, image_mime_type, cover_mime_type, status FROM community_posts WHERE id = ${req.params.id}`;
     if (!post || post.status !== 'published') return res.status(404).json({ error: 'Imagen de publicación no encontrada.' });
@@ -1235,16 +1415,25 @@ app.get('/api/places', requireNeon, async (req, res) => {
       map_url AS "mapUrl", images, logo, rating, review_count AS "reviewCount",
       is_open AS "isOpen", cost, distance, good_to_know AS "goodToKnow", hours, weekly_hours AS "weeklyHours",
       lat, lng, phone, created_at AS "createdAt" FROM places ORDER BY sort_order`;
-    const publishedPosts = await sql`SELECT id, place_id FROM community_posts WHERE status = 'published' ORDER BY created_at DESC`;
+    const publishedPosts = await sql`SELECT post.id, post.place_id, post.caption, post.created_at AS "createdAt",
+      post.author_google_sub AS "profileId", account.display_name AS "authorName", account.picture_url AS "authorPicture"
+      FROM community_posts AS post LEFT JOIN user_accounts AS account ON account.google_sub = post.author_google_sub
+      WHERE post.status = 'published' ORDER BY post.created_at DESC`;
     const postImagesByPlace = new Map();
+    const communityPostsByPlace = new Map();
     for (const post of publishedPosts) {
       const images = postImagesByPlace.get(post.place_id) || [];
-      images.push(`${req.protocol}://${req.get('host')}/api/community-posts/${post.id}/image`);
+      const imageUrl = `${req.protocol}://${req.get('host')}/api/community-posts/${post.id}/image`;
+      images.push(imageUrl);
       postImagesByPlace.set(post.place_id, images);
+      const communityPosts = communityPostsByPlace.get(post.place_id) || [];
+      communityPosts.push({ id: post.id, imageUrl, caption: post.caption, createdAt: post.createdAt, profileId: post.profileId, authorName: post.authorName, authorPicture: post.authorPicture });
+      communityPostsByPlace.set(post.place_id, communityPosts);
     }
     res.json(places.map((place) => ({
       ...place,
       images: [...(Array.isArray(place.images) ? place.images : []), ...(postImagesByPlace.get(place.id) || [])],
+      communityPosts: communityPostsByPlace.get(place.id) || [],
       goodToKnow: Array.isArray(place.goodToKnow) ? place.goodToKnow : [],
     })));
   } catch (error) {
