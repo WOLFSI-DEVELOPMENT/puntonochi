@@ -5,9 +5,11 @@ import { mockPlaces } from '../data';
 import { Place } from '../types';
 import { apiFetch } from '../api';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
+import CornerKit from '@cornerkit/core';
 
 type FlowStep = 'choice' | 'camera' | 'preview' | 'compose' | 'published';
 type CameraRatio = '16:9' | '1:1' | '9:16';
+const createCorners = new CornerKit();
 
 export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => void; onPromoteBusiness: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -31,6 +33,14 @@ export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => 
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState('');
   const placePickerDrag = useSheetDrag(() => setShowPlacePicker(false));
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      createCorners.applyAll('[data-create-choice-card]', { radius: 28, smoothing: 1 });
+      createCorners.applyAll('[data-create-camera-frame]', { radius: 34, smoothing: 1 });
+    }, 40);
+    return () => window.clearTimeout(timer);
+  }, [step, cameraRatio]);
 
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -196,8 +206,8 @@ export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => 
         <h1 className="text-3xl font-bold tracking-tight">¿Qué quieres compartir?</h1>
         <p className="mt-2 text-sm leading-relaxed text-white/55">Elige cómo quieres participar en la comunidad.</p>
         <div className="mt-7 space-y-3">
-          <button type="button" onClick={() => setStep('camera')} className="flex w-full items-center gap-4 rounded-[28px] bg-[#292a2d] p-5 text-left transition-colors active:bg-[#343539] [corner-shape:squircle]"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10"><Camera className="h-6 w-6"/></span><span className="min-w-0 flex-1"><span className="block text-lg font-bold">Publicar una foto</span><span className="mt-1 block text-sm leading-relaxed text-white/50">Comparte una imagen con la comunidad, como en tus redes sociales.</span></span><ArrowLeft className="h-5 w-5 rotate-180 text-white/40"/></button>
-          <button type="button" onClick={onPromoteBusiness} className="flex w-full items-center gap-4 rounded-[28px] bg-[#292a2d] p-5 text-left transition-colors active:bg-[#343539] [corner-shape:squircle]"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10"><Megaphone className="h-6 w-6"/></span><span className="min-w-0 flex-1"><span className="block text-lg font-bold">Promocionar un negocio</span><span className="mt-1 block text-sm leading-relaxed text-white/50">Solicita una promoción para que más personas descubran un negocio local.</span></span><ArrowLeft className="h-5 w-5 rotate-180 text-white/40"/></button>
+          <button type="button" data-create-choice-card onClick={() => setStep('camera')} className="flex w-full items-center gap-4 rounded-[28px] bg-[#292a2d] p-5 text-left transition-colors active:bg-[#343539] [corner-shape:squircle]"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10"><Camera className="h-6 w-6"/></span><span className="min-w-0 flex-1"><span className="block text-lg font-bold">Publicar una foto</span><span className="mt-1 block text-sm leading-relaxed text-white/50">Comparte una imagen con la comunidad, como en tus redes sociales.</span></span><ArrowLeft className="h-5 w-5 rotate-180 text-white/40"/></button>
+          <button type="button" data-create-choice-card onClick={onPromoteBusiness} className="flex w-full items-center gap-4 rounded-[28px] bg-[#292a2d] p-5 text-left transition-colors active:bg-[#343539] [corner-shape:squircle]"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10"><Megaphone className="h-6 w-6"/></span><span className="min-w-0 flex-1"><span className="block text-lg font-bold">Promocionar un negocio</span><span className="mt-1 block text-sm leading-relaxed text-white/50">Solicita una promoción para que más personas descubran un negocio local.</span></span><ArrowLeft className="h-5 w-5 rotate-180 text-white/40"/></button>
         </div>
       </div>}
 
@@ -206,7 +216,7 @@ export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => 
         <div className="mb-4 flex items-center gap-1.5 rounded-full bg-[#202020] p-1.5" role="group" aria-label="Proporción de cámara">
           {(['16:9', '1:1', '9:16'] as CameraRatio[]).map((ratio) => <button key={ratio} type="button" aria-pressed={cameraRatio === ratio} onClick={() => setCameraRatio(ratio)} className={`rounded-full px-4 py-2 text-xs font-semibold transition-colors ${cameraRatio === ratio ? 'bg-white text-black' : 'text-white/55'}`}>{ratio}</button>)}
         </div>
-        <div className={`relative w-full overflow-hidden rounded-[34px] bg-[#171717] [corner-shape:squircle] ${cameraRatio === '16:9' ? 'aspect-video max-w-[440px]' : cameraRatio === '1:1' ? 'aspect-square max-w-[min(78vw,440px)]' : 'h-[min(58dvh,560px)] aspect-[9/16]'}`}>
+        <div data-create-camera-frame className={`relative w-full overflow-hidden rounded-[34px] bg-[#171717] [corner-shape:squircle] ${cameraRatio === '16:9' ? 'aspect-video max-w-[440px]' : cameraRatio === '1:1' ? 'aspect-square max-w-[min(78vw,440px)]' : 'h-[min(58dvh,560px)] aspect-[9/16]'}`}>
           <video ref={videoRef} playsInline muted className={`h-full w-full object-cover ${facing === 'user' ? '-scale-x-100' : ''}`} />
           {!cameraReady && <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#111] px-7 text-center"><Camera className="h-9 w-9 text-white/55" />{cameraError ? <p className="text-sm text-white/65">{cameraError}</p> : <><LoaderCircle className="h-5 w-5 animate-spin text-white/55" /><p className="text-sm text-white/55">Abriendo cámara…</p></>}</div>}
           {capturing && <motion.div className="absolute inset-0 bg-white" initial={{ opacity: 0.95 }} animate={{ opacity: 0 }} transition={{ duration: 0.35 }} />}
@@ -221,7 +231,7 @@ export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => 
 
       {step === 'preview' && <div className="relative z-10 flex min-h-[100dvh] flex-col items-center px-5 pb-7 pt-5">
         <div className="flex w-full max-w-[520px] items-center"><button type="button" onClick={() => setStep('camera')} className="rounded-full bg-[#292929] px-4 py-2.5 text-sm font-semibold"><ArrowLeft className="mr-2 inline h-4 w-4" />Volver</button></div>
-        <div className="flex flex-1 items-center justify-center py-6"><motion.img src={photo} alt="Foto capturada" initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', damping: 22 }} className={`rounded-[34px] object-cover [corner-shape:squircle] ${cameraRatio === '16:9' ? 'aspect-video w-full max-w-[min(92vw,620px)]' : cameraRatio === '1:1' ? 'aspect-square w-full max-w-[min(78vw,440px)]' : 'h-[min(62dvh,600px)] aspect-[9/16] w-auto max-w-full'}`} /></div>
+        <div className="flex flex-1 items-center justify-center py-6"><motion.img data-create-camera-frame src={photo} alt="Foto capturada" initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', damping: 22 }} className={`rounded-[34px] object-cover [corner-shape:squircle] ${cameraRatio === '16:9' ? 'aspect-video w-full max-w-[min(92vw,620px)]' : cameraRatio === '1:1' ? 'aspect-square w-full max-w-[min(78vw,440px)]' : 'h-[min(62dvh,600px)] aspect-[9/16] w-auto max-w-full'}`} /></div>
         <button type="button" onClick={() => setStep('compose')} style={{ backgroundColor: '#ffffff', color: '#000000' }} className="w-full max-w-[520px] rounded-full !bg-white py-3.5 text-[15px] font-bold !text-black">Continuar</button>
       </div>}
 

@@ -249,6 +249,12 @@ export function SearchPage({ query, onQueryChange, onClose, onSelectBusiness }: 
           {!query.trim() && !visiblePlaces.length && <p className="text-sm text-white/50">Busca por nombre, categoría o zona.</p>}
           {visiblePlaces.map((place) => <BusinessCard key={place.id} place={place} onSelect={onSelectBusiness} />)}
         </div>
+        <aside className="mb-6 mt-8" aria-label="Contenido patrocinado">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/40">Patrocinado</p>
+          <a href="https://higgsfield.ai?fpr=puntonochis" target="_blank" rel="sponsored noopener noreferrer" aria-label="Visitar Higgsfield AI" data-search-squircle className="block overflow-hidden rounded-[24px] bg-[#292a2d] p-[5px] transition-transform active:scale-[0.99]">
+            <img data-search-image src="https://www.joeyoungblood.com/wp-content/uploads/2026/01/higgsfield-logo-750x450.png" alt="Higgsfield AI" loading="lazy" className="aspect-[5/3] w-full rounded-[19px] object-cover" />
+          </a>
+        </aside>
       </section>
       {showAskNochi && <AskNochiSheet places={mockPlaces} onClose={() => setShowAskNochi(false)} onSelectPlace={(place) => { setShowAskNochi(false); onSelectBusiness(place); }} />}
     </main>
