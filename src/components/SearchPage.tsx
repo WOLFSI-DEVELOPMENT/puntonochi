@@ -40,10 +40,17 @@ type SearchPageProps = {
   onSelectBusiness: (place: Place) => void;
 };
 
-function SearchSparkleIcon() {
+export function SearchSparkleIcon() {
   return <svg aria-hidden="true" viewBox="0 0 28 28" className="h-5 w-5 shrink-0 text-white/70" fill="currentColor">
     <path d="M17.171 6.829a3.16 3.16 0 0 1 .761 1.238l.498 1.53a.605.605 0 0 0 1.14 0l.498-1.53a3.15 3.15 0 0 1 1.998-1.996l1.53-.497a.605.605 0 0 0 0-1.14l-.03-.008l-1.531-.497a3.15 3.15 0 0 1-1.998-1.996L19.54.403a.604.604 0 0 0-1.14 0l-.498 1.53l-.013.038a3.15 3.15 0 0 1-1.955 1.958l-1.53.497a.605.605 0 0 0 0 1.14l1.53.497c.467.156.89.418 1.237.766m8.65 3.529l.918.298l.019.004a.362.362 0 0 1 0 .684l-.919.299a1.9 1.9 0 0 0-1.198 1.197l-.299.918a.363.363 0 0 1-.684 0l-.299-.918a1.89 1.89 0 0 0-1.198-1.202l-.919-.298a.362.362 0 0 1 0-.684l.919-.299a1.9 1.9 0 0 0 1.18-1.197l.299-.918a.363.363 0 0 1 .684 0l.298.918a1.89 1.89 0 0 0 1.199 1.197M11.5 3a8.5 8.5 0 0 1 2.738.45l-.149.05a1.57 1.57 0 0 0-.79.59a1.58 1.58 0 0 0-.29 1.086a6.5 6.5 0 1 0 4.933 5.449q.06.056.127.104a1.64 1.64 0 0 0 1.86 0l.034-.028q.037.395.037.799a8.46 8.46 0 0 1-1.824 5.262l6.531 6.53a1 1 0 0 1-1.414 1.415l-6.531-6.531A8.5 8.5 0 1 1 11.5 3" />
   </svg>;
+}
+
+export function SearchBar({ value, onChange, className = '' }: { value: string; onChange: (value: string) => void; className?: string }) {
+  return <div className={`flex h-12 w-full items-center gap-3 rounded-2xl border-0 bg-[#292929] px-4 text-white/45 shadow-none outline-none ring-0 ${className}`}>
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"><SearchSparkleIcon /></span>
+    <input type="search" value={value} onChange={(event) => onChange(event.target.value)} placeholder="Buscar lugares y negocios" aria-label="Buscar lugares y negocios" className="search-input-fix min-w-0 flex-1 appearance-none border-0 !bg-transparent p-0 text-[16px] text-white !shadow-none outline-none ring-0 placeholder:text-white/40 focus:border-0 focus:!bg-transparent focus:outline-none focus:!shadow-none focus:ring-0" />
+  </div>;
 }
 
 type AskMessage = { id: string; role: 'user' | 'assistant'; content: string; places?: Place[] };
@@ -223,7 +230,7 @@ export function SearchPage({ query, onQueryChange, onClose, onSelectBusiness }: 
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder="Buscar lugares y negocios"
             aria-label="Buscar lugares y negocios"
-            className="search-input-fix min-w-0 flex-1 bg-transparent text-[16px] text-white outline-none placeholder:text-white/40"
+            className="search-input-fix min-w-0 flex-1 appearance-none !bg-transparent text-[16px] text-white !shadow-none outline-none placeholder:text-white/40 focus:!bg-transparent focus:!shadow-none"
           />
         </div>
       </header>

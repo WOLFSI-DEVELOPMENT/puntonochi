@@ -6,7 +6,7 @@ import type { Place, Review } from '../types';
 import { createDefaultWeeklySchedule, formatWeeklyHours, WeeklyHoursEditor, type WeeklyHours } from './WeeklyHoursEditor';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 
-type Props = { place: Place; onClose: () => void };
+type Props = { place: Place; onClose: () => void; initialMode?: 'menu' | 'reviews'; onReviewCreated?: (review: Review) => void };
 type Mode = 'menu' | 'reviews' | 'edit';
 type EditField = 'name' | 'category' | 'subtitle' | 'location' | 'address' | 'phone' | 'imageUrl' | 'weeklyHours';
 type SuggestedChanges = Partial<Record<EditField, string | WeeklyHours>>;
@@ -20,9 +20,9 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 const dateLabel = (value: string) => new Date(value).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
 
-export function CommunityActionsSheet({ place, onClose }: Props) {
+export function CommunityActionsSheet({ place, onClose, initialMode = 'menu', onReviewCreated }: Props) {
   const sheetDrag = useSheetDrag(onClose);
-  const [mode, setMode] = useState<Mode>('menu');
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [author, setAuthor] = useState('');
@@ -81,7 +81,7 @@ export function CommunityActionsSheet({ place, onClose }: Props) {
       const review = await request<Review>(`/api/places/${encodeURIComponent(place.id)}/reviews`, {
         method: 'POST', body: JSON.stringify({ author, rating, text: reviewText }),
       });
-      setReviews((current) => [review, ...current]); setAuthor(''); setRating(0); setReviewText('');
+      setReviews((current) => [review, ...current]); onReviewCreated?.(review); setAuthor(''); setRating(0); setReviewText('');
       setNotice('Tu reseña ya aparece en la ficha del negocio.');
     } catch (submitError) { setError(submitError instanceof Error ? submitError.message : 'No se pudo guardar la reseña.'); }
     finally { setBusy(false); }

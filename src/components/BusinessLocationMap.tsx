@@ -4,6 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { X } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { Place } from '../types';
+import CornerKit from '@cornerkit/core';
 
 const NOCHISTLAN: [number, number] = [-102.8456, 21.3653];
 const mapStyle = 'https://tiles.openfreemap.org/styles/liberty';
@@ -54,13 +55,17 @@ function BusinessMapCanvas({ place, expanded = false }: { place: Place; expanded
     };
   }, [place.id, place.name, point, expanded]);
 
-  return <div className={`relative overflow-hidden bg-[#22252a] ${expanded ? 'h-full min-h-[65dvh] w-full' : 'h-[210px] w-full rounded-[24px]'}`}>
+  return <div data-detail-squircle={expanded ? undefined : 'true'} className={`relative overflow-hidden bg-[#22252a] ${expanded ? 'h-full min-h-[65dvh] w-full' : 'h-[210px] w-full rounded-[24px]'}`}>
     <div ref={containerRef} className="absolute inset-0" />
     {!point.exact && <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] bg-black/55 px-3 py-2 text-center text-xs text-white/80 backdrop-blur-md">Ubicación aproximada en Nochistlán; ficha sin coordenadas exactas.</div>}
   </div>;
 }
 
 export function BusinessLocationMap({ place }: { place: Place }) {
+  useEffect(() => {
+    const timer = window.setTimeout(() => new CornerKit().applyAll('[data-detail-squircle]', { radius: 24, smoothing: 1 }), 50);
+    return () => window.clearTimeout(timer);
+  }, [place.id]);
   return <section className="mb-6" aria-labelledby="business-map-title">
     <h3 id="business-map-title" className="mb-3 text-[18px] font-bold text-white">Mapa</h3>
     <BusinessMapCanvas place={place} />

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUpRight, Bookmark, MapPin, Plus, Star, Store } from 'lucide-react';
-import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import CornerKit, { type SquircleConfig } from '@cornerkit/core';
 import { mockPlaces } from '../data';
 import type { Place } from '../types';
@@ -14,6 +14,16 @@ const cornerKit = new CornerKit();
 const feedCorners: SquircleConfig = { radius: 28, smoothing: 1 };
 const adClient = 'ca-pub-7029279570287128';
 const overviewStorageKey = (placeId: string) => `puntonochi-ai-overview-v2:${placeId}`;
+type DayPhotoPost = { id: string; caption: string; createdAt: string; imageUrl: string };
+
+function CommunityDayPhotoCard({ post }: { post: DayPhotoPost }) {
+  return <motion.article data-explore-squircle className="relative isolate aspect-[9/16] w-full snap-start [scroll-snap-stop:always] overflow-hidden rounded-[28px] bg-[#1a1b1e]">
+    <img src={post.imageUrl} alt="" loading="lazy" decoding="async" fetchPriority="low" className="absolute inset-0 h-full w-full object-cover" />
+    <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/80" />
+    <div className="absolute inset-x-0 top-0 flex items-center justify-between p-5"><span className="bg-black/40 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur">Foto de la comunidad</span><time className="text-xs font-medium text-white/80">{new Date(post.createdAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}</time></div>
+    {post.caption && <p className="absolute inset-x-0 bottom-0 line-clamp-5 p-5 text-[15px] font-medium leading-relaxed text-white">{post.caption}</p>}
+  </motion.article>;
+}
 
 function OverviewIcon() {
   return <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-blue-300" fill="currentColor">
@@ -77,19 +87,14 @@ function ExplorePlaceCard({ place, index, saved, onOpen, onToggleBookmark, reduc
   onToggleBookmark: (place: Place) => void;
   reduceMotion: boolean | null;
 }) {
-  const cardRef = useRef<HTMLElement>(null);
-  const { scrollYProgress } = useScroll({ target: cardRef, offset: ['start end', 'end start'] });
-  const imageY = useTransform(scrollYProgress, [0, 1], [8, -8]);
-  const imageScale = useTransform(scrollYProgress, [0, 0.5, 1], [1.07, 1.12, 1.07]);
   const image = place.images[0];
 
-  return <motion.article ref={cardRef} data-explore-squircle className="snap-start [scroll-snap-stop:always] relative isolate aspect-[9/16] w-full overflow-hidden rounded-[28px] bg-[#1a1b1e] shadow-xl shadow-black/25" initial={reduceMotion ? false : { opacity: 0, y: 20, scale: 0.985 }} whileInView={{ opacity: 1, y: 0, scale: 1 }} viewport={{ once: true, amount: 0.08 }} transition={{ type: 'spring', damping: 27, stiffness: 165, mass: 0.85 }}>
-    <img src={image} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full scale-125 object-cover opacity-55 blur-3xl" />
+  return <motion.article data-explore-squircle style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 760px' }} className="snap-start [scroll-snap-stop:always] relative isolate aspect-[9/16] w-full overflow-hidden rounded-[28px] bg-[#1a1b1e] shadow-xl shadow-black/25" initial={reduceMotion ? false : { opacity: 0, y: 20, scale: 0.985 }} whileInView={{ opacity: 1, y: 0, scale: 1 }} viewport={{ once: true, amount: 0.08 }} transition={{ type: 'spring', damping: 27, stiffness: 165, mass: 0.85 }}>
     <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.03)_0%,rgba(10,11,13,0.16)_44%,rgba(17,18,20,0.76)_100%)]" />
     <button type="button" onClick={() => onOpen(place)} aria-label={`Abrir ${place.name}`} className="absolute inset-0 z-[1] cursor-pointer" />
     <div className="absolute inset-x-0 top-0 z-[2] p-2.5">
       <div data-explore-squircle className="relative aspect-video overflow-hidden rounded-[24px] bg-black/30 shadow-lg shadow-black/20">
-        <motion.img src={image} alt={`${place.name} en Nochistlán`} loading={index < 2 ? 'eager' : 'lazy'} style={{ y: reduceMotion ? 0 : imageY, scale: reduceMotion ? 1.07 : imageScale }} className="h-full w-full object-cover" />
+        <img src={image} alt={`${place.name} en Nochistlán`} loading={index < 3 ? 'eager' : 'lazy'} fetchPriority={index === 0 ? 'high' : 'auto'} decoding="async" className="h-full w-full scale-[1.07] object-cover" />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-white/[0.06]" />
       </div>
     </div>
@@ -109,19 +114,30 @@ function FeedAd() {
   useEffect(() => {
     const ad = adRef.current;
     if (!ad || ad.dataset.initialized) return;
-    ad.dataset.initialized = 'true';
-    try {
-      const adsWindow = window as Window & { adsbygoogle?: unknown[] };
-      adsWindow.adsbygoogle = adsWindow.adsbygoogle || [];
-      adsWindow.adsbygoogle.push({});
-    } catch (error) {
-      console.error('AdSense feed unit could not be initialized.', error);
-    }
+    let active = true;
+    const initialize = () => {
+      if (!active || ad.dataset.initialized) return;
+      ad.dataset.initialized = 'true';
+      try {
+        const adsWindow = window as Window & { adsbygoogle?: unknown[] };
+        adsWindow.adsbygoogle = adsWindow.adsbygoogle || [];
+        adsWindow.adsbygoogle.push({});
+      } catch (error) {
+        console.error('AdSense feed unit could not be initialized.', error);
+      }
+    };
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        observer.disconnect();
+        initialize();
+      }
+    }, { rootMargin: '600px 0px' });
+    observer.observe(ad);
+    return () => { active = false; observer.disconnect(); };
   }, []);
-  return <div data-explore-squircle className="relative isolate my-0 snap-start [scroll-snap-stop:always] aspect-[9/16] w-full overflow-hidden rounded-[28px] bg-[#1a1b1e] shadow-xl shadow-black/25" aria-label="Publicidad">
-    <img src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=900&q=80" alt="" aria-hidden="true" className="absolute inset-0 h-full w-full scale-125 object-cover opacity-25 blur-3xl" />
+  return <div data-explore-squircle style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 760px' }} className="relative isolate my-0 snap-start [scroll-snap-stop:always] aspect-[9/16] w-full overflow-hidden rounded-[28px] bg-[#1a1b1e] shadow-xl shadow-black/25" aria-label="Publicidad">
     <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.12)_0%,rgba(10,11,13,0.32)_44%,rgba(17,18,20,0.92)_100%)]" />
-    <div className="absolute inset-x-0 top-0 z-[1] p-2.5" aria-hidden="true"><div data-explore-squircle className="relative aspect-video overflow-hidden rounded-[24px] bg-[#25272a]"><img src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=900&q=80" alt="" className="h-full w-full animate-pulse object-cover opacity-55"/><div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent"/></div></div>
+    <div className="absolute inset-x-0 top-0 z-[1] p-2.5" aria-hidden="true"><div data-explore-squircle className="relative aspect-video overflow-hidden rounded-[24px] bg-[#25272a]"><div className="h-full w-full animate-pulse bg-[linear-gradient(120deg,#27292d,#3a3d42,#27292d)]"/><div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent"/></div></div>
     <div className="absolute right-5 top-5 z-[2] rounded-full bg-black/45 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/75 backdrop-blur-md">Anuncio</div>
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] flex h-[68%] flex-col items-start justify-start p-5 pt-7" aria-hidden="true"><span className="mb-3 h-6 w-20 animate-pulse rounded-full bg-white/[0.12]"/><span className="h-7 w-[82%] animate-pulse rounded-full bg-white/[0.12]"/><span className="mt-2 h-7 w-[58%] animate-pulse rounded-full bg-white/[0.09]"/><span className="mt-4 h-4 w-[90%] animate-pulse rounded-full bg-white/[0.08]"/><span className="mt-2 h-4 w-[72%] animate-pulse rounded-full bg-white/[0.07]"/><span className="mt-4 w-full border-t border-white/15 pt-3"><span className="block h-3 w-24 animate-pulse rounded-full bg-white/[0.08]"/></span><span className="mt-4 h-3 w-[92%] animate-pulse rounded-full bg-white/[0.07]"/><span className="mt-2 h-3 w-[68%] animate-pulse rounded-full bg-white/[0.06]"/></div>
     <ins ref={adRef} data-explore-feed-ad className="adsbygoogle absolute inset-0 z-[3] block h-full w-full" style={{ display: 'block', height: '100%' }} data-ad-format="fluid" data-ad-layout-key="-6t+ed+2i-1n-4w" data-ad-client={adClient} data-ad-slot="7895105729" />
@@ -129,7 +145,7 @@ function FeedAd() {
 }
 
 function PromoteBusinessCard({ onClick }: { onClick: () => void }) {
-  return <button type="button" onClick={onClick} data-explore-squircle className="relative isolate my-0 snap-start [scroll-snap-stop:always] aspect-[9/16] w-full overflow-hidden rounded-[28px] bg-[#1a1b1e] text-left text-white shadow-xl shadow-black/25 active:scale-[0.99] transition-transform">
+  return <button type="button" onClick={onClick} data-explore-squircle style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 760px' }} className="relative isolate my-0 snap-start [scroll-snap-stop:always] aspect-[9/16] w-full overflow-hidden rounded-[28px] bg-[#1a1b1e] text-left text-white shadow-xl shadow-black/25 active:scale-[0.99] transition-transform">
     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_65%_20%,rgba(44,117,226,.45),transparent_45%),linear-gradient(155deg,#283244_0%,#202226_52%,#111214_100%)]" />
     <div className="absolute inset-x-0 top-0 z-[1] p-2.5"><div data-explore-squircle className="relative flex aspect-video items-center justify-center overflow-hidden rounded-[24px] bg-[linear-gradient(145deg,#374967,#242a34_56%,#18202d)]"><div className="absolute -right-8 -top-12 h-40 w-40 rounded-full bg-blue-400/25 blur-3xl"/><span className="relative flex h-20 w-20 items-center justify-center rounded-[26px] bg-white/10 text-blue-100 backdrop-blur-sm"><Store className="h-10 w-10"/></span></div></div>
     <div className="absolute right-5 top-5 z-[2] rounded-full bg-black/35 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/80 backdrop-blur-md">Para negocios</div>
@@ -140,12 +156,22 @@ function PromoteBusinessCard({ onClick }: { onClick: () => void }) {
 export function DiscoverPage({ onSelectBusiness }: { onSelectBusiness: (place: Place) => void }) {
   const [showPromotion, setShowPromotion] = useState(false);
   const [showCreateFlow, setShowCreateFlow] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
+  const [showProfile, setShowProfile] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.has('accountAuth') || params.has('accountAuthError');
+  });
   const [feedVersion, setFeedVersion] = useState(0);
+  const [dayPosts, setDayPosts] = useState<DayPhotoPost[]>([]);
   const [bookmarkIds, setBookmarkIds] = useState<string[]>(getBookmarkedPlaceIds);
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
+    let active = true;
+    const loadDayPosts = () => fetch('/api/community-posts/day').then(async (response) => {
+      if (!response.ok) return [];
+      const result: unknown = await response.json();
+      return Array.isArray(result) ? result as DayPhotoPost[] : [];
+    }).then((posts) => { if (active) setDayPosts(posts); }).catch(() => undefined);
     const refreshFeed = (event?: Event) => {
       const detail = (event as CustomEvent<{ placeId?: string; imageUrl?: string }> | undefined)?.detail;
       if (detail?.placeId && detail.imageUrl) {
@@ -153,13 +179,16 @@ export function DiscoverPage({ onSelectBusiness }: { onSelectBusiness: (place: P
         if (place && !place.images.includes(detail.imageUrl)) place.images = [...place.images, detail.imageUrl];
       }
       setFeedVersion((version) => version + 1);
+      void loadDayPosts();
     };
     const refreshBookmarks = () => setBookmarkIds(getBookmarkedPlaceIds());
     window.addEventListener('community-post-published', refreshFeed);
     window.addEventListener('business-directory-updated', refreshFeed);
     window.addEventListener('puntonochi-bookmarks-updated', refreshBookmarks);
     window.addEventListener('storage', refreshBookmarks);
+    void loadDayPosts();
     return () => {
+      active = false;
       window.removeEventListener('community-post-published', refreshFeed);
       window.removeEventListener('business-directory-updated', refreshFeed);
       window.removeEventListener('puntonochi-bookmarks-updated', refreshBookmarks);
@@ -170,8 +199,9 @@ export function DiscoverPage({ onSelectBusiness }: { onSelectBusiness: (place: P
   const places = useMemo(() => mockPlaces.filter((place) => place.images?.[0]), [feedVersion]);
 
   useEffect(() => {
-    cornerKit.applyAll('[data-explore-squircle]', feedCorners);
-  }, [places, bookmarkIds]);
+    const frame = window.requestAnimationFrame(() => cornerKit.applyAll('[data-explore-squircle]', feedCorners));
+    return () => window.cancelAnimationFrame(frame);
+  }, [places, dayPosts]);
 
   const toggleBookmark = (place: Place) => {
     const next = bookmarkIds.includes(place.id) ? bookmarkIds.filter((id) => id !== place.id) : [...bookmarkIds, place.id];
@@ -192,6 +222,7 @@ export function DiscoverPage({ onSelectBusiness }: { onSelectBusiness: (place: P
     </header>
 
     <div className="mx-auto flex max-w-[460px] flex-col gap-2 [scroll-behavior:smooth]">
+      {dayPosts.map((post) => <CommunityDayPhotoCard key={`${post.id}-${feedVersion}`} post={post} />)}
       {places.map((place, index) => {
         const saved = bookmarkIds.includes(place.id);
         return <Fragment key={`${place.id}-${feedVersion}`}>

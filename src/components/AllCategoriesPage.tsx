@@ -2,8 +2,14 @@ import { motion } from 'motion/react';
 import { ChevronLeft } from 'lucide-react';
 import { Category } from '../types';
 import { categories, mockPlaces } from '../data';
+import { SearchBar } from './SearchPage';
 
-export function AllCategoriesPage({ onClose, onSelectCategory }: { onClose: () => void, onSelectCategory: (cat: Category) => void }) {
+export function AllCategoriesPage({ onClose, onSelectCategory, query, onQueryChange }: { onClose: () => void, onSelectCategory: (cat: Category) => void, query: string, onQueryChange: (query: string) => void }) {
+  const normalizedQuery = query.trim().toLocaleLowerCase('es');
+  const matchingCategories = categories.filter((category) => {
+    if (!normalizedQuery || category.name.toLocaleLowerCase('es').includes(normalizedQuery)) return true;
+    return mockPlaces.some((place) => place.category === category.name && [place.name, place.subtitle, place.location, place.address].filter(Boolean).join(' ').toLocaleLowerCase('es').includes(normalizedQuery));
+  });
   return (
     <motion.div 
       initial={{ opacity: 0, scale: 0.96 }}
@@ -23,8 +29,9 @@ export function AllCategoriesPage({ onClose, onSelectCategory }: { onClose: () =
       </div>
 
       <div className="p-5 pb-32">
+        <SearchBar value={query} onChange={onQueryChange} className="mb-5" />
         <div className="grid grid-cols-2 gap-4">
-          {categories.map((cat) => {
+          {matchingCategories.map((cat) => {
             const itemCount = mockPlaces.filter(p => p.category === cat.name).length;
             return (
               <div 
@@ -47,6 +54,7 @@ export function AllCategoriesPage({ onClose, onSelectCategory }: { onClose: () =
             );
           })}
         </div>
+        {normalizedQuery && matchingCategories.length === 0 && <p className="py-12 text-center text-sm text-neutral-500">No hay categorías o negocios que coincidan con “{query}”.</p>}
       </div>
     </motion.div>
   );

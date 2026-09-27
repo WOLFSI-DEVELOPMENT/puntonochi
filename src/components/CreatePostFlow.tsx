@@ -8,6 +8,7 @@ import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 import CornerKit from '@cornerkit/core';
 
 type FlowStep = 'choice' | 'camera' | 'preview' | 'compose' | 'published';
+type PostType = 'business' | 'day';
 type CameraRatio = '16:9' | '1:1' | '9:16';
 const createCorners = new CornerKit();
 
@@ -17,6 +18,7 @@ export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => 
   const photoPickerRef = useRef<HTMLInputElement>(null);
   const coverPickerRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<FlowStep>('choice');
+  const [postType, setPostType] = useState<PostType>('business');
   const [cameraRatio, setCameraRatio] = useState<CameraRatio>('9:16');
   const [cameraError, setCameraError] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
@@ -159,8 +161,12 @@ export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => 
 
   const publish = async () => {
     if (!photo || isPublishing) return;
-    if (!selectedPlace) {
+    if (postType === 'business' && !selectedPlace) {
       setShowPlacePicker(true);
+      return;
+    }
+    if (postType === 'day' && !caption.trim()) {
+      setPublishError('Escribe una descripción para tu foto.');
       return;
     }
     setIsPublishing(true);
@@ -169,7 +175,7 @@ export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => 
     try {
       const draftResponse = await apiFetch('/api/community-posts', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ placeId: selectedPlace.id, placeName: selectedPlace.name, caption: caption.trim() }),
+        body: JSON.stringify({ postType, placeId: selectedPlace?.id, placeName: selectedPlace?.name, caption: caption.trim() }),
       });
       const draft = await draftResponse.json().catch(() => ({}));
       if (!draftResponse.ok || typeof draft.id !== 'string') throw new Error(draft.error || 'No se pudo crear la publicación.');
@@ -180,10 +186,10 @@ export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => 
       const published = await publishResponse.json().catch(() => ({}));
       if (!publishResponse.ok) throw new Error(published.error || 'No se pudo publicar la imagen.');
       const imageUrl = String(published.imageUrl || '');
-      const business = mockPlaces.find((place) => place.id === selectedPlace.id);
+      const business = selectedPlace ? mockPlaces.find((place) => place.id === selectedPlace.id) : null;
       if (business && imageUrl && !business.images.includes(imageUrl)) business.images = [...business.images, imageUrl];
       window.dispatchEvent(new CustomEvent('community-post-published', {
-        detail: { id: postId, placeId: selectedPlace.id, placeName: selectedPlace.name, imageUrl, coverUrl: cover !== photo ? published.coverUrl : imageUrl, caption: caption.trim() },
+        detail: { id: postId, postType, placeId: selectedPlace?.id, placeName: selectedPlace?.name, imageUrl, coverUrl: cover !== photo ? published.coverUrl : imageUrl, caption: caption.trim() },
       }));
       setStep('published');
     } catch (error) {
@@ -206,7 +212,8 @@ export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => 
         <h1 className="text-3xl font-bold tracking-tight">¿Qué quieres compartir?</h1>
         <p className="mt-2 text-sm leading-relaxed text-white/55">Elige cómo quieres participar en la comunidad.</p>
         <div className="mt-7 space-y-3">
-          <button type="button" data-create-choice-card onClick={() => setStep('camera')} className="flex w-full items-center gap-4 rounded-[28px] bg-[#292a2d] p-5 text-left transition-colors active:bg-[#343539] [corner-shape:squircle]"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10"><Camera className="h-6 w-6"/></span><span className="min-w-0 flex-1"><span className="block text-lg font-bold">Publicar una foto</span><span className="mt-1 block text-sm leading-relaxed text-white/50">Comparte una imagen con la comunidad, como en tus redes sociales.</span></span><ArrowLeft className="h-5 w-5 rotate-180 text-white/40"/></button>
+          <button type="button" data-create-choice-card onClick={() => { setPostType('business'); setStep('camera'); }} className="flex w-full items-center gap-4 rounded-[28px] bg-[#292a2d] p-5 text-left transition-colors active:bg-[#343539] [corner-shape:squircle]"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10"><Camera className="h-6 w-6"/></span><span className="min-w-0 flex-1"><span className="block text-lg font-bold">Publicar una foto</span><span className="mt-1 block text-sm leading-relaxed text-white/50">Comparte una imagen relacionada con un negocio.</span></span><ArrowLeft className="h-5 w-5 rotate-180 text-white/40"/></button>
+          <button type="button" data-create-choice-card onClick={() => { setPostType('day'); setSelectedPlace(null); setStep('camera'); }} className="flex w-full items-center gap-4 rounded-[28px] bg-[#292a2d] p-5 text-left transition-colors active:bg-[#343539] [corner-shape:squircle]"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10"><Images className="h-6 w-6"/></span><span className="min-w-0 flex-1"><span className="block text-lg font-bold">Una foto de mi día</span><span className="mt-1 block text-sm leading-relaxed text-white/50">Publica un momento de Nochistlán con una breve descripción, sin elegir negocio.</span></span><ArrowLeft className="h-5 w-5 rotate-180 text-white/40"/></button>
           <button type="button" data-create-choice-card onClick={onPromoteBusiness} className="flex w-full items-center gap-4 rounded-[28px] bg-[#292a2d] p-5 text-left transition-colors active:bg-[#343539] [corner-shape:squircle]"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10"><Megaphone className="h-6 w-6"/></span><span className="min-w-0 flex-1"><span className="block text-lg font-bold">Promocionar un negocio</span><span className="mt-1 block text-sm leading-relaxed text-white/50">Solicita una promoción para que más personas descubran un negocio local.</span></span><ArrowLeft className="h-5 w-5 rotate-180 text-white/40"/></button>
         </div>
       </div>}
@@ -236,22 +243,22 @@ export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => 
       </div>}
 
       {step === 'compose' && <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-[620px] flex-col px-5 pb-7 pt-5">
-        <div className="flex items-center"><button type="button" onClick={() => setStep('preview')} className="rounded-full bg-[#292929] px-4 py-2.5 text-sm font-semibold"><ArrowLeft className="mr-2 inline h-4 w-4" />Volver</button><h1 className="ml-4 text-lg font-bold">Nueva publicación</h1></div>
+        <div className="flex items-center"><button type="button" onClick={() => setStep('preview')} className="rounded-full bg-[#292929] px-4 py-2.5 text-sm font-semibold"><ArrowLeft className="mr-2 inline h-4 w-4" />Volver</button><h1 className="ml-4 text-lg font-bold">{postType === 'day' ? 'Foto de mi día' : 'Nueva publicación'}</h1></div>
         <div className="flex-1 overflow-y-auto pb-6 pt-5">
-          <div className="flex gap-3 rounded-[28px] bg-[#202020] p-3">
+          {postType === 'business' && <div className="flex gap-3 rounded-[28px] bg-[#202020] p-3">
             <img src={cover || photo} alt="Portada de publicación" className="aspect-[4/5] w-28 rounded-[21px] object-cover [corner-shape:squircle]" />
             <div className="flex min-w-0 flex-1 flex-col items-start justify-center"><p className="text-sm font-bold">Portada</p><p className="mt-1 text-xs leading-relaxed text-white/50">Usaremos tu foto automáticamente o elige otra imagen.</p><button type="button" onClick={() => coverPickerRef.current?.click()} className="mt-3 rounded-full bg-[#353535] px-4 py-2 text-xs font-semibold">Elegir portada</button><input ref={coverPickerRef} type="file" accept="image/*" className="hidden" onChange={(event) => onFile(event, true)} /></div>
-          </div>
-          <label className="mt-5 block"><span className="mb-2 block text-sm font-semibold">Detalles</span><textarea value={caption} onChange={(event) => setCaption(event.target.value)} maxLength={400} rows={4} placeholder="Cuéntale a la comunidad qué te gustó…" className="w-full resize-none rounded-[24px] bg-[#202020] px-4 py-4 text-sm text-white outline-none placeholder:text-white/35 focus:ring-1 focus:ring-white/20" /><span className="mt-1 block text-right text-xs text-white/35">{caption.length}/400</span></label>
-          <button type="button" onClick={() => setShowPlacePicker(true)} className="mt-5 flex w-full items-center justify-between rounded-full bg-[#202020] px-5 py-4 text-left">
+          </div>}
+          <label className={`${postType === 'business' ? 'mt-5' : ''} block`}><span className="mb-2 block text-sm font-semibold">{postType === 'day' ? 'Descripción' : 'Detalles'}</span><textarea value={caption} onChange={(event) => setCaption(event.target.value)} required={postType === 'day'} maxLength={400} rows={4} placeholder={postType === 'day' ? 'Describe este momento…' : 'Cuéntale a la comunidad qué te gustó…'} className="w-full resize-none rounded-[24px] bg-[#202020] px-4 py-4 text-sm text-white outline-none placeholder:text-white/35 focus:ring-1 focus:ring-white/20" /><span className="mt-1 block text-right text-xs text-white/35">{caption.length}/400</span></label>
+          {postType === 'business' && <button type="button" onClick={() => setShowPlacePicker(true)} className="mt-5 flex w-full items-center justify-between rounded-full bg-[#202020] px-5 py-4 text-left">
             <span><span className="block text-xs text-white/45">Este lugar pertenece a</span><span className="mt-1 block text-sm font-semibold">{selectedPlace?.name || 'Selecciona un negocio'}</span></span><span className="text-sm text-white/65">{selectedPlace ? 'Cambiar' : 'Elegir'}</span>
-          </button>
+          </button>}
         </div>
         {publishError && <p role="alert" className="mb-3 text-center text-sm text-red-300">{publishError}</p>}
         <button type="button" onClick={() => void publish()} disabled={isPublishing} style={{ backgroundColor: '#ffffff', color: '#000000' }} className="flex w-full items-center justify-center gap-2 rounded-full !bg-white py-3.5 text-[15px] font-bold !text-black disabled:opacity-70">{isPublishing && <LoaderCircle className="h-4 w-4 animate-spin" />}{isPublishing ? 'Publicando…' : 'Publicar'}</button>
       </div>}
 
-      {step === 'published' && <div className="relative z-10 flex min-h-[100dvh] flex-col items-center justify-center px-7 text-center"><div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-black"><Check className="h-8 w-8" /></div><h2 className="mt-5 text-2xl font-bold">¡Publicado!</h2><p className="mt-2 text-sm text-white/55">La imagen ya aparece en Explorar y en las fotos de {selectedPlace?.name}.</p><button type="button" onClick={onClose} style={{ backgroundColor: '#ffffff', color: '#000000' }} className="mt-7 rounded-full !bg-white px-8 py-3 text-sm font-bold !text-black">Listo</button></div>}
+      {step === 'published' && <div className="relative z-10 flex min-h-[100dvh] flex-col items-center justify-center px-7 text-center"><div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-black"><Check className="h-8 w-8" /></div><h2 className="mt-5 text-2xl font-bold">¡Publicado!</h2><p className="mt-2 text-sm text-white/55">{postType === 'day' ? 'Tu foto ya aparece en Explorar para toda la comunidad.' : `La imagen ya aparece en Explorar y en las fotos de ${selectedPlace?.name}.`}</p><button type="button" onClick={onClose} style={{ backgroundColor: '#ffffff', color: '#000000' }} className="mt-7 rounded-full !bg-white px-8 py-3 text-sm font-bold !text-black">Listo</button></div>}
 
       <AnimatePresence>
         {showPlacePicker && <>

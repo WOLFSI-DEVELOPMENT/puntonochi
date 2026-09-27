@@ -35,6 +35,9 @@ const requireNeon = (req, res, next) => {
 const ADMIN_COOKIE = 'puntonochi_admin';
 const ADMIN_OAUTH_STATE_COOKIE = 'puntonochi_admin_oauth_state';
 const ADMIN_SESSION_TTL_SECONDS = 8 * 60 * 60;
+const ACCOUNT_COOKIE = 'puntonochi_account';
+const ACCOUNT_OAUTH_STATE_COOKIE = 'puntonochi_account_oauth_state';
+const ACCOUNT_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 const ADMIN_EMAIL_ALLOWLIST = new Set([
   'survivalcreativeminecraftadven@gmail.com',
   'rocioramire1976@gmail.com',
@@ -46,6 +49,46 @@ const getGoogleOAuthClient = (req) => new OAuth2Client(
   process.env.GOOGLE_CLIENT_SECRET,
   getOAuthRedirectUri(req),
 );
+const getAccountOAuthRedirectUri = (req) => `${req.protocol}://${req.get('host')}/api/account/oauth/callback`;
+const getAccountGoogleOAuthClient = (req) => new OAuth2Client(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  getAccountOAuthRedirectUri(req),
+);
+let accountSchemaReady;
+const ensureAccountSchema = () => {
+  if (!sql) throw new Error('DATABASE_URL is not configured.');
+  if (!accountSchemaReady) accountSchemaReady = (async () => {
+    await sql`CREATE TABLE IF NOT EXISTS user_accounts (
+      google_sub TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      picture_url TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+    await sql`CREATE INDEX IF NOT EXISTS user_accounts_email_idx ON user_accounts (LOWER(email))`;
+    await sql`CREATE TABLE IF NOT EXISTS user_account_sessions (
+      token_hash TEXT PRIMARY KEY,
+      google_sub TEXT NOT NULL REFERENCES user_accounts(google_sub) ON DELETE CASCADE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+    await sql`CREATE INDEX IF NOT EXISTS user_account_sessions_expiry_idx ON user_account_sessions (expires_at)`;
+  })().catch((error) => { accountSchemaReady = undefined; throw error; });
+  return accountSchemaReady;
+};
+const getAccountSession = async (req) => {
+  if (!sql) return null;
+  await ensureAccountSchema();
+  const token = getCookieValue(req, ACCOUNT_COOKIE);
+  if (!token) return null;
+  const [account] = await sql`SELECT account.google_sub AS id, account.display_name AS name, account.email, account.picture_url AS picture
+    FROM user_account_sessions AS session
+    JOIN user_accounts AS account ON account.google_sub = session.google_sub
+    WHERE session.token_hash = ${hashAdminSessionToken(token)} AND session.expires_at > NOW()`;
+  return account || null;
+};
 let adminSessionSchemaReady;
 const ensureAdminSessionSchema = () => {
   if (!sql) throw new Error('DATABASE_URL is not configured.');
@@ -222,6 +265,97 @@ app.post('/api/admin/logout', (req, res) => {
   });
 });
 
+app.get('/api/account/session', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    const configured = Boolean(sql && isGoogleOAuthConfigured());
+    const account = configured ? await getAccountSession(req) : null;
+    res.json({ configured, authenticated: Boolean(account), account: account || null });
+  } catch (error) {
+    console.error('Account session lookup failed:', error);
+    res.status(503).json({ configured: false, authenticated: false, account: null, error: 'No se pudo comprobar la cuenta.' });
+  }
+});
+
+app.get('/api/account/oauth/start', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!sql || !isGoogleOAuthConfigured()) return res.status(503).send('Configura DATABASE_URL, GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en el servidor.');
+  try { await ensureAccountSchema(); } catch (error) {
+    console.error('Account OAuth could not initialize account storage:', error);
+    return res.status(503).send('No se pudo conectar con Neon para iniciar sesión.');
+  }
+  const mode = req.query.mode === 'login' ? 'login' : 'signup';
+  const state = `${mode}.${randomBytes(32).toString('base64url')}`;
+  const secure = process.env.NODE_ENV === 'production' || req.secure;
+  res.cookie(ACCOUNT_OAUTH_STATE_COOKIE, state, { httpOnly: true, secure, sameSite: 'lax', path: '/api/account/oauth', maxAge: 10 * 60 * 1000 });
+  res.redirect(getAccountGoogleOAuthClient(req).generateAuthUrl({
+    response_type: 'code',
+    scope: ['openid', 'email', 'profile'],
+    state,
+    prompt: 'select_account',
+  }));
+});
+
+app.get('/api/account/oauth/callback', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const secure = process.env.NODE_ENV === 'production' || req.secure;
+  const clearStateCookie = `${ACCOUNT_OAUTH_STATE_COOKIE}=; HttpOnly; Path=/api/account/oauth; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`;
+  const redirectWithError = (error) => res.setHeader('Set-Cookie', clearStateCookie).redirect(`/explorar?accountAuthError=${encodeURIComponent(error)}`);
+  if (!sql || !isGoogleOAuthConfigured()) return redirectWithError('Configura Google OAuth en el servidor.');
+  const code = typeof req.query.code === 'string' ? req.query.code : '';
+  const stateCookie = getCookieValue(req, ACCOUNT_OAUTH_STATE_COOKIE);
+  const state = typeof req.query.state === 'string' ? req.query.state : '';
+  if (!code || !stateCookie || stateCookie !== state || !/^(signup|login)\.[A-Za-z0-9_-]{32,}$/.test(state)) return redirectWithError('No se pudo validar la sesión de Google. Intenta otra vez.');
+  try {
+    await ensureAccountSchema();
+    const { tokens } = await getAccountGoogleOAuthClient(req).getToken(code);
+    if (!tokens.id_token) return redirectWithError('Google no devolvió una identidad válida.');
+    const ticket = await getAccountGoogleOAuthClient(req).verifyIdToken({ idToken: tokens.id_token, audience: process.env.GOOGLE_CLIENT_ID });
+    const payload = ticket.getPayload();
+    const googleSub = payload?.sub;
+    const email = payload?.email?.trim().toLowerCase();
+    const name = payload?.name?.trim();
+    const picture = parseImageUrl(payload?.picture);
+    if (!googleSub || !email || payload?.email_verified !== true || !name) return redirectWithError('Google no devolvió un perfil verificado.');
+    const [existing] = await sql`SELECT google_sub FROM user_accounts WHERE google_sub = ${googleSub}`;
+    const mode = state.slice(0, state.indexOf('.'));
+    if (mode === 'login' && !existing) return redirectWithError('No encontramos una cuenta con este Google. Crea una cuenta primero.');
+    await sql`INSERT INTO user_accounts (google_sub, email, display_name, picture_url)
+      VALUES (${googleSub}, ${email}, ${name}, ${picture})
+      ON CONFLICT (google_sub) DO UPDATE SET email = EXCLUDED.email, display_name = EXCLUDED.display_name,
+        picture_url = EXCLUDED.picture_url, updated_at = NOW()`;
+    const token = randomBytes(32).toString('base64url');
+    await sql`INSERT INTO user_account_sessions (token_hash, google_sub, expires_at)
+      VALUES (${hashAdminSessionToken(token)}, ${googleSub}, NOW() + (${ACCOUNT_SESSION_TTL_SECONDS} * INTERVAL '1 second'))`;
+    res.setHeader('Set-Cookie', [
+      `${ACCOUNT_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${ACCOUNT_SESSION_TTL_SECONDS}${secure ? '; Secure' : ''}`,
+      clearStateCookie,
+    ]);
+    res.redirect(`/explorar?accountAuth=${existing ? 'signed-in' : 'created'}`);
+  } catch (error) {
+    console.error('Google account OAuth callback failed:', error);
+    redirectWithError('No se pudo completar el inicio con Google. Intenta otra vez.');
+  }
+});
+
+app.post('/api/account/logout', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!ensureSameOrigin(req, res)) return;
+  const secure = process.env.NODE_ENV === 'production' || req.secure;
+  const token = getCookieValue(req, ACCOUNT_COOKIE);
+  try {
+    if (token && sql) {
+      await ensureAccountSchema();
+      await sql`DELETE FROM user_account_sessions WHERE token_hash = ${hashAdminSessionToken(token)}`;
+    }
+    res.setHeader('Set-Cookie', `${ACCOUNT_COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`);
+    res.json({ authenticated: false });
+  } catch (error) {
+    console.error('Account session could not be cleared:', error);
+    res.status(500).json({ error: 'No se pudo cerrar la sesión.' });
+  }
+});
+
 let directorySchemaReady;
 const requestedCategories = [
   ['comida', 'Comida', '🍽️', 'bg-card-orange'],
@@ -339,8 +473,9 @@ const ensureSubmissionSchema = () => {
     await sql`ALTER TABLE promotion_orders ADD COLUMN IF NOT EXISTS contact_email TEXT NOT NULL DEFAULT ''`;
     await sql`CREATE TABLE IF NOT EXISTS community_posts (
       id TEXT PRIMARY KEY,
-      place_id TEXT NOT NULL,
-      place_name TEXT NOT NULL,
+      place_id TEXT,
+      place_name TEXT,
+      post_type TEXT NOT NULL DEFAULT 'business' CHECK (post_type IN ('business', 'day')),
       caption TEXT NOT NULL DEFAULT '',
       image_key TEXT,
       cover_key TEXT,
@@ -349,6 +484,9 @@ const ensureSubmissionSchema = () => {
       status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
+    await sql`ALTER TABLE community_posts ALTER COLUMN place_id DROP NOT NULL`;
+    await sql`ALTER TABLE community_posts ALTER COLUMN place_name DROP NOT NULL`;
+    await sql`ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS post_type TEXT NOT NULL DEFAULT 'business' CHECK (post_type IN ('business', 'day'))`;
     await sql`CREATE TABLE IF NOT EXISTS community_reviews (
       id TEXT PRIMARY KEY,
       place_id TEXT NOT NULL REFERENCES places(id) ON DELETE CASCADE,
@@ -854,15 +992,19 @@ app.get('/api/events/:id', requireNeon, async (req, res) => {
 
 app.post('/api/community-posts', requireNeon, async (req, res) => {
   try {
-    const { placeId, placeName, caption = '' } = req.body || {};
-    if (typeof placeId !== 'string' || !placeId.trim() || typeof placeName !== 'string' || !placeName.trim() || typeof caption !== 'string' || caption.length > 400) {
+    const { placeId, placeName, caption = '', postType = 'business' } = req.body || {};
+    if (!['business', 'day'].includes(postType) || typeof caption !== 'string' || caption.length > 400) {
       return res.status(400).json({ error: 'Selecciona un negocio y revisa los detalles de la publicación.' });
+    }
+    if (postType === 'day' && !caption.trim()) return res.status(400).json({ error: 'Agrega una descripción para tu foto.' });
+    if (postType === 'business' && (typeof placeId !== 'string' || !placeId.trim() || typeof placeName !== 'string' || !placeName.trim())) {
+      return res.status(400).json({ error: 'Selecciona un negocio para esta publicación.' });
     }
     await ensureSubmissionSchema();
     const id = randomUUID();
-    await sql`INSERT INTO community_posts (id, place_id, place_name, caption)
-      VALUES (${id}, ${placeId.trim()}, ${placeName.trim()}, ${caption.trim()})`;
-    res.status(201).json({ id });
+    await sql`INSERT INTO community_posts (id, place_id, place_name, post_type, caption)
+      VALUES (${id}, ${postType === 'business' ? placeId.trim() : null}, ${postType === 'business' ? placeName.trim() : null}, ${postType}, ${caption.trim()})`;
+    res.status(201).json({ id, postType });
   } catch (error) {
     console.error('Community post create failed:', error);
     res.status(500).json({ error: 'No se pudo iniciar la publicación.' });
@@ -906,7 +1048,7 @@ app.post('/api/community-posts/:id/publish', requireNeon, async (req, res) => {
     await ensureSubmissionSchema();
     const [post] = await sql`UPDATE community_posts SET status = 'published'
       WHERE id = ${req.params.id} AND status = 'draft' AND image_key IS NOT NULL
-      RETURNING id, place_id, place_name, caption, created_at`;
+      RETURNING id, place_id, place_name, post_type AS "postType", caption, created_at AS "createdAt"`;
     if (!post) return res.status(404).json({ error: 'No se encontró la publicación o le falta su imagen.' });
     const base = `${req.protocol}://${req.get('host')}`;
     res.json({ ...post, imageUrl: `${base}/api/community-posts/${post.id}/image`, coverUrl: `${base}/api/community-posts/${post.id}/cover` });
@@ -928,6 +1070,20 @@ app.delete('/api/community-posts/:id', requireNeon, async (req, res) => {
   } catch (error) {
     console.error('Community post draft cleanup failed:', error);
     res.status(500).json({ error: 'No se pudo limpiar el borrador.' });
+  }
+});
+
+app.get('/api/community-posts/day', requireNeon, async (req, res) => {
+  try {
+    await ensureSubmissionSchema();
+    const posts = await sql`SELECT id, caption, created_at AS "createdAt" FROM community_posts
+      WHERE status = 'published' AND post_type = 'day' ORDER BY created_at DESC LIMIT 20`;
+    const base = `${req.protocol}://${req.get('host')}`;
+    res.set('Cache-Control', 'no-store');
+    res.json(posts.map((post) => ({ ...post, imageUrl: `${base}/api/community-posts/${post.id}/image`, coverUrl: `${base}/api/community-posts/${post.id}/cover` })));
+  } catch (error) {
+    console.error('Could not load community day photos:', error);
+    res.status(500).json({ error: 'No se pudieron cargar las fotos de la comunidad.' });
   }
 });
 

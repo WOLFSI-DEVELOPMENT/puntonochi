@@ -31,6 +31,7 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [showMenuModal, setShowMenuModal] = useState(false);
   const [showCommunityActions, setShowCommunityActions] = useState(false);
+  const [communityReviewMode, setCommunityReviewMode] = useState<'menu' | 'reviews'>('menu');
   const [shareFeedback, setShareFeedback] = useState('');
   const businessUrl = `${window.location.origin}/place/${encodeURIComponent(place.id)}`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=176x176&margin=8&data=${encodeURIComponent(businessUrl)}`;
@@ -74,6 +75,13 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
       return order.indexOf(a.toLocaleLowerCase('es')) - order.indexOf(b.toLocaleLowerCase('es'));
     }).map(([day, schedule]) => `${day}: ${schedule.closed ? 'Cerrado' : schedule.intervals.map(({ open, close }) => `${formatTime(open)}–${formatTime(close)}`).join(', ') || 'Horario no disponible'}`)
     : [];
+  const reviewSamples = communityReviews.length ? communityReviews : (googleDetails?.reviews || []);
+  const reviewAverage = communityReviews.length
+    ? communityReviews.reduce((sum, review) => sum + review.rating, 0) / communityReviews.length
+    : place.rating || (reviewSamples.length ? reviewSamples.reduce((sum, review) => sum + review.rating, 0) / reviewSamples.length : 0);
+  const reviewTotal = communityReviews.length + (place.reviewCount || 0);
+  const ratingDistribution = [5, 4, 3, 2, 1].map((score) => ({ score, count: reviewSamples.filter((review) => review.rating === score).length }));
+  const maxRatingCount = Math.max(1, ...ratingDistribution.map((item) => item.count));
 
   const copyBusinessLink = async () => {
     try {
@@ -107,9 +115,10 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
     const timer = setTimeout(() => {
       const ck = new CornerKit();
       ck.applyAll('.ck-apply', { radius: 23, smoothing: 1 });
+      ck.applyAll('[data-detail-squircle]', { radius: 24, smoothing: 1 });
     }, 300);
     return () => clearTimeout(timer);
-  }, [place]);
+  }, [place, reviewsLoading, communityReviews.length]);
   const openViewer = (index: number) => setViewerState({ index, direction: 0 });
   const closeViewer = () => setViewerState(null);
 
@@ -238,7 +247,7 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
                   <span className="whitespace-nowrap text-[11px] font-semibold">Sitio</span>
                 </button>;
               })()}
-              <button type="button" onClick={() => setShowCommunityActions(true)} className="flex min-w-[62px] flex-1 snap-start flex-col items-center gap-2 text-white" aria-label="Más opciones">
+              <button type="button" onClick={() => { setCommunityReviewMode('menu'); setShowCommunityActions(true); }} className="flex min-w-[62px] flex-1 snap-start flex-col items-center gap-2 text-white" aria-label="Más opciones">
                 <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#292a2d]"><MoreHorizontal className="h-5 w-5" strokeWidth={1.8}/></span>
                 <span className="whitespace-nowrap text-[11px] font-semibold">Más</span>
               </button>
@@ -246,7 +255,7 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
 
             {/* Info list */}
             <div className="space-y-4 mb-6">
-              <div className="rounded-[18px] bg-[#292a2d] px-4 py-3.5 text-white shadow-sm">
+              <div data-detail-squircle className="rounded-[24px] bg-[#292a2d] px-4 py-3.5 text-white shadow-none">
                 <span className="mb-2 block text-[11px] font-semibold text-white/50">Dirección</span>
                 <div className="flex items-start gap-2.5">
                   <MapPin aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-white/75" />
@@ -269,19 +278,25 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
                     })}
                 </div>
                 {googleDetails?.googleMapsUri && <a href={googleDetails.googleMapsUri} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-[12px] font-medium text-white/55 underline decoration-white/25 underline-offset-2" translate="no">Google Maps</a>}
+                <p className="mt-3 text-[12px] leading-relaxed text-white/45">Tip: Muchos negocios suelen cerrar cerca de las 3:00 p. m. y abrir de nuevo alrededor de las 4:00 p. m.; algunos no vuelven a abrir ese día. Confirma el horario antes de ir.</p>
               </section>
               <section aria-labelledby="community-reviews-title" className="pt-1 text-white">
-                <div className="mb-3 flex items-baseline justify-between gap-3">
-                  <h3 id="community-reviews-title" className="text-[17px] font-bold">Reseñas de la comunidad</h3>
-                  <span className="text-[12px] text-white/45">{communityReviews.length}</span>
+                <div className="mb-3 flex items-baseline justify-between gap-3"><h3 id="community-reviews-title" className="text-[18px] font-bold">Opiniones</h3><span className="text-[12px] text-white/45">{reviewTotal} reseñas</span></div>
+                <div data-detail-squircle className="rounded-[24px] bg-[#202124] p-4">
+                  {reviewsLoading ? <div className="flex gap-5 animate-pulse" role="status" aria-label="Cargando resumen de reseñas"><div className="w-[90px] shrink-0 space-y-2"><div className="h-10 w-16 rounded-lg bg-blue-400/20"/><div className="h-3 w-20 rounded-full bg-blue-400/15"/><div className="h-2 w-14 rounded-full bg-white/[0.07]"/></div><div className="flex-1 space-y-2 pt-1">{[0, 1, 2, 3, 4].map((item) => <div key={item} className="flex items-center gap-2"><div className="h-2 w-3 rounded-full bg-white/[0.08]"/><div className="h-2 flex-1 rounded-full bg-white/[0.08]"><div className="h-full w-2/3 rounded-full bg-blue-400/20"/></div></div>)}</div></div>
+                    : <div className="flex gap-5">
+                      <div className="w-[90px] shrink-0"><div className="text-[38px] font-semibold leading-none tracking-tight text-blue-300">{reviewAverage ? reviewAverage.toFixed(1) : '—'}</div><div className="mt-2 flex items-center gap-0.5 text-blue-300" aria-label={reviewAverage ? `${reviewAverage.toFixed(1)} de 5` : 'Sin calificaciones'}>{[1, 2, 3, 4, 5].map((star) => <Star key={star} className={`h-3 w-3 ${reviewAverage >= star - 0.5 ? 'fill-current' : 'text-white/20'}`}/>)}</div><p className="mt-1 text-[11px] text-white/45">{reviewTotal} reseñas</p></div>
+                      <div className="flex-1 space-y-2 pt-1">{ratingDistribution.map(({ score, count }) => <div key={score} className="flex items-center gap-2 text-[11px] text-white/50"><span className="w-3 text-right">{score}</span><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-blue-400" style={{ width: `${Math.round(count / maxRatingCount * 100)}%` }}/></div></div>)}</div>
+                    </div>}
                 </div>
-                {reviewsLoading ? <div className="space-y-3" role="status" aria-label="Cargando reseñas"><div className="h-3 w-2/3 animate-pulse rounded-full bg-white/10"/><div className="h-3 w-full animate-pulse rounded-full bg-white/[0.07]"/></div>
-                  : communityReviews.length ? <div className="space-y-4">{communityReviews.map((review) => <article key={review.id} className="border-b border-white/[0.07] pb-4 last:border-0">
-                    <div className="mb-1 flex items-center justify-between gap-3"><span className="text-[14px] font-semibold">{review.author}</span><span className="flex shrink-0 items-center gap-1 text-[12px] text-white/70"><Star className="h-3 w-3 fill-amber-400 text-amber-400"/>{review.rating}</span></div>
+                <button type="button" data-detail-squircle onClick={() => { setCommunityReviewMode('reviews'); setShowCommunityActions(true); }} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-[16px] bg-[#1683f8] px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#0d74e8]"><MessageCircle className="h-4 w-4"/>Escribir reseña</button>
+                {reviewsLoading ? <div className="mt-4 space-y-3 animate-pulse" role="status" aria-label="Cargando reseñas"><div className="h-3 w-1/3 rounded-full bg-white/10"/><div className="h-3 w-full rounded-full bg-white/[0.07]"/><div className="h-3 w-4/5 rounded-full bg-white/[0.07]"/></div>
+                  : communityReviews.length ? <div className="mt-4 space-y-4">{communityReviews.map((review) => <article key={review.id} className="border-b border-white/[0.07] pb-4 last:border-0">
+                    <div className="mb-1 flex items-center justify-between gap-3"><span className="text-[14px] font-semibold">{review.author}</span><span className="flex shrink-0 items-center gap-1 text-[12px] font-semibold text-blue-300"><Star className="h-3 w-3 fill-current"/>{review.rating}</span></div>
                     <p className="text-[14px] leading-relaxed text-white/75">{review.text}</p>
                     {review.createdAt && <time className="mt-1 block text-[11px] text-white/40">{new Date(review.createdAt).toLocaleDateString('es-MX')}</time>}
                   </article>)}</div>
-                  : <p className="text-[14px] text-white/55">Aún no hay reseñas. Comparte tu experiencia con la comunidad.</p>}
+                  : <div data-detail-squircle className="mt-4 rounded-[24px] bg-[#202124] px-4 py-3.5"><p className="text-[13px] font-semibold text-white/70">Todavía no hay reseñas de la comunidad</p><div className="mt-3 space-y-2" aria-hidden="true"><div className="h-2.5 w-[82%] animate-pulse rounded-full bg-blue-300/10"/><div className="h-2.5 w-[60%] animate-pulse rounded-full bg-white/[0.06]"/></div><p className="mt-3 text-xs text-white/45">Sé la primera persona en contar cómo te fue.</p></div>}
               </section>
               {googleDetails?.reviews?.length ? <section aria-labelledby="google-reviews-title" className="pt-1 text-white">
                 <div className="mb-3 flex items-baseline justify-between gap-3"><h3 id="google-reviews-title" className="text-[17px] font-bold">Reseñas de Google Maps</h3><a href={googleDetails.googleMapsUri} target="_blank" rel="noreferrer" className="text-[12px] text-white/55 underline underline-offset-2" translate="no">Google Maps</a></div>
@@ -310,19 +325,26 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
             </Suspense>
 
             {/* Photos */}
-            <h3 className="text-[18px] font-bold text-neutral-900 mb-3">Fotos</h3>
-            <div className="flex overflow-x-auto gap-3 pb-4 scrollbar-hide snap-x">
-              {(place.images.length > 1 ? place.images.slice(1) : place.images).map((img, idx) => (
-                <div 
-                  key={idx} 
-                  className="ck-apply w-[180px] h-[240px] overflow-hidden shrink-0 snap-start shadow-sm border border-black/5 cursor-pointer active:opacity-80 transition-opacity"
-                  onPointerDownCapture={(e) => e.stopPropagation()}
-                  onClick={() => openViewer(place.images.length > 1 ? idx + 1 : 0)}
-                >
-                  <img src={img} alt={`Gallery ${idx}`} className="w-full h-full object-cover pointer-events-none" />
-                </div>
-              ))}
-            </div>
+            {place.images.length > 0 && <section className="pb-4">
+              <h3 className="mb-3 text-[18px] font-bold text-neutral-900">Fotos</h3>
+              {place.images.length > 1 ? <div className="grid aspect-[4/3] grid-cols-2 grid-rows-2 gap-1.5 overflow-hidden rounded-[24px]" data-detail-squircle>
+                {place.images.slice(0, 3).map((img, index) => (
+                  <button
+                    key={`${img}-${index}`}
+                    type="button"
+                    aria-label={`Abrir foto ${index + 1} de ${place.images.length}`}
+                    className={`relative min-h-0 overflow-hidden bg-[#292a2d] active:opacity-80 ${index === 0 ? 'row-span-2' : ''} ${index === 1 && place.images.length === 2 ? 'row-span-2' : ''}`}
+                    onPointerDownCapture={(event) => event.stopPropagation()}
+                    onClick={() => openViewer(index)}
+                  >
+                    <img src={img} alt={`Foto ${index + 1} de ${place.name}`} loading="lazy" className="pointer-events-none h-full w-full object-cover" />
+                    {index === 2 && place.images.length > 3 && <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-2xl font-bold text-white">+{place.images.length - 3}</span>}
+                  </button>
+                ))}
+              </div> : <button type="button" data-detail-squircle aria-label="Abrir foto del negocio" className="h-[240px] w-[180px] overflow-hidden bg-[#292a2d] active:opacity-80" onPointerDownCapture={(event) => event.stopPropagation()} onClick={() => openViewer(0)}>
+                <img src={place.images[0]} alt={`Foto de ${place.name}`} loading="lazy" className="h-full w-full object-cover" />
+              </button>}
+            </section>}
           </div>
         </div>
       </motion.div>
@@ -676,7 +698,7 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {showCommunityActions && <CommunityActionsSheet place={place} onClose={() => setShowCommunityActions(false)} />}
+        {showCommunityActions && <CommunityActionsSheet place={place} initialMode={communityReviewMode} onReviewCreated={(review) => setCommunityReviews((current) => [review, ...current])} onClose={() => setShowCommunityActions(false)} />}
       </AnimatePresence>
     </>
   );

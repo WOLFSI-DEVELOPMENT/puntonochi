@@ -19,6 +19,10 @@
     { "source": "/api/admin/places", "destination": "/api/admin-dispatch?__adminPath=places" },
     { "source": "/api/admin/places/:id", "destination": "/api/admin-dispatch?__adminPath=places/:id" },
     { "source": "/api/admin/places/:id/image", "destination": "/api/admin-dispatch?__adminPath=places/:id/image" },
+    { "source": "/api/account/session", "destination": "/api/account-dispatch?__accountPath=session" },
+    { "source": "/api/account/oauth/start", "destination": "/api/account-dispatch?__accountPath=oauth/start" },
+    { "source": "/api/account/oauth/callback", "destination": "/api/account-dispatch?__accountPath=oauth/callback" },
+    { "source": "/api/account/logout", "destination": "/api/account-dispatch?__accountPath=logout" },
     { "source": "/:path((?!api/).*)", "destination": "/index.html" }
   ],
   "crons": [

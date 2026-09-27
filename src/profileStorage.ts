@@ -1,6 +1,20 @@
 export const DAILY_USE_KEY = 'puntonochi-daily-use-v1';
 export const PROFILE_ACTIVITY_KEY = 'puntonochi-profile-activity-v1';
 export const BOOKMARKS_KEY = 'puntonochi-bookmarks-v1';
+export const NAV_DESIGN_KEY = 'puntonochi-nav-design-v1';
+export type NavDesign = 'dynamic' | 'simple';
+
+export function getNavDesign(): NavDesign {
+  try { return localStorage.getItem(NAV_DESIGN_KEY) === 'simple' ? 'simple' : 'dynamic'; }
+  catch { return 'dynamic'; }
+}
+
+export function setNavDesign(design: NavDesign) {
+  try {
+    localStorage.setItem(NAV_DESIGN_KEY, design);
+    window.dispatchEvent(new Event('puntonochi-nav-design-updated'));
+  } catch { /* The in-memory choice can still be used if storage is unavailable. */ }
+}
 
 export type ProfileActivity = { activeSecondsByDay: Record<string, number> };
 
