@@ -5,8 +5,8 @@ export const NAV_DESIGN_KEY = 'puntonochi-nav-design-v1';
 export type NavDesign = 'dynamic' | 'simple';
 
 export function getNavDesign(): NavDesign {
-  try { return localStorage.getItem(NAV_DESIGN_KEY) === 'simple' ? 'simple' : 'dynamic'; }
-  catch { return 'dynamic'; }
+  try { return localStorage.getItem(NAV_DESIGN_KEY) === 'dynamic' ? 'dynamic' : 'simple'; }
+  catch { return 'simple'; }
 }
 
 export function setNavDesign(design: NavDesign) {
