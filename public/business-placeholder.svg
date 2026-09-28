@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" fill="none">
+  <defs><linearGradient id="bg" x1="70" y1="20" x2="730" y2="580" gradientUnits="userSpaceOnUse"><stop stop-color="#25282C"/><stop offset="1" stop-color="#17191C"/></linearGradient></defs>
+  <path fill="url(#bg)" d="M0 0h800v600H0z"/>
+  <path d="m270 282 30-74h200l30 74" stroke="#737A83" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M285 280h230v157H285z" fill="#202327" stroke="#737A83" stroke-width="12" stroke-linejoin="round"/>
+  <path d="M268 280h264v42c0 18-14 32-32 32s-32-14-32-32c0 18-14 32-32 32s-32-14-32-32c0 18-14 32-32 32s-32-14-32-32c0 18-14 32-32 32s-32-14-32-32v-42Z" fill="#343940" stroke="#858D96" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M365 370h70v67h-70z" fill="#17191C" stroke="#737A83" stroke-width="9"/>
+  <text x="400" y="493" fill="#B6BDC5" font-family="Arial,sans-serif" font-size="22" text-anchor="middle">Foto no disponible</text>
+</svg>

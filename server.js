@@ -97,6 +97,7 @@ const ensureAccountSchema = () => {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
     await sql`ALTER TABLE user_accounts ADD COLUMN IF NOT EXISTS bio TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE user_accounts ADD COLUMN IF NOT EXISTS profile_picture_key TEXT`;
     await sql`CREATE INDEX IF NOT EXISTS user_accounts_email_idx ON user_accounts (LOWER(email))`;
     await sql`CREATE TABLE IF NOT EXISTS user_account_sessions (
       token_hash TEXT PRIMARY KEY,
@@ -353,6 +354,52 @@ app.get('/api/account/content', requireNeon, requireAccount, async (req, res) =>
   } catch (error) {
     console.error('Could not load account activity:', error);
     res.status(500).json({ error: 'No se pudo cargar tu actividad.' });
+  }
+});
+
+app.patch('/api/account/profile', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim().slice(0, 60) : '';
+    const bio = typeof req.body?.bio === 'string' ? req.body.bio.trim().slice(0, 280) : '';
+    if (!name) return res.status(400).json({ error: 'Escribe un nombre para tu perfil.' });
+    let pictureKey = null;
+    const pictureData = req.body?.pictureData;
+    if (pictureData) {
+      if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
+      const match = typeof pictureData === 'string' && pictureData.match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
+      if (!match) return res.status(400).json({ error: 'Elige una imagen JPG, PNG o WebP válida.' });
+      const bytes = Buffer.from(match[2], 'base64');
+      if (!bytes.length || bytes.length > 3 * 1024 * 1024) return res.status(413).json({ error: 'La foto debe pesar 3 MB o menos.' });
+      pictureKey = `account-profiles/${req.account.id}/${randomUUID()}`;
+      await s3.send(new PutObjectCommand({ Bucket: 'uploads', Key: pictureKey, Body: bytes, ContentType: `image/${match[1]}` }));
+    }
+    const [updated] = pictureKey
+      ? await sql`UPDATE user_accounts SET display_name = ${name}, bio = ${bio}, profile_picture_key = ${pictureKey}, picture_url = ${`${req.protocol}://${req.get('host')}/api/profiles/${encodeURIComponent(req.account.id)}/picture`}, updated_at = NOW() WHERE google_sub = ${req.account.id} RETURNING google_sub AS id, display_name AS name, picture_url AS picture, bio`
+      : await sql`UPDATE user_accounts SET display_name = ${name}, bio = ${bio}, updated_at = NOW() WHERE google_sub = ${req.account.id} RETURNING google_sub AS id, display_name AS name, picture_url AS picture, bio`;
+    res.set('Cache-Control', 'no-store');
+    res.json(updated);
+  } catch (error) {
+    console.error('Could not update account profile:', error);
+    res.status(500).json({ error: 'No se pudo guardar tu perfil.' });
+  }
+});
+
+app.get('/api/profiles/:id/picture', requireNeon, async (req, res) => {
+  try {
+    if (!s3) return res.status(503).end();
+    await ensureAccountSchema();
+    const profileId = String(req.params.id).slice(0, 200);
+    const [profile] = await sql`SELECT profile_picture_key AS key FROM user_accounts WHERE google_sub = ${profileId}`;
+    if (!profile?.key) return res.status(404).end();
+    const object = await s3.send(new GetObjectCommand({ Bucket: 'uploads', Key: profile.key }));
+    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
+    res.set('Content-Type', object.ContentType || 'image/webp');
+    if (object.ContentLength) res.set('Content-Length', String(object.ContentLength));
+    object.Body.pipe(res);
+  } catch (error) {
+    console.error('Could not load account profile picture:', error);
+    res.status(404).end();
   }
 });
 

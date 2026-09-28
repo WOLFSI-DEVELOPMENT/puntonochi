@@ -24,10 +24,12 @@ import { Category, Place, Colonia } from './types';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { DAILY_USE_KEY, getBookmarkedPlaceIds, recordProfileActiveSeconds } from './profileStorage';
 import { PublicProfileSheet } from './components/PublicProfileSheet';
+import { StreakPage } from './components/StreakPage';
 
 const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
 const WELCOME_SEEN_KEY = 'puntonochi-welcome-seen-v1';
 type DailyUse = { lastOpened: string; totalDays: number; currentStreak: number };
+type SignedInAccount = { id: string; name: string; email: string; picture: string | null };
 const RECENT_SEARCHES_KEY = 'puntonochi-recent-searches-v1';
 const RECENT_PLACES_KEY = 'puntonochi-recent-places-v1';
 
@@ -141,12 +143,27 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [showWelcome, setShowWelcome] = useState(false);
   const [publicProfileId, setPublicProfileId] = useState<string | null>(null);
+  const [showStreakPage, setShowStreakPage] = useState(false);
+  const [signedInAccount, setSignedInAccount] = useState<SignedInAccount | null>(null);
   const [directoryVersion, setDirectoryVersion] = useState(0);
   const [suggestionVersion, setSuggestionVersion] = useState(0);
   const [popularPlaces, setPopularPlaces] = useState<Place[]>([]);
   const [recentlyAddedPlaces, setRecentlyAddedPlaces] = useState<Place[]>([]);
   const [dailyUse, setDailyUse] = useState<DailyUse>(() => recordDailyUse());
   const streakDateRef = useRef(dailyUse.lastOpened);
+
+  useEffect(() => {
+    let active = true;
+    const refreshAccount = () => fetch('/api/account/session', { cache: 'no-store', credentials: 'same-origin' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => { if (active) setSignedInAccount(data?.account || null); })
+      .catch(() => { if (active) setSignedInAccount(null); });
+    void refreshAccount();
+    const onAccountChange = () => { void refreshAccount(); };
+    window.addEventListener('account-profile-updated', onAccountChange);
+    window.addEventListener('account-session-updated', onAccountChange);
+    return () => { active = false; window.removeEventListener('account-profile-updated', onAccountChange); window.removeEventListener('account-session-updated', onAccountChange); };
+  }, []);
 
   useEffect(() => {
     const openProfile = (event: Event) => {
@@ -509,9 +526,14 @@ export default function App() {
         <motion.main key="home-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }} className="pt-8">
           {/* Header Section */}
           <section className="relative px-5 mb-8">
-            <div aria-label={`${dailyUse.totalDays} días usando PuntoNochi. Racha actual de ${dailyUse.currentStreak} días.`} title={`${dailyUse.totalDays} días usando PuntoNochi · racha de ${dailyUse.currentStreak} días`} className="absolute right-5 top-[-4px] flex min-h-9 items-center gap-1.5 rounded-full bg-[#292a2d] px-2.5 py-1 text-white shadow-sm">
+            <div className="absolute right-5 top-[-4px] flex items-center gap-2">
+            {signedInAccount && <button type="button" onClick={() => setPublicProfileId(signedInAccount.id)} aria-label="Abrir mi perfil público" title="Mi perfil" className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-[#292a2d] p-[2px] text-white shadow-sm ring-1 ring-white/15 transition-transform active:scale-95">
+              {signedInAccount.picture ? <img src={signedInAccount.picture} alt="" referrerPolicy="no-referrer" className="h-full w-full rounded-full object-cover"/> : <span className="flex h-full w-full items-center justify-center rounded-full bg-blue-500 text-sm font-bold">{signedInAccount.name.slice(0, 1).toUpperCase()}</span>}
+            </button>}
+            <button type="button" onClick={() => setShowStreakPage(true)} aria-label={`${dailyUse.totalDays} días usando PuntoNochi. Racha actual de ${dailyUse.currentStreak} días. Ver actividad`} title={`${dailyUse.totalDays} días usando PuntoNochi · racha de ${dailyUse.currentStreak} días`} className="flex min-h-9 items-center gap-1.5 rounded-full bg-[#292a2d] px-2.5 py-1 text-left text-white shadow-sm transition-transform active:scale-95">
               <Flame aria-hidden="true" className="h-4 w-4 shrink-0 fill-orange-400 text-orange-400" />
               <span className="leading-tight"><span className="block text-xs font-bold tabular-nums">{dailyUse.totalDays} días</span><span className="block text-[8px] font-medium text-white/55">racha {dailyUse.currentStreak}</span></span>
+            </button>
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-neutral-900">
               Descubre<br/>
@@ -799,8 +821,12 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {showStreakPage && <StreakPage key="streak-page" totalDays={dailyUse.totalDays} currentStreak={dailyUse.currentStreak} onClose={() => setShowStreakPage(false)} />}
+      </AnimatePresence>
+
       {/* Bottom Navigation & Search */}
-      {!showSearch && !showAdminPage && (
+      {!showSearch && !showAdminPage && !showStreakPage && (
         <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => setShowSearch(true)} />
       )}
 

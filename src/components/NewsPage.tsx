@@ -10,6 +10,7 @@ import { AccountRequiredPrompt } from './AccountSheets';
 
 const cornerKit = new CornerKit();
 const newsCardCorners: SquircleConfig = { radius: 24, smoothing: 1 };
+const weatherHourCorners: SquircleConfig = { radius: 18, smoothing: 1 };
 
 type Article = { title: string; description: string; content: string; url: string; image: string; publishedAt: string; source: string };
 type WeatherDay = { date: string; weatherCode: number; high: number | null; low: number | null; precipitationChance: number | null };
@@ -66,6 +67,17 @@ function weatherIcon(code: number): LucideIcon {
   if (code <= 77 || code === 85 || code === 86) return CloudSnow;
   if (code >= 95) return CloudLightning;
   return Cloud;
+}
+
+function weatherIconClass(code: number) {
+  if (code === 0) return 'text-amber-300';
+  if (code <= 3) return '[&>path:first-child]:text-white [&>path:last-child]:text-amber-300';
+  if (code === 45 || code === 48) return 'text-slate-200';
+  if (code <= 57) return '[&>path:first-child]:text-white [&>path:last-child]:text-sky-300';
+  if (code <= 67 || (code >= 80 && code <= 82)) return '[&>path:first-child]:text-white [&>path:last-child]:text-sky-400';
+  if (code <= 77 || code === 85 || code === 86) return '[&>path:first-child]:text-white [&>path:last-child]:text-sky-200';
+  if (code >= 95) return '[&>path:first-child]:text-white [&>path:last-child]:text-amber-300';
+  return 'text-white';
 }
 
 function forecastTabLabel(value: string) {
@@ -289,6 +301,10 @@ export function NewsPage() {
     cornerKit.applyAll('[data-news-squircle]', newsCardCorners);
   }, [articles, newsLoading, newsError, selectedArticle, weather, weatherError, videos, videosLoading, videosError, events, eventsLoading, selectedEvent]);
 
+  useEffect(() => {
+    cornerKit.applyAll('[data-weather-hour-squircle]', weatherHourCorners);
+  }, [selectedForecastDate, weatherHours]);
+
   const shareEvent = async (event: PublicEvent) => {
     const url = `${window.location.origin}/eventos/${encodeURIComponent(event.id)}`;
     try {
@@ -336,7 +352,7 @@ export function NewsPage() {
                 const selected = day.date === selectedForecastDate;
                 return <button key={day.date} type="button" role="tab" aria-selected={selected} onClick={() => setSelectedForecastDate(day.date)} className={`flex min-w-[92px] shrink-0 flex-col items-center gap-1 border-b-2 px-2 pb-3 pt-1 text-center transition-colors ${selected ? 'border-white text-white' : 'border-transparent text-white/50 hover:text-white/80'}`}>
                   <span className="whitespace-nowrap text-xs font-semibold capitalize">{forecastTabLabel(day.date)}</span>
-                  <Icon aria-hidden="true" className="my-0.5 h-6 w-6 text-white/85" strokeWidth={1.8} />
+                  <Icon aria-hidden="true" className={`my-0.5 h-6 w-6 ${weatherIconClass(day.weatherCode)}`} strokeWidth={1.8} />
                   <span className="text-[13px] font-semibold leading-tight">{day.high === null ? '—' : `${Math.round(day.high)}°`} <span className="font-normal text-white/45">{day.low === null ? '—' : `${Math.round(day.low)}°`}</span></span>
                 </button>;
               })}
@@ -346,8 +362,8 @@ export function NewsPage() {
               <div className="flex gap-1 overflow-x-auto px-5 pb-2 scrollbar-hide">
                 {selectedDayHours.length ? selectedDayHours.map((hour) => {
                   const Icon = weatherIcon(hour.weatherCode);
-                  return <div key={hour.dateTime} className="flex w-[52px] shrink-0 flex-col items-center gap-2 py-1 text-center">
-                    <Icon aria-hidden="true" className="h-6 w-6 text-white/80" strokeWidth={1.8}/>
+                  return <div data-weather-hour-squircle key={hour.dateTime} className="flex w-[58px] shrink-0 flex-col items-center gap-2 overflow-hidden rounded-[18px] bg-[#202124] px-1 py-2 text-center">
+                    <Icon aria-hidden="true" className={`h-6 w-6 ${weatherIconClass(hour.weatherCode)}`} strokeWidth={1.8}/>
                     <span className="text-sm font-semibold">{hour.temperature === null ? '—' : `${Math.round(hour.temperature)}°`}</span>
                     <span className="text-xs text-white/55">{forecastHourLabel(hour.dateTime)}</span>
                     {hour.precipitationChance !== null && hour.precipitationChance > 0 && <span className="text-[10px] leading-none text-sky-300">{hour.precipitationChance}%</span>}
