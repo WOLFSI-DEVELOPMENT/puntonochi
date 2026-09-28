@@ -47,7 +47,8 @@ export function VideosPage() {
       </label>
       <section className="mt-8">
         <h2 className="text-lg font-semibold">Shorts</h2>
-        <div className="mt-4 flex gap-3 overflow-x-auto pb-3 scrollbar-hide">
+        <div className="relative mt-4 -mx-5 overflow-hidden before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:z-10 before:w-7 before:bg-gradient-to-r before:from-[#111111] before:to-transparent after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:z-10 after:w-9 after:bg-gradient-to-l after:from-[#111111] after:to-transparent">
+        <div className="flex gap-3 overflow-x-auto px-5 pb-3 scrollbar-hide">
           {visibleShorts.map((short) => (
             <article key={short.id} className="ck-video-card w-[min(50vw,200px)] shrink-0 rounded-[24px] bg-[#292929] p-[5px] sm:w-[min(38vw,270px)]">
               <button type="button" onClick={() => setSelectedVideo({ ...short, isShort: true, thumbnail: `https://i.ytimg.com/vi/${short.id}/hqdefault.jpg` })} aria-label={`Reproducir: ${short.title}`} className="ck-video-card-media group relative block aspect-[4/5] w-full overflow-hidden rounded-[19px] bg-black sm:aspect-[9/16]">
@@ -65,10 +66,12 @@ export function VideosPage() {
           ))}
           {!visibleShorts.length && <p className="rounded-[20px] bg-[#202124] p-4 text-sm text-white/55">No hay Shorts que coincidan.</p>}
         </div>
+        </div>
       </section>
       <section className="mt-8">
         <h2 className="text-lg font-semibold">Videos largos</h2>
-        <div className="mt-4 flex gap-3 overflow-x-auto pb-3 scrollbar-hide">
+        <div className="relative mt-4 -mx-5 overflow-hidden before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:z-10 before:w-7 before:bg-gradient-to-r before:from-[#111111] before:to-transparent after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:z-10 after:w-9 after:bg-gradient-to-l after:from-[#111111] after:to-transparent">
+        <div className="flex gap-3 overflow-x-auto px-5 pb-3 scrollbar-hide">
           {visibleLongVideos.map((video) => (
             <article key={video.id} className="ck-video-card w-[min(84vw,380px)] shrink-0 rounded-[24px] bg-[#292929] p-[5px]">
               <button type="button" onClick={() => setSelectedVideo({ ...video, isShort: false, thumbnail: `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg` })} aria-label={`Reproducir: ${video.title}`} className="ck-video-card-media group relative block aspect-video w-full overflow-hidden rounded-[19px] bg-black">
@@ -85,6 +88,7 @@ export function VideosPage() {
             </article>
           ))}
           {!visibleLongVideos.length && <p className="rounded-[20px] bg-[#202124] p-4 text-sm text-white/55">No hay videos largos que coincidan.</p>}
+        </div>
         </div>
       </section>
       <YouTubeVideoOverlay video={selectedVideo} onClose={() => setSelectedVideo(null)} />

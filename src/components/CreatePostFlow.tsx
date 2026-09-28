@@ -272,7 +272,7 @@ export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => 
 
       {step === 'published' && <div className="relative z-10 flex min-h-[100dvh] flex-col items-center justify-center px-7 text-center"><div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-black"><Check className="h-8 w-8" /></div><h2 className="mt-5 text-2xl font-bold">¡Publicado!</h2><p className="mt-2 text-sm text-white/55">{postType === 'day' ? 'Tu foto ya aparece en Explorar para toda la comunidad.' : `La imagen ya aparece en Explorar y en las fotos de ${selectedPlace?.name}.`}</p><button type="button" onClick={onClose} style={{ backgroundColor: '#ffffff', color: '#000000' }} className="mt-7 rounded-full !bg-white px-8 py-3 text-sm font-bold !text-black">Listo</button></div>}
 
-      {showAccountPrompt && <AccountRequiredPrompt onClose={() => setShowAccountPrompt(false)} message="Inicia sesión con Google para publicar fotos y compartir contenido en PuntoNochi."/>}
+      {showAccountPrompt && <AccountRequiredPrompt onClose={() => setShowAccountPrompt(false)} message="Inicia sesión con Google o Facebook para publicar fotos y compartir contenido en PuntoNochi."/>}
       <AnimatePresence>
         {showPlacePicker && <>
           <motion.button aria-label="Cerrar selector" onClick={() => setShowPlacePicker(false)} className="fixed inset-0 z-[90] bg-black/65" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />

@@ -295,7 +295,7 @@ export default function App() {
         ck.applyAll('.ck-app-card', { radius: 26, smoothing: 1 });
         ck.applyAll('.ck-app-card-inner', { radius: 21, smoothing: 1 });
         ck.applyAll('.ck-home-category-card', { radius: 24, smoothing: 1 });
-        ck.applyAll('.ck-home-suggested-card', { radius: 28, smoothing: 1 });
+        ck.applyAll('.ck-home-suggested-card', { radius: 30, smoothing: 1 });
         ck.applyAll('.ck-home-favorite-card', { radius: 24, smoothing: 1 });
       }, 300);
       return () => clearTimeout(timer);
@@ -634,7 +634,7 @@ export default function App() {
               <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Lo que la comunidad está buscando y visitando</p>
             </div>
             <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 scrollbar-hide">
-              {popularPlaces.map((place) => <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
+              {popularPlaces.map((place) => <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[30px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
                 <img src={place.images[0]} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
                 <span className="absolute left-4 top-4 inline-flex items-center gap-1 bg-[#f97316] px-2.5 py-1 text-[11px] font-bold text-white"><Flame className="h-3.5 w-3.5 fill-white"/>EN TENDENCIA</span>

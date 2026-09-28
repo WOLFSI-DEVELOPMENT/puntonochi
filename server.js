@@ -60,12 +60,15 @@ const ADMIN_OAUTH_STATE_COOKIE = 'puntonochi_admin_oauth_state';
 const ADMIN_SESSION_TTL_SECONDS = 8 * 60 * 60;
 const ACCOUNT_COOKIE = 'puntonochi_account';
 const ACCOUNT_OAUTH_STATE_COOKIE = 'puntonochi_account_oauth_state';
+const ACCOUNT_FACEBOOK_OAUTH_STATE_COOKIE = 'puntonochi_account_facebook_oauth_state';
 const ACCOUNT_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 const ADMIN_EMAIL_ALLOWLIST = new Set([
   'survivalcreativeminecraftadven@gmail.com',
   'rocioramire1976@gmail.com',
 ]);
 const isGoogleOAuthConfigured = () => Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+const isFacebookOAuthConfigured = () => Boolean(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET);
+const isAccountOAuthConfigured = () => isGoogleOAuthConfigured() || isFacebookOAuthConfigured();
 const getOAuthRedirectUri = (req) => `${req.protocol}://${req.get('host')}/api/admin/oauth/callback`;
 const getGoogleOAuthClient = (req) => new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
@@ -73,6 +76,8 @@ const getGoogleOAuthClient = (req) => new OAuth2Client(
   getOAuthRedirectUri(req),
 );
 const getAccountOAuthRedirectUri = (req) => `${req.protocol}://${req.get('host')}/api/account/oauth/callback`;
+const getFacebookOAuthRedirectUri = (req) => process.env.FACEBOOK_OAUTH_REDIRECT_URI || `${req.protocol}://${req.get('host')}/api/account/oauth/facebook/callback`;
+const getFacebookGraphVersion = () => /^v\d+\.\d+$/.test(process.env.FACEBOOK_GRAPH_API_VERSION || '') ? process.env.FACEBOOK_GRAPH_API_VERSION : 'v24.0';
 const getAccountGoogleOAuthClient = (req) => new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
@@ -124,7 +129,7 @@ const getAccountSession = async (req) => {
 };
 const requireAccount = async (req, res, next) => {
   try {
-    if (!sql || !isGoogleOAuthConfigured()) return res.status(503).json({ error: 'La función de cuentas todavía no está configurada.' });
+    if (!sql || !isAccountOAuthConfigured()) return res.status(503).json({ error: 'Configura el inicio de sesión con Google o Facebook en el servidor.' });
     const account = await getAccountSession(req);
     if (!account) return res.status(401).json({ code: 'ACCOUNT_REQUIRED', error: 'Inicia sesión para continuar.' });
     req.account = account;
@@ -313,7 +318,7 @@ app.post('/api/admin/logout', (req, res) => {
 app.get('/api/account/session', async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try {
-    const configured = Boolean(sql && isGoogleOAuthConfigured());
+    const configured = Boolean(sql && isAccountOAuthConfigured());
     const account = configured ? await getAccountSession(req) : null;
     res.json({ configured, authenticated: Boolean(account), account: account || null });
   } catch (error) {
@@ -493,6 +498,85 @@ app.get('/api/account/oauth/callback', async (req, res) => {
   } catch (error) {
     console.error('Google account OAuth callback failed:', error);
     redirectWithError('No se pudo completar el inicio con Google. Intenta otra vez.');
+  }
+});
+
+app.get('/api/account/oauth/facebook/start', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!sql || !isFacebookOAuthConfigured()) return res.status(503).send('Configura FACEBOOK_APP_ID y FACEBOOK_APP_SECRET en el servidor.');
+  try { await ensureAccountSchema(); } catch (error) {
+    console.error('Facebook OAuth could not initialize account storage:', error);
+    return res.status(503).send('No se pudo conectar con Neon para iniciar sesión.');
+  }
+  const mode = req.query.mode === 'login' ? 'login' : 'signup';
+  const state = `${mode}.${randomBytes(32).toString('base64url')}`;
+  const secure = process.env.NODE_ENV === 'production' || req.secure;
+  res.cookie(ACCOUNT_FACEBOOK_OAUTH_STATE_COOKIE, state, { httpOnly: true, secure, sameSite: 'lax', path: '/api/account/oauth/facebook', maxAge: 10 * 60 * 1000 });
+  const authUrl = new URL(`https://www.facebook.com/${getFacebookGraphVersion()}/dialog/oauth`);
+  authUrl.searchParams.set('client_id', process.env.FACEBOOK_APP_ID);
+  authUrl.searchParams.set('redirect_uri', getFacebookOAuthRedirectUri(req));
+  authUrl.searchParams.set('response_type', 'code');
+  authUrl.searchParams.set('scope', 'email,public_profile');
+  authUrl.searchParams.set('state', state);
+  res.redirect(authUrl.toString());
+});
+
+app.get('/api/account/oauth/facebook/callback', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const secure = process.env.NODE_ENV === 'production' || req.secure;
+  const clearStateCookie = `${ACCOUNT_FACEBOOK_OAUTH_STATE_COOKIE}=; HttpOnly; Path=/api/account/oauth/facebook; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`;
+  const redirectWithError = (error) => res.setHeader('Set-Cookie', clearStateCookie).redirect(`/explorar?accountAuthError=${encodeURIComponent(error)}`);
+  if (!sql || !isFacebookOAuthConfigured()) return redirectWithError('Configura el inicio de sesión con Facebook en el servidor.');
+  const code = typeof req.query.code === 'string' ? req.query.code : '';
+  const stateCookie = getCookieValue(req, ACCOUNT_FACEBOOK_OAUTH_STATE_COOKIE);
+  const state = typeof req.query.state === 'string' ? req.query.state : '';
+  if (req.query.error || !code || !stateCookie || stateCookie !== state || !/^(signup|login)\.[A-Za-z0-9_-]{32,}$/.test(state)) return redirectWithError('No se pudo validar la sesión de Facebook. Intenta otra vez.');
+  try {
+    await ensureAccountSchema();
+    const graphVersion = getFacebookGraphVersion();
+    const redirectUri = getFacebookOAuthRedirectUri(req);
+    const tokenUrl = new URL(`https://graph.facebook.com/${graphVersion}/oauth/access_token`);
+    tokenUrl.searchParams.set('client_id', process.env.FACEBOOK_APP_ID);
+    tokenUrl.searchParams.set('client_secret', process.env.FACEBOOK_APP_SECRET);
+    tokenUrl.searchParams.set('redirect_uri', redirectUri);
+    tokenUrl.searchParams.set('code', code);
+    const tokenResponse = await fetch(tokenUrl, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(12_000) });
+    const tokenData = await tokenResponse.json().catch(() => ({}));
+    if (!tokenResponse.ok || typeof tokenData.access_token !== 'string') return redirectWithError('Facebook no devolvió un token de acceso válido.');
+
+    const profileUrl = new URL(`https://graph.facebook.com/${graphVersion}/me`);
+    profileUrl.searchParams.set('fields', 'id,name,email,picture.type(large)');
+    profileUrl.searchParams.set('access_token', tokenData.access_token);
+    const profileResponse = await fetch(profileUrl, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(12_000) });
+    const profile = await profileResponse.json().catch(() => ({}));
+    const facebookId = typeof profile.id === 'string' ? profile.id : '';
+    const accountId = facebookId ? `facebook:${facebookId}` : '';
+    const name = typeof profile.name === 'string' ? profile.name.trim() : '';
+    const email = typeof profile.email === 'string' ? profile.email.trim().toLowerCase() : '';
+    const picture = parseImageUrl(profile.picture?.data?.url);
+    if (!profileResponse.ok || !/^facebook:\d+$/.test(accountId) || !name) return redirectWithError('Facebook no devolvió un perfil válido.');
+
+    const [existing] = await sql`SELECT google_sub FROM user_accounts WHERE google_sub = ${accountId}`;
+    const mode = state.slice(0, state.indexOf('.'));
+    if (mode === 'login' && !existing) return redirectWithError('No encontramos una cuenta con este Facebook. Crea una cuenta primero.');
+    await sql`INSERT INTO user_accounts (google_sub, email, display_name, picture_url)
+      VALUES (${accountId}, ${email}, ${name}, ${picture})
+      ON CONFLICT (google_sub) DO UPDATE SET
+        email = COALESCE(NULLIF(EXCLUDED.email, ''), user_accounts.email),
+        display_name = EXCLUDED.display_name,
+        picture_url = EXCLUDED.picture_url,
+        updated_at = NOW()`;
+    const token = randomBytes(32).toString('base64url');
+    await sql`INSERT INTO user_account_sessions (token_hash, google_sub, expires_at)
+      VALUES (${hashAdminSessionToken(token)}, ${accountId}, NOW() + (${ACCOUNT_SESSION_TTL_SECONDS} * INTERVAL '1 second'))`;
+    res.setHeader('Set-Cookie', [
+      `${ACCOUNT_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${ACCOUNT_SESSION_TTL_SECONDS}${secure ? '; Secure' : ''}`,
+      clearStateCookie,
+    ]);
+    res.redirect(`/explorar?accountAuth=${existing ? 'signed-in' : 'created'}`);
+  } catch (error) {
+    console.error('Facebook account OAuth callback failed:', error);
+    redirectWithError('No se pudo completar el inicio con Facebook. Intenta otra vez.');
   }
 });
 
@@ -1333,7 +1417,7 @@ app.get('/api/youtube-news', async (req, res) => {
 });
 
 app.get('/api/weather', async (_req, res) => {
-  const cacheKey = 'nochistlan-weekly-weather';
+  const cacheKey = 'nochistlan-10day-hourly-weather';
   const cached = apiCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return res.json(cached.data);
   try {
@@ -1341,18 +1425,28 @@ app.get('/api/weather', async (_req, res) => {
     url.searchParams.set('latitude', '21.3656');
     url.searchParams.set('longitude', '-102.8461');
     url.searchParams.set('daily', 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max');
+    url.searchParams.set('hourly', 'temperature_2m,weather_code,precipitation_probability');
     url.searchParams.set('timezone', 'America/Mexico_City');
-    url.searchParams.set('forecast_days', '7');
+    url.searchParams.set('forecast_days', '10');
     const upstream = await fetch(url, { headers: { Accept: 'application/json' } });
     if (!upstream.ok) return res.status(502).json({ error: 'No se pudo cargar el pronóstico del tiempo.' });
     const body = await upstream.json();
-    const data = { location: 'Nochistlán, Zacatecas', days: (body.daily?.time || []).map((date, index) => ({
+    const data = {
+      location: 'Nochistlán, Zacatecas',
+      days: (body.daily?.time || []).map((date, index) => ({
       date,
       weatherCode: body.daily.weather_code?.[index] ?? 0,
       high: body.daily.temperature_2m_max?.[index] ?? null,
       low: body.daily.temperature_2m_min?.[index] ?? null,
       precipitationChance: body.daily.precipitation_probability_max?.[index] ?? null,
-    })) };
+      })),
+      hours: (body.hourly?.time || []).map((dateTime, index) => ({
+        dateTime,
+        temperature: body.hourly.temperature_2m?.[index] ?? null,
+        weatherCode: body.hourly.weather_code?.[index] ?? 0,
+        precipitationChance: body.hourly.precipitation_probability?.[index] ?? null,
+      })),
+    };
     apiCache.set(cacheKey, { data, expiresAt: Date.now() + 30 * 60 * 1000 });
     res.set('Cache-Control', 'public, max-age=1800');
     res.json(data);

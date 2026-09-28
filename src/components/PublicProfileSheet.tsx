@@ -67,7 +67,7 @@ export function PublicProfileSheet({ profileId, onClose }: { profileId: string; 
         </section>
       </>}
     </motion.main>
-    {showAccountPrompt && <AccountRequiredPrompt onClose={() => setShowAccountPrompt(false)} message="Inicia sesión con Google para seguir a otras personas de la comunidad."/>}
+    {showAccountPrompt && <AccountRequiredPrompt onClose={() => setShowAccountPrompt(false)} message="Inicia sesión con Google o Facebook para seguir a otras personas de la comunidad."/>}
   </>;
 }
 

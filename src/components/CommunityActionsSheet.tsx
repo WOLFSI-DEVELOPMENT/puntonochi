@@ -149,6 +149,6 @@ export function CommunityActionsSheet({ place, onClose, initialMode = 'menu', on
         </form>}
       </div>
     </motion.section>
-    <AnimatePresence>{showAccountPrompt && <AccountRequiredPrompt onClose={() => setShowAccountPrompt(false)} message="Inicia sesión con Google para dejar una reseña vinculada a tu perfil."/>}</AnimatePresence>
+    <AnimatePresence>{showAccountPrompt && <AccountRequiredPrompt onClose={() => setShowAccountPrompt(false)} message="Inicia sesión con Google o Facebook para dejar una reseña vinculada a tu perfil."/>}</AnimatePresence>
   </>;
 }

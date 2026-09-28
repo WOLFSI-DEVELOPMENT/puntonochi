@@ -23,6 +23,8 @@
     { "source": "/api/account/content", "destination": "/api/account-dispatch?__accountPath=content" },
     { "source": "/api/account/oauth/start", "destination": "/api/account-dispatch?__accountPath=oauth/start" },
     { "source": "/api/account/oauth/callback", "destination": "/api/account-dispatch?__accountPath=oauth/callback" },
+    { "source": "/api/account/oauth/facebook/start", "destination": "/api/account-dispatch?__accountPath=oauth/facebook/start" },
+    { "source": "/api/account/oauth/facebook/callback", "destination": "/api/account-dispatch?__accountPath=oauth/facebook/callback" },
     { "source": "/api/account/logout", "destination": "/api/account-dispatch?__accountPath=logout" },
     { "source": "/:path((?!api/).*)", "destination": "/index.html" }
   ],

@@ -13,6 +13,7 @@ const newsCardCorners: SquircleConfig = { radius: 24, smoothing: 1 };
 
 type Article = { title: string; description: string; content: string; url: string; image: string; publishedAt: string; source: string };
 type WeatherDay = { date: string; weatherCode: number; high: number | null; low: number | null; precipitationChance: number | null };
+type WeatherHour = { dateTime: string; temperature: number | null; weatherCode: number; precipitationChance: number | null };
 type NewsVideo = { id: string; title: string; channel: string; publishedAt: string; thumbnail: string; isShort: boolean };
 type PublicEvent = { id: string; title: string; date: string; endDate: string | null; time: string | null; location: string; description: string; imageUrl: string; createdAt?: string; profileId?: string | null; authorName?: string | null; authorPicture?: string | null };
 
@@ -67,8 +68,13 @@ function weatherIcon(code: number): LucideIcon {
   return Cloud;
 }
 
-function dayName(value: string) {
-  return new Intl.DateTimeFormat('es-MX', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${value}T12:00:00Z`)).replace('.', '');
+function forecastTabLabel(value: string) {
+  return new Intl.DateTimeFormat('es-MX', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${value}T12:00:00Z`)).replace(',', '');
+}
+
+function forecastHourLabel(value: string) {
+  const hour = value.split('T')[1]?.slice(0, 5);
+  return hour || '--:--';
 }
 
 function dateLabel(value: string) {
@@ -77,7 +83,7 @@ function dateLabel(value: string) {
 }
 
 function WeatherSkeleton() {
-  return <section aria-label="Cargando pronóstico" role="status" className="rounded-[26px] bg-[#202124] p-4"><div className="mb-4 h-4 w-44 animate-pulse rounded-full bg-[#3b3d40]" /><div className="flex gap-2 overflow-hidden">{Array.from({ length: 7 }, (_, index) => <div key={index} className="h-24 min-w-16 flex-1 animate-pulse rounded-[18px] bg-[#303134]" />)}</div></section>;
+  return <section aria-label="Cargando pronóstico" role="status" className="py-2"><div className="mb-4 h-4 w-44 animate-pulse rounded-full bg-[#3b3d40]" /><div className="flex gap-5 overflow-hidden border-b border-white/10 pb-3">{Array.from({ length: 5 }, (_, index) => <div key={index} className="h-11 min-w-16 flex-1 animate-pulse rounded-md bg-[#303134]" />)}</div><div className="mt-5 flex gap-5 overflow-hidden">{Array.from({ length: 7 }, (_, index) => <div key={index} className="h-16 w-10 shrink-0 animate-pulse rounded-md bg-[#303134]" />)}</div></section>;
 }
 
 function EventCreateSheet({ onClose, onCreated }: { onClose: () => void; onCreated: (event: PublicEvent) => void }) {
@@ -153,6 +159,8 @@ function EventCreateSheet({ onClose, onCreated }: { onClose: () => void; onCreat
 
 export function NewsPage() {
   const [weather, setWeather] = useState<WeatherDay[]>([]);
+  const [weatherHours, setWeatherHours] = useState<WeatherHour[]>([]);
+  const [selectedForecastDate, setSelectedForecastDate] = useState('');
   const [weatherError, setWeatherError] = useState('');
   const [articles, setArticles] = useState<Article[]>([]);
   const [newsLoading, setNewsLoading] = useState(true);
@@ -177,7 +185,10 @@ export function NewsPage() {
       .then(async (response) => {
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'No se pudo cargar el pronóstico.');
-        setWeather(result.days || []);
+        const days = result.days || [];
+        setWeather(days);
+        setWeatherHours(result.hours || []);
+        setSelectedForecastDate((current) => days.some((day: WeatherDay) => day.date === current) ? current : days[0]?.date || '');
       })
       .catch((error) => setWeatherError(error instanceof Error ? error.message : 'No se pudo cargar el pronóstico.'));
   };
@@ -288,6 +299,8 @@ export function NewsPage() {
     }
   };
 
+  const selectedDayHours = weatherHours.filter((hour) => hour.dateTime.slice(0, 10) === selectedForecastDate);
+
   if (eventDetailLoading) return <main className="min-h-screen bg-[#111111] px-5 pb-36 pt-6 text-white"><div className="mx-auto max-w-3xl"><button type="button" onClick={closeEvent} className="mb-5 flex items-center gap-2 rounded-full bg-[#292929] px-4 py-2.5 text-sm font-semibold"><ArrowLeft className="h-4 w-4"/>Volver a eventos</button><div className="aspect-[16/10] animate-pulse rounded-[26px] bg-[#202124]"/><div className="mt-5 h-7 w-3/4 animate-pulse rounded-full bg-[#202124]"/></div></main>;
 
   if (selectedEvent) return <main className="min-h-screen bg-[#111111] px-5 pb-36 pt-6 text-white"><div className="mx-auto max-w-3xl"><div className="mb-5 flex items-center justify-between gap-3"><button type="button" onClick={closeEvent} className="flex items-center gap-2 rounded-full bg-[#292929] px-4 py-2.5 text-sm font-semibold"><ArrowLeft className="h-4 w-4"/>Eventos</button><button type="button" onClick={() => void shareEvent(selectedEvent)} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#292929]" aria-label="Compartir evento"><Share2 className="h-4 w-4"/></button></div><img data-news-squircle src={selectedEvent.imageUrl} alt={`Portada de ${selectedEvent.title}`} className="mb-6 aspect-[16/10] w-full rounded-[26px] bg-[#202124] object-cover"/><p className="text-sm font-medium capitalize text-white/50">{eventDateLabel(selectedEvent)}</p><h1 className="mt-2 text-3xl font-bold leading-tight">{selectedEvent.title}</h1><div className="mt-5 space-y-3"><div className="flex items-start gap-3 rounded-2xl bg-[#202124] p-4"><CalendarDays className="mt-0.5 h-5 w-5 shrink-0 text-white/60"/><span className="text-sm">{eventDateLabel(selectedEvent)}</span></div>{selectedEvent.time && <div className="flex items-start gap-3 rounded-2xl bg-[#202124] p-4"><Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-white/60"/><span className="text-sm">{selectedEvent.time}</span></div>}<a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedEvent.location)}`} target="_blank" rel="noreferrer" className="flex items-start gap-3 rounded-2xl bg-[#202124] p-4"><MapPin className="mt-0.5 h-5 w-5 shrink-0 text-white/60"/><span className="min-w-0 flex-1 text-sm">{selectedEvent.location}</span><ExternalLink className="h-4 w-4 shrink-0 text-white/40"/></a></div><p className="mt-6 whitespace-pre-wrap text-base leading-7 text-white/75">{selectedEvent.description}</p><button type="button" onClick={() => void shareEvent(selectedEvent)} className="mt-7 flex w-full items-center justify-center gap-2 rounded-full bg-white px-5 py-3.5 text-sm font-bold text-black"><Share2 className="h-4 w-4"/>Compartir evento</button></div></main>;
@@ -311,25 +324,40 @@ export function NewsPage() {
     <main className="min-h-screen bg-[#111111] px-5 pb-36 pt-8 text-white">
       <div className="mx-auto max-w-3xl">
         {weather.length ? (
-          <section data-news-squircle aria-label="Pronóstico semanal de Nochistlán" className="rounded-[26px] bg-[#202124] p-4">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div><h2 className="text-sm font-semibold">Pronóstico semanal</h2><p className="mt-1 text-xs text-white/50">Nochistlán, Zacatecas</p></div>
-              <span className="text-xs text-white/45">7 días</span>
+          <section aria-label="Pronóstico de 10 días de Nochistlán" className="py-2">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div><h2 className="text-base font-semibold">Pronóstico</h2><p className="mt-1 text-xs text-white/45">Nochistlán, Zacatecas · 10 días</p></div>
+              <Clock3 aria-hidden="true" className="h-5 w-5 text-white/55"/>
             </div>
-            <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-              {weather.map((day) => {
+            <div className="relative -mx-5 overflow-hidden before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:z-10 before:w-5 before:bg-gradient-to-r before:from-[#111111] before:to-transparent after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:z-10 after:w-7 after:bg-gradient-to-l after:from-[#111111] after:to-transparent">
+              <div role="tablist" aria-label="Elige un día para consultar su pronóstico por hora" className="flex gap-1 overflow-x-auto px-5 scrollbar-hide">
+              {weather.slice(0, 10).map((day) => {
                 const Icon = weatherIcon(day.weatherCode);
-                return <div data-news-squircle key={day.date} className="flex min-w-[62px] flex-1 flex-col items-center gap-2 rounded-[18px] bg-[#292a2d] px-2 py-3 text-center">
-                  <span className="text-[11px] font-semibold capitalize text-white/60">{dayName(day.date)}</span>
-                  <Icon className="h-5 w-5 text-white/80" strokeWidth={1.8} />
-                  <span className="whitespace-nowrap text-xs font-semibold">{day.high === null ? '—' : `${Math.round(day.high)}°`} <span className="font-normal text-white/45">{day.low === null ? '—' : `${Math.round(day.low)}°`}</span></span>
-                  {day.precipitationChance !== null && <span className="text-[10px] text-sky-200/70">{day.precipitationChance}% lluvia</span>}
-                </div>;
+                const selected = day.date === selectedForecastDate;
+                return <button key={day.date} type="button" role="tab" aria-selected={selected} onClick={() => setSelectedForecastDate(day.date)} className={`flex min-w-[92px] shrink-0 flex-col items-center gap-1 border-b-2 px-2 pb-3 pt-1 text-center transition-colors ${selected ? 'border-white text-white' : 'border-transparent text-white/50 hover:text-white/80'}`}>
+                  <span className="whitespace-nowrap text-xs font-semibold capitalize">{forecastTabLabel(day.date)}</span>
+                  <Icon aria-hidden="true" className="my-0.5 h-6 w-6 text-white/85" strokeWidth={1.8} />
+                  <span className="text-[13px] font-semibold leading-tight">{day.high === null ? '—' : `${Math.round(day.high)}°`} <span className="font-normal text-white/45">{day.low === null ? '—' : `${Math.round(day.low)}°`}</span></span>
+                </button>;
               })}
+              </div>
+            </div>
+            <div role="tabpanel" aria-label={`${forecastTabLabel(selectedForecastDate)} pronóstico por hora`} className="relative -mx-5 mt-3 overflow-hidden before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:z-10 before:w-5 before:bg-gradient-to-r before:from-[#111111] before:to-transparent after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:z-10 after:w-7 after:bg-gradient-to-l after:from-[#111111] after:to-transparent">
+              <div className="flex gap-1 overflow-x-auto px-5 pb-2 scrollbar-hide">
+                {selectedDayHours.length ? selectedDayHours.map((hour) => {
+                  const Icon = weatherIcon(hour.weatherCode);
+                  return <div key={hour.dateTime} className="flex w-[52px] shrink-0 flex-col items-center gap-2 py-1 text-center">
+                    <Icon aria-hidden="true" className="h-6 w-6 text-white/80" strokeWidth={1.8}/>
+                    <span className="text-sm font-semibold">{hour.temperature === null ? '—' : `${Math.round(hour.temperature)}°`}</span>
+                    <span className="text-xs text-white/55">{forecastHourLabel(hour.dateTime)}</span>
+                    {hour.precipitationChance !== null && hour.precipitationChance > 0 && <span className="text-[10px] leading-none text-sky-300">{hour.precipitationChance}%</span>}
+                  </div>;
+                }) : <p className="px-5 py-5 text-sm text-white/50">No hay datos por hora para este día.</p>}
+              </div>
             </div>
           </section>
         ) : weatherError ? (
-          <section className="rounded-[26px] bg-[#202124] p-4"><div className="flex items-center justify-between gap-3"><div><h2 className="text-sm font-semibold">Pronóstico semanal</h2><p role="alert" className="mt-1 text-xs text-white/50">{weatherError}</p></div><button type="button" onClick={loadWeather} className="text-xs font-semibold text-white/75">Reintentar</button></div></section>
+          <section className="py-2"><div className="flex items-center justify-between gap-3"><div><h2 className="text-sm font-semibold">Pronóstico</h2><p role="alert" className="mt-1 text-xs text-white/50">{weatherError}</p></div><button type="button" onClick={loadWeather} className="text-xs font-semibold text-white/75">Reintentar</button></div></section>
         ) : <WeatherSkeleton />}
 
         <section aria-label="Videos de noticias de hoy" className="mt-6 overflow-hidden">
@@ -344,7 +372,7 @@ export function NewsPage() {
           ) : videosError ? (
             <div className="rounded-[24px] bg-[#202124] p-4"><p role="alert" className="text-sm text-white/65">{videosError}</p><button type="button" onClick={loadVideos} className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black">Reintentar</button></div>
           ) : videos.length ? (
-            <div className="relative overflow-hidden" style={{ perspective: 1100 }}>
+            <div className="relative overflow-hidden before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:z-10 before:w-5 before:bg-gradient-to-r before:from-[#111111] before:to-transparent after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:z-10 after:w-8 after:bg-gradient-to-l after:from-[#111111] after:to-transparent" style={{ perspective: 1100 }}>
               <motion.div
                 className="flex w-max py-1"
                 animate={reduceMotion ? undefined : { x: ['0%', '-50%'] }}
@@ -418,7 +446,7 @@ export function NewsPage() {
         } : null}
         onClose={() => setSelectedVideo(null)}
       />
-      {showAccountPrompt && <AccountRequiredPrompt onClose={() => setShowAccountPrompt(false)} message="Inicia sesión con Google para publicar eventos en la comunidad."/>}
+      {showAccountPrompt && <AccountRequiredPrompt onClose={() => setShowAccountPrompt(false)} message="Inicia sesión con Google o Facebook para publicar eventos en la comunidad."/>}
       {showCreateEvent && <EventCreateSheet onClose={() => setShowCreateEvent(false)} onCreated={(event) => { setEvents((current) => [event, ...current.filter((item) => item.id !== event.id)]); setShowCreateEvent(false); openEvent(event); }} />}
     </main>
   );
