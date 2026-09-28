@@ -95,6 +95,7 @@ export default function App() {
     let initShowAllCategories = false;
     let initShowColonias = false;
     let initShowAdmin = false;
+    const initShowSplash = path === '/' || /^\/inicio\/?$/.test(path);
 
     if (parts.length > 0) {
       if (parts[0] === 'admin') {
@@ -123,7 +124,7 @@ export default function App() {
       }
     }
     
-    return { initialTab, initialCategory, initialBusiness, initShowAllCategories, initShowColonias, initShowAdmin };
+    return { initialTab, initialCategory, initialBusiness, initShowAllCategories, initShowColonias, initShowAdmin, initShowSplash };
   };
 
   const init = getInitialState();
@@ -140,7 +141,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(init.initialTab);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(init.initShowSplash);
   const [showWelcome, setShowWelcome] = useState(false);
   const [publicProfileId, setPublicProfileId] = useState<string | null>(null);
   const [showStreakPage, setShowStreakPage] = useState(false);
