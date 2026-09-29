@@ -76,7 +76,7 @@ export function VideosPage({ onSelectBusiness }: { onSelectBusiness?: (place: Pl
     return <MarketplacePublishedItemDetails item={selectedPublishedListing} onBack={() => setSelectedPublishedListing(null)} onOpenProfile={setPublicProfileId} />;
   }
   if (selectedCategory) {
-    return <MarketplaceCategoryPage category={selectedCategory} listings={listings} onBack={() => setSelectedCategory(null)} onSelectListing={setSelectedListing} onSelectPublishedListing={setSelectedPublishedListing} />;
+    return <MarketplaceCategoryPage category={selectedCategory} listings={listings} onBack={() => setSelectedCategory(null)} onSelectPublishedListing={setSelectedPublishedListing} />;
   }
   if (showAllCategories) {
     return <MarketplaceCategoriesPage listings={listings} onBack={() => setShowAllCategories(false)} onSelectCategory={(category) => { setSelectedCategory(category); setShowAllCategories(false); }} />;
@@ -134,26 +134,7 @@ export function VideosPage({ onSelectBusiness }: { onSelectBusiness?: (place: Pl
   );
 }
 
-type MarketplaceListing = (typeof sampleListings)[number];
 type MarketplaceCategory = (typeof categories)[number];
-
-function MarketplaceListingCard({ listing, onClick }: { listing: MarketplaceListing; onClick: () => void }) {
-  const Icon = listing.icon;
-  return <button type="button" onClick={onClick} className="marketplace-listing marketplace-squircle overflow-hidden bg-white text-left shadow-[0_2px_10px_rgba(22,28,45,0.055)]">
-    <div className={`relative flex aspect-[1.72/1] items-center justify-center overflow-hidden ${listing.art}`}>
-      <div aria-hidden="true" className="absolute -right-5 -top-7 h-28 w-28 rounded-full bg-white/35" />
-      <div aria-hidden="true" className="absolute -bottom-12 -left-5 h-28 w-28 rounded-full bg-black/[0.035]" />
-      <Icon aria-hidden="true" strokeWidth={1.35} className="relative h-14 w-14 drop-shadow-sm" />
-      <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-1 text-[9px] font-semibold text-neutral-600">{listing.category}</span>
-      <span className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-neutral-600"><Heart aria-hidden="true" className="h-3.5 w-3.5" /></span>
-    </div>
-    <div className="p-3">
-      <p className="text-[11px] font-semibold leading-snug text-neutral-800">{listing.title}</p>
-      <p className="mt-1 text-sm font-extrabold text-[#202c3a]">{listing.price}</p>
-      <div className="mt-2 flex items-center justify-between gap-1 text-[9px] text-neutral-400"><span className="flex min-w-0 items-center gap-1 truncate"><MapPin aria-hidden="true" className="h-3 w-3 shrink-0" />{listing.detail}</span><span className="shrink-0">{listing.stamp}</span></div>
-    </div>
-  </button>;
-}
 
 function MarketplacePublishedListingCard({ listing, onOpenListing, onOpenProfile }: { listing: Listing; onOpenListing: () => void; onOpenProfile: (profileId: string) => void }) {
   return <article className="marketplace-listing marketplace-squircle overflow-hidden bg-[#202124] text-left">
@@ -167,16 +148,6 @@ function MarketplacePublishedListingCard({ listing, onOpenListing, onOpenProfile
     </button>
     <div className="px-3 pb-3"><button type="button" onClick={() => onOpenProfile(listing.profileId)} className="mt-2 flex min-w-0 items-center gap-1.5 text-[9px] text-white/55"><span className="flex h-5 w-5 items-center justify-center overflow-hidden rounded-full bg-[#36373a]">{listing.authorPicture ? <img src={listing.authorPicture} alt="" className="h-full w-full object-cover"/> : <UserRound className="h-3 w-3"/>}</span><span className="truncate">{listing.authorName || 'Vendedor local'}</span></button></div>
   </article>;
-}
-
-function categoryListings(category: MarketplaceCategory) {
-  switch (category.label) {
-    case 'Artículos': return sampleListings.filter((listing) => listing.category === 'Artículos');
-    case 'Empleos': return sampleListings.filter((listing) => listing.category === 'Empleo');
-    case 'Casas': return sampleListings.filter((listing) => listing.title.toLocaleLowerCase('es-MX').includes('casa'));
-    case 'Rentas': return sampleListings.filter((listing) => listing.category === 'Renta');
-    default: return [];
-  }
 }
 
 function MarketplacePageHeader({ title, subtitle, onBack }: { title: string; subtitle: string; onBack: () => void }) {
@@ -193,7 +164,7 @@ function MarketplaceCategoriesPage({ listings, onBack, onSelectCategory }: { lis
       <label className="marketplace-squircle mb-5 flex h-11 items-center gap-2 bg-[#202124] px-4 text-xs text-white/45"><Search className="h-4 w-4"/><span className="sr-only">Buscar categorías</span><input placeholder="Explora artículos, servicios, comida..." className="min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-white/45"/></label>
       <section aria-label="Todas las categorías" className="grid grid-cols-2 gap-2.5">
         {categories.map((category, index) => {
-          const count = categoryListings(category).length + listings.filter((listing) => listing.category === category.label).length;
+          const count = listings.filter((listing) => listing.category === category.label).length;
           return <button type="button" key={category.label} onClick={() => onSelectCategory(category)} className={`marketplace-category marketplace-squircle marketplace-category-${index + 1}`}>
             <span aria-hidden="true" className="marketplace-category-emoji">{category.emoji}</span>
             <span className="marketplace-category-label">{category.label}</span>
@@ -206,10 +177,9 @@ function MarketplaceCategoriesPage({ listings, onBack, onSelectCategory }: { lis
   </main>;
 }
 
-function MarketplaceCategoryPage({ category, listings: publishedListings, onBack, onSelectListing, onSelectPublishedListing }: { category: MarketplaceCategory; listings: Listing[]; onBack: () => void; onSelectListing: (listing: MarketplaceListing) => void; onSelectPublishedListing: (listing: Listing) => void }) {
-  const listings = categoryListings(category);
+function MarketplaceCategoryPage({ category, listings: publishedListings, onBack, onSelectPublishedListing }: { category: MarketplaceCategory; listings: Listing[]; onBack: () => void; onSelectPublishedListing: (listing: Listing) => void }) {
   const userListings = publishedListings.filter((listing) => listing.category === category.label);
-  const totalListings = listings.length + userListings.length;
+  const totalListings = userListings.length;
   return <main className="marketplace-page marketplace-browse-page min-h-screen px-4 pb-36">
     <div className="mx-auto w-full max-w-2xl">
       <MarketplacePageHeader title={category.label} subtitle={category.note} onBack={onBack}/>
@@ -218,68 +188,9 @@ function MarketplaceCategoryPage({ category, listings: publishedListings, onBack
         <div><p className="text-sm font-bold text-white">{category.label} en Nochistlán</p><p className="mt-1 text-[11px] text-white/50">Descubre opciones cerca de ti</p></div>
       </section>
       <div className="mb-4 flex items-end justify-between"><div><h2 className="text-sm font-bold text-white">Anuncios</h2><p className="mt-1 text-[10px] text-white/45">{totalListings ? `${totalListings} disponibles` : 'Nuevas publicaciones aparecerán aquí'}</p></div><span className="rounded-full bg-[#202124] px-3 py-2 text-[10px] text-white/65">Más recientes <ChevronRight className="ml-1 inline h-3 w-3"/></span></div>
-      {totalListings ? <div className="grid grid-cols-2 gap-2.5">{listings.map((listing) => <MarketplaceListingCard key={listing.title} listing={listing} onClick={() => onSelectListing(listing)}/>)}{userListings.map((listing) => <MarketplacePublishedListingCard key={listing.id} listing={listing} onOpenListing={() => onSelectPublishedListing(listing)} onOpenProfile={() => undefined}/>)}</div> : <div className="marketplace-category-empty marketplace-squircle px-5 py-9 text-center"><span className="text-4xl" aria-hidden="true">{category.emoji}</span><h2 className="mt-3 text-sm font-bold text-white">Todavía no hay anuncios</h2><p className="mx-auto mt-1.5 max-w-xs text-xs leading-relaxed text-white/50">Sé de las primeras personas en publicar en {category.label.toLocaleLowerCase('es-MX')}.</p><button type="button" className="mt-4 rounded-full bg-white px-4 py-2.5 text-xs font-bold text-black">Publicar anuncio</button></div>}
+      {totalListings ? <div className="grid grid-cols-2 gap-2.5">{userListings.map((listing) => <MarketplacePublishedListingCard key={listing.id} listing={listing} onOpenListing={() => onSelectPublishedListing(listing)} onOpenProfile={() => undefined}/>)}</div> : <div className="marketplace-category-empty marketplace-squircle px-5 py-9 text-center"><span className="text-4xl" aria-hidden="true">{category.emoji}</span><h2 className="mt-3 text-sm font-bold text-white">Todavía no hay anuncios</h2><p className="mx-auto mt-1.5 max-w-xs text-xs leading-relaxed text-white/50">Sé de las primeras personas en publicar en {category.label.toLocaleLowerCase('es-MX')}.</p><button type="button" className="mt-4 rounded-full bg-white px-4 py-2.5 text-xs font-bold text-black">Publicar anuncio</button></div>}
     </div>
   </main>;
-}
-
-function MarketplaceItemDetails({ item, onBack }: { item: (typeof sampleListings)[number]; onBack: () => void }) {
-  const ItemIcon = item.icon;
-  return (
-    <main className="marketplace-page marketplace-detail min-h-screen pb-40">
-      <section className={`marketplace-detail-art relative flex h-[300px] items-center justify-center overflow-hidden sm:h-[360px] ${item.art}`}>
-        <div aria-hidden="true" className="absolute -right-10 -top-16 h-64 w-64 rounded-full bg-white/30" />
-        <div aria-hidden="true" className="absolute -bottom-24 -left-12 h-64 w-64 rounded-full bg-black/[0.045]" />
-        <ItemIcon aria-hidden="true" strokeWidth={1.15} className="relative h-36 w-36 drop-shadow-md sm:h-44 sm:w-44" />
-        <div className="absolute inset-x-0 top-0 flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+14px)] sm:px-6">
-          <button type="button" onClick={onBack} aria-label="Volver al mercado" className="marketplace-detail-icon-button"><ArrowLeft className="h-5 w-5" /></button>
-          <div className="flex gap-2">
-            <button type="button" aria-label="Compartir anuncio" className="marketplace-detail-icon-button"><Share2 className="h-4 w-4" /></button>
-            <button type="button" aria-label="Guardar anuncio" className="marketplace-detail-icon-button"><Heart className="h-4 w-4" /></button>
-          </div>
-        </div>
-        <span className="marketplace-detail-count absolute bottom-[27px] right-4 rounded-full px-2.5 py-1 text-[10px] font-semibold text-white">1 de 4</span>
-      </section>
-
-      <div className="marketplace-detail-content mx-auto max-w-xl px-4">
-        <div className="marketplace-detail-panel -mt-4 relative z-[1] p-4 sm:p-5">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <span className="marketplace-detail-category">{item.category}</span>
-            <span className="flex items-center gap-1 text-[10px] text-neutral-400"><Clock3 className="h-3 w-3" />{item.stamp}</span>
-          </div>
-          <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">{item.title}</h1>
-          <p className="mt-2 text-2xl font-extrabold tracking-tight text-white">{item.price}</p>
-          <p className="mt-3 flex items-center gap-1.5 text-xs text-neutral-400"><MapPin className="h-4 w-4" />{item.detail}</p>
-        </div>
-
-        <section className="marketplace-detail-section mt-5">
-          <h2>Descripción</h2>
-          <p>{item.description}</p>
-        </section>
-
-        <section className="marketplace-seller-card marketplace-detail-panel mt-4 flex items-center gap-3 p-4">
-          <div className="marketplace-seller-avatar">N</div>
-          <div className="min-w-0 flex-1"><p className="text-sm font-semibold text-white">Vendedor local</p><p className="mt-1 text-[10px] text-neutral-400">En PuntoNochi desde 2026</p></div>
-          <ChevronRight className="h-4 w-4 text-neutral-500" />
-        </section>
-
-        <section className="marketplace-detail-section mt-5">
-          <h2>Detalles del anuncio</h2>
-          <div className="marketplace-detail-facts mt-3"><span>Condición</span><strong>Buen estado</strong><span>Entrega</span><strong>A convenir en persona</strong></div>
-        </section>
-
-        <section className="marketplace-safety-note marketplace-detail-panel mt-4 flex items-start gap-3 p-4">
-          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#a7c5a9]" />
-          <div><h2 className="text-xs font-semibold text-white">Compra con tranquilidad</h2><p className="mt-1 text-[10px] leading-relaxed text-neutral-400">Conoce el producto en persona y acuerda el pago directamente con quien lo anuncia.</p></div>
-        </section>
-      </div>
-
-      <div className="marketplace-detail-actions mx-auto flex max-w-xl gap-2 px-4">
-        <button type="button" className="marketplace-detail-contact flex-1"><MessageCircle className="h-4 w-4" />Enviar mensaje</button>
-        <button type="button" aria-label="Llamar al vendedor" className="marketplace-detail-call"><Phone className="h-4 w-4" /></button>
-      </div>
-    </main>
-  );
 }
 
 function MarketplacePublishedItemDetails({ item, onBack, onOpenProfile }: { item: Listing; onBack: () => void; onOpenProfile: (profileId: string) => void }) {

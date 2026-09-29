@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarDays, Clock3, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, ExternalLink, ImagePlus, LoaderCircle, MapPin, Newspaper, Play, Plus, Share2, Sun, X } from 'lucide-react';
+import { ArrowLeft, ArrowLeftRight, CalendarDays, ChevronRight, Clock3, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, ExternalLink, ImagePlus, LoaderCircle, MapPin, Newspaper, Play, Plus, RefreshCw, Share2, Sun, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import CornerKit, { type SquircleConfig } from '@cornerkit/core';
 import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
@@ -11,6 +11,7 @@ import { AccountRequiredPrompt } from './AccountSheets';
 const cornerKit = new CornerKit();
 const newsCardCorners: SquircleConfig = { radius: 24, smoothing: 1 };
 const weatherHourCorners: SquircleConfig = { radius: 18, smoothing: 1 };
+const exchangePanelCorners: SquircleConfig = { radius: 18, smoothing: 1 };
 
 type Article = { title: string; description: string; content: string; url: string; image: string; publishedAt: string; source: string };
 type WeatherDay = { date: string; weatherCode: number; high: number | null; low: number | null; precipitationChance: number | null };
@@ -23,6 +24,16 @@ function eventDateLabel(event: PublicEvent) {
   if (!event.endDate || event.endDate === event.date) return start;
   const end = new Intl.DateTimeFormat('es-MX', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(`${event.endDate}T12:00:00Z`));
   return `${start} – ${end}`;
+}
+
+function eventDateParts(value: string) {
+  const date = new Date(`${value}T12:00:00Z`);
+  if (Number.isNaN(date.getTime())) return { weekday: '—', day: '—', month: '' };
+  return {
+    weekday: new Intl.DateTimeFormat('es-MX', { weekday: 'short', timeZone: 'UTC' }).format(date).replace('.', '').toLocaleUpperCase('es-MX'),
+    day: new Intl.DateTimeFormat('es-MX', { day: 'numeric', timeZone: 'UTC' }).format(date),
+    month: new Intl.DateTimeFormat('es-MX', { month: 'short', timeZone: 'UTC' }).format(date).replace('.', '').toLocaleUpperCase('es-MX'),
+  };
 }
 
 function EventSkeleton({ empty = false }: { empty?: boolean }) {
@@ -189,7 +200,33 @@ export function NewsPage() {
   const [eventDetailLoading, setEventDetailLoading] = useState(false);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [showAccountPrompt, setShowAccountPrompt] = useState(false);
+  const [usdMxnRate, setUsdMxnRate] = useState<number | null>(null);
+  const [exchangeRateDate, setExchangeRateDate] = useState('');
+  const [exchangeRateLoading, setExchangeRateLoading] = useState(true);
+  const [exchangeRateError, setExchangeRateError] = useState('');
+  const [exchangeDirection, setExchangeDirection] = useState<'MXN-USD' | 'USD-MXN'>('MXN-USD');
+  const [exchangeAmount, setExchangeAmount] = useState('100');
   const reduceMotion = useReducedMotion();
+
+  const loadExchangeRate = () => {
+    setExchangeRateLoading(true);
+    setExchangeRateError('');
+    void fetch('https://api.frankfurter.dev/v2/rate/USD/MXN', { cache: 'no-store' })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok || typeof result.rate !== 'number') throw new Error('No se pudo cargar el tipo de cambio.');
+        setUsdMxnRate(result.rate);
+        setExchangeRateDate(result.date || '');
+      })
+      .catch((error) => setExchangeRateError(error instanceof Error ? error.message : 'No se pudo cargar el tipo de cambio.'))
+      .finally(() => setExchangeRateLoading(false));
+  };
+
+  useEffect(() => {
+    loadExchangeRate();
+    const refresh = window.setInterval(loadExchangeRate, 6 * 60 * 60 * 1000);
+    return () => window.clearInterval(refresh);
+  }, []);
 
   const loadWeather = () => {
     setWeatherError('');
@@ -298,11 +335,24 @@ export function NewsPage() {
   }, []);
 
   useEffect(() => {
-    cornerKit.applyAll('[data-news-squircle]', newsCardCorners);
-  }, [articles, newsLoading, newsError, selectedArticle, weather, weatherError, videos, videosLoading, videosError, events, eventsLoading, selectedEvent]);
+    const frame = window.requestAnimationFrame(() => {
+      document.querySelectorAll<HTMLElement>('[data-news-squircle]').forEach((element) => cornerKit.apply(element, newsCardCorners));
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [articles, newsLoading, newsError, selectedArticle, events, eventsLoading, selectedEvent]);
 
   useEffect(() => {
-    cornerKit.applyAll('[data-weather-hour-squircle]', weatherHourCorners);
+    const frame = window.requestAnimationFrame(() => {
+      document.querySelectorAll<HTMLElement>('[data-exchange-squircle]').forEach((element) => cornerKit.apply(element, exchangePanelCorners));
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      document.querySelectorAll<HTMLElement>('[data-weather-hour-squircle]').forEach((element) => cornerKit.apply(element, weatherHourCorners));
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [selectedForecastDate, weatherHours]);
 
   const shareEvent = async (event: PublicEvent) => {
@@ -376,6 +426,19 @@ export function NewsPage() {
           <section className="py-2"><div className="flex items-center justify-between gap-3"><div><h2 className="text-sm font-semibold">Pronóstico</h2><p role="alert" className="mt-1 text-xs text-white/50">{weatherError}</p></div><button type="button" onClick={loadWeather} className="text-xs font-semibold text-white/75">Reintentar</button></div></section>
         ) : <WeatherSkeleton />}
 
+        <section aria-label="Tipo de cambio" className="mt-5">
+          <div className="mb-3 flex items-end justify-between gap-3"><div><h2 className="text-lg font-semibold">Tipo de cambio</h2><p className="mt-1 text-xs text-white/45">Convierte pesos mexicanos y dólares</p></div><button type="button" onClick={loadExchangeRate} disabled={exchangeRateLoading} aria-label="Actualizar tipo de cambio" className="flex h-9 w-9 items-center justify-center rounded-full bg-[#252629] text-white/70 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${exchangeRateLoading ? 'animate-spin' : ''}`}/></button></div>
+          <div data-news-squircle className="rounded-[24px] bg-[#202124] p-4 sm:p-5">
+            <div className="flex items-center gap-3">
+              <label data-exchange-squircle className="min-w-0 flex-1 rounded-[18px] bg-[#2a2b2e] p-3"><span className="block text-[10px] font-semibold text-white/45">Tienes</span><span className="mt-1 flex items-center gap-2"><span className="text-xs font-bold text-white/70">{exchangeDirection === 'MXN-USD' ? 'MXN' : 'USD'}</span><input type="number" min="0" inputMode="decimal" value={exchangeAmount} onChange={(event) => setExchangeAmount(event.target.value)} aria-label={`Cantidad en ${exchangeDirection === 'MXN-USD' ? 'pesos mexicanos' : 'dólares'}`} className="w-full min-w-0 bg-transparent text-lg font-semibold text-white outline-none"/></span></label>
+              <button type="button" onClick={() => setExchangeDirection((current) => current === 'MXN-USD' ? 'USD-MXN' : 'MXN-USD')} aria-label="Invertir conversión" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#36373a] text-white/80 transition-transform active:scale-95"><ArrowLeftRight className="h-4 w-4"/></button>
+              <div data-exchange-squircle className="min-w-0 flex-1 rounded-[18px] bg-[#2a2b2e] p-3"><span className="block text-[10px] font-semibold text-white/45">Recibes</span><span className="mt-1 block truncate text-lg font-semibold text-white">{exchangeRateLoading && usdMxnRate === null ? '…' : exchangeRateError && usdMxnRate === null ? '—' : new Intl.NumberFormat('es-MX', { style: 'currency', currency: exchangeDirection === 'MXN-USD' ? 'USD' : 'MXN', maximumFractionDigits: 2 }).format(Math.max(0, Number(exchangeAmount) || 0) * (exchangeDirection === 'MXN-USD' ? 1 / (usdMxnRate || 1) : (usdMxnRate || 1)))}</span></div>
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-2 text-[10px] text-white/40">{exchangeRateError && usdMxnRate === null ? <span role="status">{exchangeRateError}</span> : usdMxnRate ? <span>1 USD = {new Intl.NumberFormat('es-MX', { maximumFractionDigits: 4 }).format(usdMxnRate)} MXN</span> : <span role="status">Consultando tipo de cambio…</span>}<span className="shrink-0">{exchangeRateDate ? `Referencia ${new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${exchangeRateDate}T12:00:00Z`))}` : 'Frankfurter · referencia diaria'}</span></div>
+            <p className="mt-1 text-[9px] text-white/30">Tipo de referencia diario · Frankfurter</p>
+          </div>
+        </section>
+
         <section aria-label="Videos de noticias de hoy" className="mt-6 overflow-hidden">
           <div className="mb-3 flex items-end justify-between gap-3">
             <div><h2 className="text-lg font-semibold">Noticias en video</h2><p className="mt-1 text-xs text-white/45">Últimos videos de hoy · México</p></div>
@@ -427,7 +490,12 @@ export function NewsPage() {
 
         <section aria-label="Eventos de la comunidad" className="mt-8">
           <div className="mb-4 flex items-end justify-between gap-3"><div><h2 className="text-lg font-semibold">Eventos</h2><p className="mt-1 text-xs text-white/45">Qué hacer en Nochistlán</p></div><button type="button" onClick={() => void requestCreateEvent()} className="flex shrink-0 items-center gap-1.5 rounded-full bg-white px-3.5 py-2.5 text-sm font-bold text-black"><Plus className="h-4 w-4"/>Crear</button></div>
-          {eventsLoading ? <div className="space-y-3">{[0, 1].map((item) => <EventSkeleton key={item}/>)}</div> : eventsError ? <div className="rounded-[24px] bg-[#202124] p-4"><p role="alert" className="text-sm text-white/65">{eventsError}</p><button type="button" onClick={loadEvents} className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black">Reintentar</button></div> : events.length ? <div className="space-y-3">{events.map((event) => <div data-news-squircle key={event.id} role="button" tabIndex={0} onClick={() => openEvent(event)} onKeyDown={(keyEvent) => { if (keyEvent.target === keyEvent.currentTarget && (keyEvent.key === 'Enter' || keyEvent.key === ' ')) openEvent(event); }} className="group relative block w-full cursor-pointer overflow-hidden rounded-[24px] bg-[#202124] text-left"><img src={event.imageUrl} alt="" loading="lazy" className="aspect-[16/9] w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"/><div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"/><div className="absolute inset-x-0 top-3 z-[2] px-4">{event.profileId && <button type="button" onClick={(clickEvent) => { clickEvent.stopPropagation(); window.dispatchEvent(new CustomEvent('open-public-profile', { detail: event.profileId })); }} className="flex items-center gap-2 rounded-full bg-black/45 py-1.5 pl-1.5 pr-3 text-xs font-semibold text-white backdrop-blur"><span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-white/20">{event.authorPicture ? <img src={event.authorPicture} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover"/> : (event.authorName || '?').slice(0, 1)}</span>{event.authorName || 'Comunidad'}</button>}</div><div className="absolute inset-x-0 bottom-0 p-4"><p className="flex items-center gap-1.5 text-xs font-semibold capitalize text-white/70"><CalendarDays className="h-3.5 w-3.5"/>{eventDateLabel(event)}{event.time ? ` · ${event.time}` : ''}</p><h3 className="mt-1 line-clamp-2 text-lg font-bold leading-snug">{event.title}</h3><p className="mt-1 flex items-center gap-1 truncate text-xs text-white/65"><MapPin className="h-3.5 w-3.5 shrink-0"/>{event.location}</p></div></div>)}</div> : <div className="relative"><EventSkeleton empty/><button type="button" onClick={() => void requestCreateEvent()} className="absolute bottom-5 left-4 z-10 text-xs font-semibold text-[#ff7956] underline underline-offset-4">Crear evento</button></div>}
+          {eventsLoading ? <div className="space-y-3">{[0, 1].map((item) => <EventSkeleton key={item}/>)}</div> : eventsError ? <div className="rounded-[24px] bg-[#202124] p-4"><p role="alert" className="text-sm text-white/65">{eventsError}</p><button type="button" onClick={loadEvents} className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black">Reintentar</button></div> : events.length ? <div className="space-y-2">{events.map((event) => { const date = eventDateParts(event.date); return <button data-news-squircle key={event.id} type="button" onClick={() => openEvent(event)} className="group flex w-full items-center gap-3 overflow-hidden rounded-[24px] bg-[#252629] p-3 text-left transition-colors hover:bg-[#2d2e31]">
+            <span className="flex w-11 shrink-0 flex-col items-center text-center"><span className="text-[9px] font-bold tracking-wide text-[#f08a69]">{date.weekday}</span><span className="text-2xl font-bold leading-tight text-white">{date.day}</span><span className="text-[9px] font-medium tracking-wide text-white/45">{date.month}</span></span>
+            <span data-news-squircle className="h-[76px] w-[88px] shrink-0 overflow-hidden rounded-[18px] bg-[#35363a]">{event.imageUrl ? <img src={event.imageUrl} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"/> : <CalendarDays className="m-auto h-6 w-6 text-white/35"/>}</span>
+            <span className="flex min-w-0 flex-1 flex-col justify-center"><span className="line-clamp-1 text-sm font-semibold text-white">{event.title}</span><span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-white/55"><MapPin className="h-3 w-3 shrink-0 text-[#f08a69]"/><span className="truncate">{event.location}</span></span>{event.time && <span className="mt-1 flex items-center gap-1.5 text-xs text-white/55"><Clock3 className="h-3 w-3 shrink-0 text-[#f08a69]"/>{event.time}</span>}</span>
+            <ChevronRight className="h-5 w-5 shrink-0 text-white/45 transition-transform group-hover:translate-x-0.5"/>
+          </button>; })}</div> : <div className="relative"><EventSkeleton empty/><button type="button" onClick={() => void requestCreateEvent()} className="absolute bottom-5 left-4 z-10 text-xs font-semibold text-[#ff7956] underline underline-offset-4">Crear evento</button></div>}
         </section>
 
         <h1 className="mb-2 mt-7 text-2xl font-bold tracking-tight">Noticias</h1>

@@ -3,21 +3,21 @@ import { categories, visits, mockPlaces } from './data';
 import { Bookmark, ChevronRight, Flame, Sparkles, MapPin, Star, Store } from 'lucide-react';
 import { BottomNav } from './components/BottomNav';
 import { ColoniasPage } from './components/ColoniasPage';
-import { DiscoverPage } from './components/DiscoverPage';
+const DiscoverPage = React.lazy(() => import('./components/DiscoverPage').then((module) => ({ default: module.DiscoverPage })));
 import { CategoryPage } from './components/CategoryPage';
 import { AllCategoriesPage } from './components/AllCategoriesPage';
 import { DestacadosPage } from './components/DestacadosPage';
 import { ColoniaDetailPage } from './components/ColoniaDetailPage';
 import { BusinessDetailSheet } from './components/BusinessDetailSheet';
-import { VideosPage } from './components/VideosPage';
-import { NewsPage } from './components/NewsPage';
+const VideosPage = React.lazy(() => import('./components/VideosPage').then((module) => ({ default: module.VideosPage })));
+const NewsPage = React.lazy(() => import('./components/NewsPage').then((module) => ({ default: module.NewsPage })));
 import { SearchPage, SearchBar } from './components/SearchPage';
 import { BusinessPromotionSheet } from './components/BusinessPromotionSheet';
 import { BusinessSubmissionSheet } from './components/BusinessSubmissionSheet';
 import { AdminPage } from './components/AdminPage';
 import { SplashScreen } from './components/SplashScreen';
 import { InstallAppPrompt } from './components/InstallAppPrompt';
-import { NotificationOptInBanner } from './components/NotificationOptInBanner';
+import { SmartOnboarding, readDeviceLocation, type DeviceLocation } from './components/SmartOnboarding';
 import { WelcomePage } from './components/WelcomePage';
 import CornerKit from '@cornerkit/core';
 import { Category, Place, Colonia } from './types';
@@ -30,8 +30,24 @@ const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
 const WELCOME_SEEN_KEY = 'puntonochi-welcome-seen-v1';
 type DailyUse = { lastOpened: string; totalDays: number; currentStreak: number };
 type SignedInAccount = { id: string; name: string; email: string; picture: string | null };
+function distanceFromDevice(place: Place, location: DeviceLocation | null) {
+  if (!location || typeof place.lat !== 'number' || typeof place.lng !== 'number') return null;
+  const radians = (degrees: number) => degrees * Math.PI / 180;
+  const latitudeDelta = radians(place.lat - location.latitude);
+  const longitudeDelta = radians(place.lng - location.longitude);
+  const a = Math.sin(latitudeDelta / 2) ** 2 + Math.cos(radians(location.latitude)) * Math.cos(radians(place.lat)) * Math.sin(longitudeDelta / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 const RECENT_SEARCHES_KEY = 'puntonochi-recent-searches-v1';
 const RECENT_PLACES_KEY = 'puntonochi-recent-places-v1';
+const appCornerKit = new CornerKit();
+const appCornerTargets: [string, { radius: number; smoothing: number }][] = [
+  ['.ck-app-card', { radius: 26, smoothing: 1 }],
+  ['.ck-app-card-inner', { radius: 21, smoothing: 1 }],
+  ['.ck-home-category-card', { radius: 24, smoothing: 1 }],
+  ['.ck-home-suggested-card', { radius: 30, smoothing: 1 }],
+  ['.ck-home-favorite-card', { radius: 24, smoothing: 1 }],
+];
 
 function readLocalList(key: string): string[] {
   try {
@@ -143,6 +159,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(init.initShowSplash);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [welcomeTransitionDone, setWelcomeTransitionDone] = useState(true);
   const [publicProfileId, setPublicProfileId] = useState<string | null>(null);
   const [showStreakPage, setShowStreakPage] = useState(false);
   const [marketplaceDetailOpen, setMarketplaceDetailOpen] = useState(false);
@@ -151,6 +168,7 @@ export default function App() {
   const [suggestionVersion, setSuggestionVersion] = useState(0);
   const [popularPlaces, setPopularPlaces] = useState<Place[]>([]);
   const [recentlyAddedPlaces, setRecentlyAddedPlaces] = useState<Place[]>([]);
+  const [deviceLocation, setDeviceLocation] = useState<DeviceLocation | null>(() => readDeviceLocation());
   const [dailyUse, setDailyUse] = useState<DailyUse>(() => recordDailyUse());
   const streakDateRef = useRef(dailyUse.lastOpened);
 
@@ -211,6 +229,8 @@ export default function App() {
   const finishWelcome = () => {
     try { localStorage.setItem(WELCOME_SEEN_KEY, 'true'); } catch { /* Welcome still closes if storage is unavailable. */ }
     setShowWelcome(false);
+    setWelcomeTransitionDone(false);
+    window.setTimeout(() => setWelcomeTransitionDone(true), 360);
   };
 
   useEffect(() => {
@@ -262,13 +282,22 @@ export default function App() {
       const bookmarkScore = bookmarks.includes(place.id) ? 12 : 0;
       const viewedIndex = recentPlaces.indexOf(place.id);
       const viewedScore = viewedIndex >= 0 ? 6 - Math.min(viewedIndex, 5) : 0;
-      return searchScore + bookmarkScore + viewedScore + Math.min(place.reviewCount || 0, 100) / 100 + (place.rating || 0) / 10;
+      const distance = distanceFromDevice(place, deviceLocation);
+      const proximityScore = distance === null ? 0 : Math.max(-20, 30 - distance * 2);
+      return searchScore + bookmarkScore + viewedScore + proximityScore + Math.min(place.reviewCount || 0, 100) / 100 + (place.rating || 0) / 10;
     };
     return [...mockPlaces]
       .filter((place) => place.images?.length)
-      .sort((a, b) => score(b) - score(a))
+      .sort((a, b) => {
+        const distanceA = distanceFromDevice(a, deviceLocation);
+        const distanceB = distanceFromDevice(b, deviceLocation);
+        if (distanceA !== null && distanceB !== null && Math.abs(distanceA - distanceB) > 0.01) return distanceA - distanceB;
+        if (distanceA !== null && distanceB === null) return -1;
+        if (distanceB !== null && distanceA === null) return 1;
+        return score(b) - score(a);
+      })
       .slice(0, 8);
-  }, [directoryVersion, suggestionVersion]);
+  }, [directoryVersion, suggestionVersion, deviceLocation]);
 
   const favoritePlaces = useMemo(() => {
     const ids = getBookmarkedPlaceIds();
@@ -332,15 +361,12 @@ export default function App() {
 
   useEffect(() => {
     if (activeTab === 'inicio') {
-      const timer = setTimeout(() => {
-        const ck = new CornerKit();
-        ck.applyAll('.ck-app-card', { radius: 26, smoothing: 1 });
-        ck.applyAll('.ck-app-card-inner', { radius: 21, smoothing: 1 });
-        ck.applyAll('.ck-home-category-card', { radius: 24, smoothing: 1 });
-        ck.applyAll('.ck-home-suggested-card', { radius: 30, smoothing: 1 });
-        ck.applyAll('.ck-home-favorite-card', { radius: 24, smoothing: 1 });
-      }, 300);
-      return () => clearTimeout(timer);
+      const frame = window.requestAnimationFrame(() => {
+        for (const [selector, config] of appCornerTargets) {
+          document.querySelectorAll<HTMLElement>(selector).forEach((element) => appCornerKit.apply(element, config));
+        }
+      });
+      return () => window.cancelAnimationFrame(frame);
     }
   }, [activeTab, destacadosState.index, loading, suggestionVersion]);
 
@@ -573,6 +599,32 @@ export default function App() {
               <div className="min-w-0 flex-1 py-2 pr-3"><h3 className="line-clamp-2 text-[15px] font-bold">{place.name}</h3><p className="mt-1 line-clamp-1 text-xs text-white/60">{place.category}{place.subtitle ? ` · ${place.subtitle}` : ''}</p><p className="mt-1 truncate text-[11px] text-white/45">{place.location || place.address || 'Nochistlán'}</p></div>
             </button>)}{homeSearchResults.length === 0 && <p className="rounded-[20px] bg-neutral-100 px-4 py-5 text-sm text-neutral-500">No encontramos negocios que coincidan. Prueba con otro nombre, giro o colonia.</p>}</div>
           </section> : <>
+          {/* Personalized suggestions */}
+          <section className="mb-10">
+            <div className="px-5 mb-4">
+              <h2 className="text-2xl font-bold flex items-center gap-2"><Sparkles className="h-5 w-5 text-[#1a73e8]"/>{deviceLocation ? 'Cerca de ti' : 'Sugeridos'}</h2>
+              <p className="text-[15px] text-neutral-500 font-medium mt-0.5">{deviceLocation ? 'Negocios ordenados por distancia a tu ubicación' : 'Negocios para ti, según lo que buscas y guardas'}</p>
+            </div>
+
+            <div className="flex gap-4 overflow-x-auto px-5 pb-2 scrollbar-hide snap-x snap-mandatory">
+              {loading ? [1, 2, 3].map((item) => <div key={item} className="h-[220px] w-[250px] shrink-0 animate-pulse rounded-[28px] bg-neutral-200 snap-start" />) : suggestedPlaces.map((place) => (
+                <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
+                  <img src={place.images[0]} alt={place.name} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
+                  <div className="absolute left-4 right-4 top-4 flex items-center justify-between">
+                    <span className="rounded-full bg-black/35 px-3 py-1 text-xs font-semibold backdrop-blur-sm">{place.category}</span>
+                    {getBookmarkedPlaceIds().includes(place.id) && <Bookmark className="h-4 w-4 fill-white drop-shadow" />}
+                  </div>
+                  <div className="absolute bottom-4 left-4 right-4">
+                    <h3 className="line-clamp-2 text-lg font-bold leading-tight">{place.name}</h3>
+                    <p className="mt-1 flex items-center gap-1 truncate text-xs text-white/80"><MapPin className="h-3 w-3 shrink-0"/>{distanceFromDevice(place, deviceLocation) !== null ? `${distanceFromDevice(place, deviceLocation)!.toFixed(1)} km de aquí` : place.location || place.address || 'Nochistlán'}</p>
+                    {place.rating > 0 && <p className="mt-1 flex items-center gap-1 text-xs text-white/85"><Star className="h-3 w-3 fill-current text-yellow-300"/>{place.rating.toFixed(1)}{place.reviewCount ? ` · ${place.reviewCount} reseñas` : ''}</p>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+
           {/* By Category Section */}
           <section className="mb-10">
             <div 
@@ -629,32 +681,6 @@ export default function App() {
                   );
                 })
               )}
-            </div>
-          </section>
-
-          {/* Personalized suggestions */}
-          <section className="mb-10">
-            <div className="px-5 mb-4">
-              <h2 className="text-2xl font-bold flex items-center gap-2"><Sparkles className="h-5 w-5 text-[#1a73e8]"/>Sugeridos</h2>
-              <p className="text-[15px] text-neutral-500 font-medium mt-0.5">Negocios para ti, según lo que buscas y guardas</p>
-            </div>
-
-            <div className="flex gap-4 overflow-x-auto px-5 pb-2 scrollbar-hide snap-x snap-mandatory">
-              {loading ? [1, 2, 3].map((item) => <div key={item} className="h-[220px] w-[250px] shrink-0 animate-pulse rounded-[28px] bg-neutral-200 snap-start" />) : suggestedPlaces.map((place) => (
-                <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
-                  <img src={place.images[0]} alt={place.name} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
-                  <div className="absolute left-4 right-4 top-4 flex items-center justify-between">
-                    <span className="rounded-full bg-black/35 px-3 py-1 text-xs font-semibold backdrop-blur-sm">{place.category}</span>
-                    {getBookmarkedPlaceIds().includes(place.id) && <Bookmark className="h-4 w-4 fill-white drop-shadow" />}
-                  </div>
-                  <div className="absolute bottom-4 left-4 right-4">
-                    <h3 className="line-clamp-2 text-lg font-bold leading-tight">{place.name}</h3>
-                    <p className="mt-1 flex items-center gap-1 truncate text-xs text-white/80"><MapPin className="h-3 w-3 shrink-0"/>{place.location || place.address || 'Nochistlán'}</p>
-                    {place.rating > 0 && <p className="mt-1 flex items-center gap-1 text-xs text-white/85"><Star className="h-3 w-3 fill-current text-yellow-300"/>{place.rating.toFixed(1)}{place.reviewCount ? ` · ${place.reviewCount} reseñas` : ''}</p>}
-                  </div>
-                </button>
-              ))}
             </div>
           </section>
 
@@ -832,18 +858,20 @@ export default function App() {
 
         {activeTab === 'explorar' && (
           <motion.div key="explore-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}>
-          <DiscoverPage 
-            key="discover" 
-            onSelectBusiness={(place) => setSelectedBusiness(place)} 
-            account={signedInAccount}
-          />
+          <React.Suspense fallback={<div role="status" aria-label="Cargando Explorar" className="min-h-[50vh] bg-[#111214]"/>}>
+            <DiscoverPage 
+              key="discover" 
+              onSelectBusiness={(place) => setSelectedBusiness(place)} 
+              account={signedInAccount}
+            />
+          </React.Suspense>
           </motion.div>
         )}
         {activeTab === 'videos' && (
-          <motion.div key="videos-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}><VideosPage key="videos" onSelectBusiness={(place) => setSelectedBusiness(place)} /></motion.div>
+          <motion.div key="videos-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}><React.Suspense fallback={<div role="status" aria-label="Cargando Mercado" className="min-h-[50vh] bg-[#111214]"/>}><VideosPage key="videos" onSelectBusiness={(place) => setSelectedBusiness(place)} /></React.Suspense></motion.div>
         )}
         {activeTab === 'noticias' && (
-          <motion.div key="news-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}><NewsPage key="noticias" /></motion.div>
+          <motion.div key="news-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}><React.Suspense fallback={<div role="status" aria-label="Cargando Noticias" className="min-h-[50vh] bg-[#111214]"/>}><NewsPage key="noticias" /></React.Suspense></motion.div>
         )}
       </AnimatePresence>
 
@@ -932,7 +960,7 @@ export default function App() {
           <SplashScreen key="splash-screen" onFinish={finishSplash} />
         )}
         <InstallAppPrompt enabled={!loading} />
-        <NotificationOptInBanner />
+        <SmartOnboarding enabled={!loading && !showWelcome && welcomeTransitionDone && !showAdminPage} onLocation={setDeviceLocation} />
         {showWelcome && !showAdminPage && <WelcomePage onContinue={finishWelcome} />}
         {publicProfileId && <PublicProfileSheet profileId={publicProfileId} onClose={() => setPublicProfileId(null)} />}
       </AnimatePresence>

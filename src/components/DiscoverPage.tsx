@@ -82,7 +82,7 @@ function StoriesRow({ posts, account, onCreate }: { posts: CommunityPost[]; acco
 
 function CommunityPostCard({ post, onOpenProfile, onOpenImage }: { post: CommunityPost; onOpenProfile: (id: string) => void; onOpenImage: (url: string, alt: string) => void }) {
   const author = post.authorName || 'Comunidad de Nochistlán';
-  return <article id={`community-post-${post.id}`} className="community-feed-card overflow-hidden rounded-[26px] bg-[#1a1b1e]">
+  return <article id={`community-post-${post.id}`} className="explore-lazy-card community-feed-card overflow-hidden rounded-[26px] bg-[#1a1b1e]">
     <div className="flex items-center gap-2.5 px-3.5 py-3">
       {post.profileId ? <button type="button" aria-label={`Ver el perfil de ${author}`} onClick={() => onOpenProfile(post.profileId!)}><AuthorAvatar picture={post.authorPicture} name={author} size="h-9 w-9"/></button> : <AuthorAvatar picture={post.authorPicture} name={author} size="h-9 w-9"/>}
       <div className="min-w-0 flex-1">
@@ -101,7 +101,7 @@ function CommunityPostCard({ post, onOpenProfile, onOpenImage }: { post: Communi
 
 function CommunityEventCard({ event, onOpenProfile, onOpenEvent }: { event: CommunityEvent; onOpenProfile: (id: string) => void; onOpenEvent: (id: string) => void }) {
   const author = event.authorName || 'Comunidad de Nochistlán';
-  return <article className="community-feed-card overflow-hidden rounded-[26px] bg-[#1a1b1e]">
+  return <article className="explore-lazy-card community-feed-card overflow-hidden rounded-[26px] bg-[#1a1b1e]">
     <div className="flex items-center gap-2.5 px-3.5 py-3">
       {event.profileId ? <button type="button" aria-label={`Ver el perfil de ${author}`} onClick={() => onOpenProfile(event.profileId!)}><AuthorAvatar picture={event.authorPicture} name={author} size="h-9 w-9"/></button> : <AuthorAvatar picture={event.authorPicture} name={author} size="h-9 w-9"/>}
       <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-white">{author}</p><p className="mt-0.5 text-[10px] text-white/45">Evento de la comunidad</p></div>
@@ -123,7 +123,7 @@ function CommunityEventCard({ event, onOpenProfile, onOpenEvent }: { event: Comm
 
 function BusinessDiscoveryCard({ place, onOpen }: { place: Place; onOpen: () => void }) {
   const image = place.images?.[0] || place.logo;
-  return <button type="button" onClick={onOpen} className="group marketplace-squircle relative h-[210px] w-full overflow-hidden bg-[#202124] text-left" aria-label={`Ver ${place.name}`}>
+  return <button type="button" onClick={onOpen} className="explore-lazy-card group marketplace-squircle relative h-[210px] w-full overflow-hidden bg-[#202124] text-left" aria-label={`Ver ${place.name}`}>
     {image ? <img src={image} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"/> : <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#30343b] to-[#1b1c1f]"><Store className="h-10 w-10 text-white/25"/></div>}
     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/15 to-black/5"/>
     <div className="absolute inset-x-0 bottom-0 p-3.5"><span className="rounded-full bg-black/45 px-2 py-1 text-[9px] font-semibold text-white/80 backdrop-blur">{place.category}</span><h3 className="mt-2 line-clamp-1 text-sm font-bold text-white">{place.name}</h3><p className="mt-1 flex items-center gap-1 text-[10px] text-white/65"><MapPin className="h-3 w-3 shrink-0"/><span className="truncate">{place.location}</span></p><p className="mt-1 flex items-center gap-1 text-[10px] text-white/70"><Star className="h-3 w-3 fill-amber-300 text-amber-300"/>{place.rating?.toFixed(1) || 'Nuevo'}<span className="text-white/45">· {place.isOpen ? 'Abierto' : 'Cerrado'}</span></p></div>

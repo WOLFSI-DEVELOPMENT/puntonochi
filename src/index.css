@@ -566,6 +566,8 @@
   border-radius: 0 !important;
   background: transparent !important;
 }
+.explore-lazy-card { content-visibility: auto; contain-intrinsic-size: auto 420px; }
+.explore-lazy-card.group { contain-intrinsic-size: auto 210px; }
 .community-feed-image {
   display: block;
   aspect-ratio: 4 / 3;
