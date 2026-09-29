@@ -12,7 +12,7 @@ import { BusinessDetailSheet } from './components/BusinessDetailSheet';
 const VideosPage = React.lazy(() => import('./components/VideosPage').then((module) => ({ default: module.VideosPage })));
 const NewsPage = React.lazy(() => import('./components/NewsPage').then((module) => ({ default: module.NewsPage })));
 const CreatePage = React.lazy(() => import('./components/CreatePage').then((module) => ({ default: module.CreatePage })));
-import { SearchPage, SearchBar } from './components/SearchPage';
+import { SearchPage, SearchBar, AskNochiInline } from './components/SearchPage';
 import { BusinessPromotionSheet } from './components/BusinessPromotionSheet';
 import { BusinessSubmissionSheet } from './components/BusinessSubmissionSheet';
 import { AdminPage } from './components/AdminPage';
@@ -25,7 +25,7 @@ import { Category, Place, Colonia } from './types';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { DAILY_USE_KEY, getBookmarkedPlaceIds, recordProfileActiveSeconds } from './profileStorage';
 import { PublicProfileSheet } from './components/PublicProfileSheet';
-import { StreakPage } from './components/StreakPage';
+import { getStreakMilestone, StreakBadgeCelebration, StreakPage } from './components/StreakPage';
 import { Analytics } from '@vercel/analytics/react';
 
 const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
@@ -159,11 +159,13 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(init.initialTab);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [homeAskMode, setHomeAskMode] = useState(false);
   const [loading, setLoading] = useState(init.initShowSplash);
   const [showWelcome, setShowWelcome] = useState(false);
   const [welcomeTransitionDone, setWelcomeTransitionDone] = useState(true);
   const [publicProfileId, setPublicProfileId] = useState<string | null>(null);
   const [showStreakPage, setShowStreakPage] = useState(false);
+  const [streakBadgeCelebration, setStreakBadgeCelebration] = useState<{ days: number; name: string } | null>(null);
   const [marketplaceDetailOpen, setMarketplaceDetailOpen] = useState(false);
   const [signedInAccount, setSignedInAccount] = useState<SignedInAccount | null>(null);
   const [directoryVersion, setDirectoryVersion] = useState(0);
@@ -173,6 +175,47 @@ export default function App() {
   const [deviceLocation, setDeviceLocation] = useState<DeviceLocation | null>(() => readDeviceLocation());
   const [dailyUse, setDailyUse] = useState<DailyUse>(() => recordDailyUse());
   const streakDateRef = useRef(dailyUse.lastOpened);
+
+  useEffect(() => {
+    if (loading || showWelcome || !welcomeTransitionDone) return;
+    const earnedBadge = getStreakMilestone(dailyUse.currentStreak);
+    if (!earnedBadge) return;
+    const today = localDateKey();
+    const seenKey = `puntonochi-streak-badge-shown-${earnedBadge.days}`;
+    try {
+      if (localStorage.getItem(seenKey) === today) return;
+      localStorage.setItem(seenKey, today);
+    } catch { /* Avoid repeating the celebration during this app session. */ }
+    setStreakBadgeCelebration({ days: earnedBadge.days, name: earnedBadge.name });
+  }, [dailyUse.currentStreak, loading, showWelcome, welcomeTransitionDone]);
+  const tabSwipeStart = useRef<{ x: number; y: number } | null>(null);
+  const previousPrimaryTab = useRef(activeTab);
+  const [tabDirection, setTabDirection] = useState(1);
+  const primaryTabs = ['inicio', 'explorar', 'videos', 'noticias', 'crear'] as const;
+
+  useEffect(() => {
+    const from = primaryTabs.indexOf(previousPrimaryTab.current as typeof primaryTabs[number]);
+    const to = primaryTabs.indexOf(activeTab as typeof primaryTabs[number]);
+    if (from >= 0 && to >= 0 && from !== to) setTabDirection(to > from ? 1 : -1);
+    previousPrimaryTab.current = activeTab;
+  }, [activeTab]);
+
+  const onPageTouchStart = (event: React.TouchEvent<HTMLElement>) => {
+    if (event.touches.length !== 1 || showSearch || showAdminPage || showStreakPage || selectedBusiness || selectedCategory || showAllCategories || showColonias) { tabSwipeStart.current = null; return; }
+    const target = event.target as HTMLElement;
+    if (target.closest('input, textarea, select, [role="dialog"], [data-no-tab-swipe], .snap-x, .overflow-x-auto')) { tabSwipeStart.current = null; return; }
+    const touch = event.touches[0]; tabSwipeStart.current = { x: touch.clientX, y: touch.clientY };
+  };
+  const onPageTouchEnd = (event: React.TouchEvent<HTMLElement>) => {
+    const start = tabSwipeStart.current; tabSwipeStart.current = null;
+    if (!start || event.changedTouches.length !== 1) return;
+    const touch = event.changedTouches[0]; const dx = touch.clientX - start.x; const dy = touch.clientY - start.y;
+    if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.35) return;
+    const index = primaryTabs.indexOf(activeTab as typeof primaryTabs[number]);
+    if (index < 0) return;
+    const nextIndex = dx < 0 ? index + 1 : index - 1;
+    if (nextIndex >= 0 && nextIndex < primaryTabs.length) setActiveTab(primaryTabs[nextIndex]);
+  };
 
   useEffect(() => {
     const handleTabNavigation = (event: Event) => {
@@ -577,7 +620,7 @@ export default function App() {
       {/* Dynamic Main Content based on activeTab */}
       <AnimatePresence mode="wait" initial={false}>
       {activeTab === 'inicio' && (
-        <motion.main key="home-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }} className="pt-8">
+        <motion.main key="home-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }} className="pt-8">
           {/* Header Section */}
           <section className="relative px-5 mb-8">
             <div className="absolute right-5 top-[-4px] flex items-center gap-2">
@@ -593,15 +636,17 @@ export default function App() {
               Descubre<br/>
               <span className="text-[#1a73e8]">Nochistlán</span>
             </h1>
-            <SearchBar value={searchQuery} onChange={setSearchQuery} className="mt-5" />
+            {homeAskMode
+              ? <AskNochiInline places={mockPlaces} onClose={() => setHomeAskMode(false)} onSelectPlace={(place) => { setSelectedCategory(null); setSelectedBusiness(place); setHomeAskMode(false); }} />
+              : <SearchBar value={searchQuery} onChange={setSearchQuery} onToggleAsk={() => { setHomeAskMode(true); setSearchQuery(''); }} className="mt-5" />}
           </section>
-          {searchQuery.trim() ? <section className="mb-10 px-5" aria-live="polite">
+          {!homeAskMode && searchQuery.trim() ? <section className="mb-10 px-5" aria-live="polite">
             <div className="mb-4"><h2 className="text-xl font-bold">Resultados ({homeSearchResults.length})</h2><p className="mt-1 text-sm text-neutral-500">Negocios que coinciden con tu búsqueda</p></div>
             <div className="space-y-3">{homeSearchResults.map((place) => <button type="button" key={place.id} onClick={() => setSelectedBusiness(place)} className="flex min-h-[106px] w-full items-center gap-3 rounded-[24px] bg-[#292a2d] p-[5px] text-left text-white">
               <div className="aspect-video w-[38%] max-w-[160px] shrink-0 overflow-hidden rounded-[19px] bg-[#35363a]">{place.images?.[0] && <img src={place.images[0]} alt="" loading="lazy" className="h-full w-full object-cover"/>}</div>
               <div className="min-w-0 flex-1 py-2 pr-3"><h3 className="line-clamp-2 text-[15px] font-bold">{place.name}</h3><p className="mt-1 line-clamp-1 text-xs text-white/60">{place.category}{place.subtitle ? ` · ${place.subtitle}` : ''}</p><p className="mt-1 truncate text-[11px] text-white/45">{place.location || place.address || 'Nochistlán'}</p></div>
             </button>)}{homeSearchResults.length === 0 && <p className="rounded-[20px] bg-neutral-100 px-4 py-5 text-sm text-neutral-500">No encontramos negocios que coincidan. Prueba con otro nombre, giro o colonia.</p>}</div>
-          </section> : <>
+          </section> : !homeAskMode ? <>
           {/* Personalized suggestions */}
           <section className="mb-10">
             <div className="px-5 mb-4">
@@ -855,12 +900,12 @@ export default function App() {
             </div>
             <button type="button" onClick={() => setShowBusinessSubmission(true)} style={{ backgroundColor: '#ffffff', color: '#111111' }} className="w-full rounded-full !bg-white px-6 py-3.5 text-sm font-bold !text-black transition-transform active:scale-[0.99]">Agrega tu negocio</button>
           </section>
-          </>}
+          </> : null}
         </motion.main>
       )}
 
         {activeTab === 'explorar' && (
-          <motion.div key="explore-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}>
+          <motion.div key="explore-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}>
           <React.Suspense fallback={<div role="status" aria-label="Cargando Explorar" className="min-h-[50vh] bg-[#111214]"/>}>
             <DiscoverPage 
               key="discover" 
@@ -871,19 +916,20 @@ export default function App() {
           </motion.div>
         )}
         {activeTab === 'videos' && (
-          <motion.div key="videos-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}><React.Suspense fallback={<div role="status" aria-label="Cargando Mercado" className="min-h-[50vh] bg-[#111214]"/>}><VideosPage key="videos" onSelectBusiness={(place) => setSelectedBusiness(place)} /></React.Suspense></motion.div>
+          <motion.div key="videos-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<div role="status" aria-label="Cargando Mercado" className="min-h-[50vh] bg-[#111214]"/>}><VideosPage key="videos" onSelectBusiness={(place) => setSelectedBusiness(place)} /></React.Suspense></motion.div>
         )}
         {activeTab === 'crear' && (
-          <motion.div key="create-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}><React.Suspense fallback={<div role="status" aria-label="Cargando Crear" className="min-h-[50vh] bg-[#111214]"/>}><CreatePage account={signedInAccount}/></React.Suspense></motion.div>
+          <motion.div key="create-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<div role="status" aria-label="Cargando Crear" className="min-h-[50vh] bg-[#111214]"/>}><CreatePage account={signedInAccount}/></React.Suspense></motion.div>
         )}
         {activeTab === 'noticias' && (
-          <motion.div key="news-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}><React.Suspense fallback={<div role="status" aria-label="Cargando Noticias" className="min-h-[50vh] bg-[#111214]"/>}><NewsPage key="noticias" /></React.Suspense></motion.div>
+          <motion.div key="news-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<div role="status" aria-label="Cargando Noticias" className="min-h-[50vh] bg-[#111214]"/>}><NewsPage key="noticias" /></React.Suspense></motion.div>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {showStreakPage && <StreakPage key="streak-page" totalDays={dailyUse.totalDays} currentStreak={dailyUse.currentStreak} onClose={() => setShowStreakPage(false)} />}
       </AnimatePresence>
+      <AnimatePresence>{streakBadgeCelebration && <StreakBadgeCelebration key={`streak-badge-${streakBadgeCelebration.days}`} days={streakBadgeCelebration.days} name={streakBadgeCelebration.name} onDone={() => setStreakBadgeCelebration(null)}/>}</AnimatePresence>
 
       {/* Bottom Navigation & Search */}
       {!showSearch && !showAdminPage && !showStreakPage && !(activeTab === 'videos' && marketplaceDetailOpen) && (
@@ -958,6 +1004,7 @@ export default function App() {
             key="business-sheet"
             place={selectedBusiness} 
             onClose={() => setSelectedBusiness(null)} 
+            onSelectBusiness={(place) => setSelectedBusiness(place)}
           />
         )}
 

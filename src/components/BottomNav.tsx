@@ -38,11 +38,11 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch }: { activeTab:
   };
 
   return (
-    <div style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.5rem)' }} className="fixed left-0 right-0 w-full flex justify-center z-50 pointer-events-none px-4">
+    <div style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.5rem)' }} className="fixed left-0 right-0 z-50 flex w-full justify-center px-2 pointer-events-none sm:px-4">
       <motion.div 
         layout
         className={cn(
-          'pointer-events-auto relative flex items-center px-0 w-[min(100%,340px)]',
+          'pointer-events-auto relative flex w-full max-w-[400px] items-center px-0',
           design === 'dynamic'
             ? 'liquid-glass h-[60px] rounded-[30px] shadow-2xl shadow-black/40'
             : 'h-[52px] rounded-[30px] bg-white/[0.08] shadow-[0_8px_28px_rgba(0,0,0,0.2)] backdrop-blur-[36px] backdrop-saturate-150'
@@ -113,7 +113,7 @@ function NavTab({ id, icon, label, active, onClick, simple }: { id: string, icon
       {active && (
         <motion.div 
           layoutId="activeTabIndicator"
-          className={cn('absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-8px)] -z-10 rounded-full', simple ? 'h-[40px] max-w-[62px] bg-white/[0.14] backdrop-blur-[24px] backdrop-saturate-150 shadow-none' : 'h-[50px] max-w-[62px] bg-[#ffffff]/15 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]')}
+          className={cn('absolute left-1/2 top-1/2 -z-10 w-[calc(100%-6px)] -translate-x-1/2 -translate-y-1/2 rounded-full', simple ? 'h-[40px] bg-white/[0.14] backdrop-blur-[24px] backdrop-saturate-150 shadow-none' : 'h-[48px] bg-[#ffffff]/15 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]')}
           transition={{ type: "spring", stiffness: 400, damping: 30 }}
         />
       )}

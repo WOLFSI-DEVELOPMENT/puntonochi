@@ -37,6 +37,22 @@ type FeedItem = { kind: 'post'; key: string; createdAt: string; post: CommunityP
 type AccountSummary = { id: string; name: string; picture: string | null };
 type BusinessPreferenceProfile = { searches: string[]; categories: Record<string, number>; viewed: string[] };
 
+function AdSenseFeedCard({ slot }: { slot: string }) {
+  const publisher = 'ca-pub-7029279570287128';
+  const adSlot = '7895105729';
+  useEffect(() => {
+    if (!window.adsbygoogle) return;
+    try { window.adsbygoogle.push({}); } catch { /* Keep the reserved native ad card visible until AdSense is ready. */ }
+  }, [adSlot]);
+  return <aside aria-label="Anuncio" className="explore-lazy-card overflow-hidden rounded-[26px] bg-[#1a1b1e]">
+    <div data-adsense-slot={slot} className="relative min-h-[170px] px-3.5 pb-3 pt-2"><span className="mb-1 block text-[9px] font-medium uppercase tracking-[.14em] text-white/35">Anuncio</span><ins className="adsbygoogle block min-h-[150px]" style={{ display: 'block' }} data-ad-client={publisher} data-ad-slot={adSlot} data-ad-format="fluid" data-ad-layout-key="-6t+ed+2i-1n-4w" data-full-width-responsive="true" data-puntonochi-placement={slot}/></div>
+  </aside>;
+}
+
+declare global {
+  interface Window { adsbygoogle?: { push: (value: Record<string, never>) => number }; }
+}
+
 function preferenceStorageKey(account: AccountSummary | null) { return `puntonochi-business-discovery-v1:${account?.id || 'guest'}`; }
 function readBusinessPreferences(key: string): BusinessPreferenceProfile {
   try {
@@ -277,10 +293,12 @@ export function DiscoverPage({ onSelectBusiness, account }: {
       {feedFilter === 'business' ? <section aria-label="Negocios recomendados" className="grid grid-cols-2 gap-2.5">{matchingBusinesses.length ? matchingBusinesses.map((place) => <BusinessDiscoveryCard key={place.id} place={place} onOpen={() => { const category = place.category.toLocaleLowerCase('es-MX').normalize('NFD').replace(/[\u0300-\u036f]/g, ''); savePreferences((current) => ({ ...current, viewed: [place.id, ...current.viewed.filter((id) => id !== place.id)].slice(0, 30), categories: { ...current.categories, [category]: (current.categories[category] || 0) + 1 } })); onSelectBusiness(place); }}/>) : <div className="col-span-2 rounded-[22px] bg-[#1a1b1e] px-5 py-8 text-center"><Store className="mx-auto h-6 w-6 text-white/35"/><p className="mt-3 text-sm font-semibold text-white/85">No encontramos negocios</p><p className="mt-1 text-xs text-white/45">Prueba con otro nombre, categoría o servicio.</p></div>}</section> : <section aria-label="Publicaciones y eventos de la comunidad" className="flex flex-col gap-4">
         {feedLoading && <div role="status" className="py-8 text-center text-xs text-white/45">Cargando lo que comparte la comunidad…</div>}
         {!feedLoading && !visibleFeedItems.length && <div className="rounded-[26px] bg-[#1a1b1e] px-5 py-8 text-center"><p className="text-sm font-semibold text-white/85">{feedItems.length ? 'No hay contenido en esta categoría' : 'Aquí aparecerá la comunidad'}</p><p className="mx-auto mt-1.5 max-w-xs text-xs leading-relaxed text-white/45">{feedItems.length ? 'Prueba otra categoría para ver más contenido.' : 'Comparte un momento o publica un evento para empezar el feed.'}</p><button type="button" onClick={() => setShowCreateFlow(true)} className="mt-4 rounded-full bg-white px-4 py-2.5 text-xs font-bold text-black">Crear publicación</button></div>}
-        {visibleFeedItems.map((item) => item.kind === 'post'
-          ? <CommunityPostCard key={item.key} post={item.post} onOpenProfile={(id) => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: id }))} onOpenImage={(url, alt) => setOpenedImage({ url, alt })}/>
-          : <CommunityEventCard key={item.key} event={item.event} onOpenProfile={(id) => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: id }))} onOpenEvent={openEvent}/>
-        )}
+        {visibleFeedItems.map((item, index) => <div key={item.key} className="contents">
+          {item.kind === 'post'
+            ? <CommunityPostCard post={item.post} onOpenProfile={(id) => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: id }))} onOpenImage={(url, alt) => setOpenedImage({ url, alt })}/>
+            : <CommunityEventCard event={item.event} onOpenProfile={(id) => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: id }))} onOpenEvent={openEvent}/>}
+          {feedFilter === 'all' && (index === 1 || (index === 5 && visibleFeedItems.length > 6)) && <AdSenseFeedCard slot={`explore-feed-${index}`} />}
+        </div>)}
       </section>}
     </div>
 

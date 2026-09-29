@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, Bookmark, MapPin, Plus, Search, Star, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { mockPlaces } from '../data';
@@ -46,10 +46,41 @@ export function SearchSparkleIcon() {
   </svg>;
 }
 
-export function SearchBar({ value, onChange, className = '' }: { value: string; onChange: (value: string) => void; className?: string }) {
+export function AskNochiInline({ places, onSelectPlace, onClose }: { places: Place[]; onSelectPlace: (place: Place) => void; onClose: () => void }) {
+  const [question, setQuestion] = useState('');
+  const [answer, setAnswer] = useState('');
+  const [answerPlaces, setAnswerPlaces] = useState<Place[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [history, setHistory] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const send = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); const text = question.trim(); if (!text || busy) return;
+    setBusy(true); setError(''); setAnswer(''); setAnswerPlaces([]);
+    try {
+      const response = await fetch('/api/ask-nochi', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: text, history: history.slice(-8) }) });
+      const data = await response.json(); if (!response.ok) throw new Error(data?.error || 'No se pudo completar la pregunta.');
+      setAnswer(String(data.answer || '')); setAnswerPlaces(Array.isArray(data.places) ? data.places : []);
+      setHistory((current) => [...current, { role: 'user', content: text }, { role: 'assistant', content: String(data.answer || '') }].slice(-10)); setQuestion('');
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'No se pudo completar la pregunta.'); }
+    finally { setBusy(false); }
+  };
+  return <div className="mt-5">
+    <form onSubmit={(event) => void send(event)} className="flex h-12 w-full items-center gap-2 rounded-2xl bg-[#292929] px-2.5 text-white">
+      <button type="button" onClick={onClose} aria-label="Cerrar pregunta de Ask Nochi" title="Cancelar" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white"><span className="material-symbols-rounded text-[21px]">close</span></button>
+      <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Pregunta lo que quieras a Nochi" aria-label="Pregunta a Ask Nochi" autoComplete="off" className="min-w-0 flex-1 appearance-none border-0 !bg-transparent p-0 text-[16px] text-white outline-none placeholder:text-white/40 focus:!bg-transparent focus:outline-none focus:ring-0"/>
+      <button type="submit" disabled={!question.trim() || busy} aria-label="Enviar pregunta" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500 text-white transition-opacity disabled:opacity-40"><span className="material-symbols-rounded text-[22px]">arrow_upward</span></button>
+    </form>
+    {(busy || error || answer) && <section aria-live="polite" className="mt-3 rounded-[22px] bg-[#202124] p-4 text-white">
+      <div className="mb-2 flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-[.14em] text-blue-300">Ask Nochi</span><button type="button" onClick={() => { setAnswer(''); setAnswerPlaces([]); setError(''); }} aria-label="Cerrar respuesta de Ask Nochi" className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[.07] text-white/60"><span className="material-symbols-rounded text-[18px]">close</span></button></div>
+      {busy ? <p className="flex items-center gap-2 py-2 text-sm text-white/55"><span className="h-2 w-2 animate-pulse rounded-full bg-blue-300"/>Ask Nochi está buscando…</p> : error ? <p role="alert" className="text-sm text-rose-200">{error}</p> : <><MarkdownAnswer content={answer}/>{!!answerPlaces.length && <div className="mt-4 space-y-2.5">{answerPlaces.map((place) => <BusinessCard key={place.id} place={place} onSelect={onSelectPlace}/>)}</div>}</>}
+    </section>}
+  </div>;
+}
+
+export function SearchBar({ value, onChange, className = '', askMode = false, onToggleAsk }: { value: string; onChange: (value: string) => void; className?: string; askMode?: boolean; onToggleAsk?: () => void }) {
   return <div className={`flex h-12 w-full items-center gap-3 rounded-2xl border-0 bg-[#292929] px-4 text-white/45 shadow-none outline-none ring-0 ${className}`}>
-    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"><SearchSparkleIcon /></span>
-    <input type="search" value={value} onChange={(event) => onChange(event.target.value)} placeholder="Buscar lugares y negocios" aria-label="Buscar lugares y negocios" className="search-input-fix min-w-0 flex-1 appearance-none border-0 !bg-transparent p-0 text-[16px] text-white !shadow-none outline-none ring-0 placeholder:text-white/40 focus:border-0 focus:!bg-transparent focus:outline-none focus:!shadow-none focus:ring-0" />
+    {onToggleAsk ? <button type="button" onClick={onToggleAsk} aria-label={askMode ? 'Volver a buscar negocios' : 'Preguntar a Ask Nochi'} title={askMode ? 'Buscar negocios' : 'Preguntar a Ask Nochi'} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"><SearchSparkleIcon /></button> : <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"><SearchSparkleIcon /></span>}
+    <input type="search" value={value} onChange={(event) => onChange(event.target.value)} placeholder={askMode ? 'Pregunta lo que quieras a Nochi' : 'Buscar lugares y negocios'} aria-label={askMode ? 'Pregunta a Ask Nochi' : 'Buscar lugares y negocios'} className="search-input-fix min-w-0 flex-1 appearance-none border-0 !bg-transparent p-0 text-[16px] text-white !shadow-none outline-none ring-0 placeholder:text-white/40 focus:border-0 focus:!bg-transparent focus:outline-none focus:!shadow-none focus:ring-0" />
   </div>;
 }
 

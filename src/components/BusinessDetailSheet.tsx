@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Share, Phone, Globe, ShoppingBag, MoreHorizontal, Navigation, BookOpen, Link, MapPin, Map as MapIcon, MessageCircle, Twitter, Facebook, QrCode, Star } from 'lucide-react';
 import { Place, Review } from '../types';
+import { mockPlaces } from '../data';
 import CornerKit from '@cornerkit/core';
 import { CommunityActionsSheet } from './CommunityActionsSheet';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
@@ -19,7 +20,7 @@ type GoogleReview = {
 };
 type GooglePlaceDetails = { weekdayDescriptions: string[]; reviews: GoogleReview[]; googleMapsUri: string };
 
-export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose: () => void }) {
+export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { place: Place, onClose: () => void, onSelectBusiness: (place: Place) => void }) {
   const [communityReviews, setCommunityReviews] = useState<Review[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const [googleDetails, setGoogleDetails] = useState<GooglePlaceDetails | null>(null);
@@ -82,6 +83,10 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
   const reviewTotal = communityReviews.length + (place.reviewCount || 0);
   const ratingDistribution = [5, 4, 3, 2, 1].map((score) => ({ score, count: reviewSamples.filter((review) => review.rating === score).length }));
   const maxRatingCount = Math.max(1, ...ratingDistribution.map((item) => item.count));
+  const suggestedBusinesses = mockPlaces
+    .filter((business) => business.id !== place.id)
+    .sort((a, b) => Number(b.category === place.category) - Number(a.category === place.category) || b.rating - a.rating)
+    .slice(0, 8);
 
   const copyBusinessLink = async () => {
     try {
@@ -116,6 +121,7 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
       const ck = new CornerKit();
       ck.applyAll('.ck-apply', { radius: 23, smoothing: 1 });
       ck.applyAll('[data-detail-squircle]', { radius: 24, smoothing: 1 });
+      ck.applyAll('[data-suggested-business]', { radius: 22, smoothing: 1 });
     }, 300);
     return () => clearTimeout(timer);
   }, [place, reviewsLoading, communityReviews.length]);
@@ -345,6 +351,35 @@ export function BusinessDetailSheet({ place, onClose }: { place: Place, onClose:
                 <img src={place.images[0]} alt={`Foto de ${place.name}`} loading="lazy" className="h-full w-full object-cover" />
               </button>}
               {!!place.communityPosts?.length && <div className="mt-3 space-y-2">{place.communityPosts.slice(0, 6).map((post) => <article key={post.id} className="flex items-center gap-3 rounded-[18px] bg-[#202124] p-2.5">{post.profileId ? <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: post.profileId }))} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">{post.authorPicture ? <img src={post.authorPicture} alt="" referrerPolicy="no-referrer" className="h-8 w-8 shrink-0 rounded-full object-cover"/> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs">{(post.authorName || '?').slice(0, 1)}</span>}<span className="min-w-0"><span className="block truncate text-xs font-semibold">Foto de {post.authorName || 'la comunidad'}</span><span className="mt-0.5 block line-clamp-1 text-[11px] text-white/45">{post.caption || 'Ver perfil y publicaciones'}</span></span></button> : <span className="min-w-0 flex-1 truncate text-xs text-white/45">Foto compartida por la comunidad</span>}<button type="button" aria-label="Abrir foto compartida" onPointerDownCapture={(event) => event.stopPropagation()} onClick={() => { const imageIndex = place.images.findIndex((image) => image === post.imageUrl); if (imageIndex >= 0) openViewer(imageIndex); }} className="h-11 w-11 shrink-0 overflow-hidden rounded-xl"><img src={post.imageUrl} alt="" className="h-full w-full object-cover"/></button></article>)}</div>}
+            </section>}
+
+            {suggestedBusinesses.length > 0 && <section className="mt-2 pb-5" aria-labelledby="suggested-businesses-title">
+              <div className="mb-3 flex items-end justify-between gap-3">
+                <div>
+                  <h3 id="suggested-businesses-title" className="text-[18px] font-bold text-white">Negocios sugeridos</h3>
+                  <p className="mt-0.5 text-xs text-white/55">Descubre más lugares para visitar</p>
+                </div>
+                <span className="shrink-0 text-xs font-semibold text-white/45">Desliza →</span>
+              </div>
+              <div className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" onPointerDownCapture={(event) => event.stopPropagation()}>
+                {suggestedBusinesses.map((business) => <button
+                  key={business.id}
+                  type="button"
+                  data-suggested-business
+                  aria-label={`Ver ${business.name}`}
+                  onClick={() => onSelectBusiness(business)}
+                  className="w-[166px] shrink-0 snap-start overflow-hidden rounded-[22px] bg-[#292a2d] text-left text-white active:scale-[0.98]"
+                >
+                  <div className="relative h-[112px] bg-neutral-200">
+                    {business.images[0] ? <img src={business.images[0]} alt="" loading="lazy" className="h-full w-full object-cover"/> : <div className="h-full w-full bg-gradient-to-br from-orange-100 to-rose-100"/>}
+                    <span className="absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate rounded-full bg-black/65 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur-sm">{business.category}</span>
+                  </div>
+                  <div className="p-3">
+                    <span className="block truncate text-[13px] font-bold text-white">{business.name}</span>
+                    <span className="mt-1 flex items-center gap-1 text-[11px] text-white/60"><Star className="h-3 w-3 fill-amber-400 text-amber-400"/>{business.rating.toFixed(1)}<span className="mx-0.5">·</span><span className="truncate">{business.location}</span></span>
+                  </div>
+                </button>)}
+              </div>
             </section>}
           </div>
         </div>
