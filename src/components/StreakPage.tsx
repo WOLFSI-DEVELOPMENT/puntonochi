@@ -5,6 +5,7 @@ import { getProfileActivity, profileDateKey } from '../profileStorage';
 
 type Props = { totalDays: number; currentStreak: number; onClose: () => void };
 const weekdays = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+const calendarWeekdays = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const dateKey = (date: Date) => profileDateKey(date);
 function minutesLabel(seconds: number) {
   const minutes = Math.floor(seconds / 60);
@@ -23,7 +24,8 @@ export function StreakPage({ totalDays, currentStreak, onClose }: Props) {
   const cells = [...Array(offset).fill(null), ...Array.from({ length: daysInMonth }, (_, index) => index + 1)];
   const cellCount = Math.ceil(cells.length / 7) * 7;
   const getSeconds = (key: string) => Math.max(0, activity[key] || 0);
-  const color = (seconds: number) => seconds <= 0 ? 'bg-white/[0.07]' : seconds < 300 ? 'bg-red-950' : seconds < 900 ? 'bg-red-800' : seconds < 1800 ? 'bg-orange-600' : 'bg-orange-300';
+  const activityLevel = (seconds: number) => seconds <= 0 ? 0 : seconds < 300 ? 1 : seconds < 900 ? 2 : seconds < 1800 ? 3 : 4;
+  const dayTone = ['bg-white/[0.035] text-white/45', 'bg-red-950 text-rose-100', 'bg-red-900 text-rose-50', 'bg-red-700 text-white', 'bg-orange-400 text-[#27160e]'];
   const todayKey = dateKey(today);
   const todaySeconds = getSeconds(todayKey);
   const week = Array.from({ length: 7 }, (_, index) => {
@@ -43,30 +45,30 @@ export function StreakPage({ totalDays, currentStreak, onClose }: Props) {
       </header>
       <section className="border-b border-white/10 py-6">
         <div className="mb-4 flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><Activity className="h-4 w-4 text-white/55"/><h2 className="text-sm font-semibold">Actividad mensual</h2></div><p className="mt-1 text-[11px] text-white/40">{activeDays} días activos</p></div><div className="flex items-center gap-2"><button type="button" aria-label="Mes anterior" onClick={() => setMonthOffset((value) => value - 1)} className="flex h-8 w-8 items-center justify-center text-white/55 hover:text-white"><ChevronLeft className="h-4 w-4"/></button><span className="min-w-[105px] text-center text-xs font-medium capitalize text-white/75">{monthLabel}</span><button type="button" aria-label="Mes siguiente" disabled={monthOffset >= 0} onClick={() => setMonthOffset((value) => Math.min(0, value + 1))} className="flex h-8 w-8 items-center justify-center text-white/55 hover:text-white disabled:opacity-25"><ChevronRight className="h-4 w-4"/></button></div></div>
-        <div className="w-full" aria-label="Mapa mensual de actividad">
-          <div className="flex w-full items-start gap-2">
-            <div className="grid h-[112px] w-8 shrink-0 grid-rows-7 items-center gap-2 text-[9px] leading-none text-white/40">
-              {weekdays.map((day, index) => <span key={`${day}-${index}`} className="flex h-3 items-center">{['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][index]}</span>)}
-            </div>
-            <div className="grid min-w-0 flex-1 grid-flow-col gap-y-2" style={{ gridTemplateColumns: `repeat(${cellCount / 7}, minmax(0, 1fr))`, gridTemplateRows: 'repeat(7, 12px)' }}>
+        <div aria-label="Calendario mensual de actividad">
+          <div className="mb-2 grid grid-cols-7 gap-2 text-center text-[10px] font-medium text-white/40">
+            {calendarWeekdays.map((day) => <span key={day} className="py-1">{day}</span>)}
+          </div>
+          <div className="grid grid-cols-7 gap-2">
             {Array.from({ length: cellCount }, (_, index) => {
               const day = cells[index];
-              if (!day) return <span key={`blank-${index}`} className="mx-auto h-3 w-full max-w-[24px]"/>;
+              if (!day) return <span key={`blank-${index}`} aria-hidden="true" className="aspect-square"/>;
               const key = dateKey(new Date(month.getFullYear(), month.getMonth(), day));
               const seconds = getSeconds(key);
-              return <motion.span key={key} title={`${key}: ${minutesLabel(seconds)} activos`} initial={reduceMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: reduceMotion ? 0 : index * 0.004 }} className={`mx-auto h-3 w-full max-w-[24px] rounded-full ${color(seconds)} ${key === todayKey ? 'ring-1 ring-white/80' : ''}`}/>;
+              const level = activityLevel(seconds);
+              return <motion.div key={key} title={`${key}: ${minutesLabel(seconds)} activos`} initial={reduceMotion ? false : { opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: reduceMotion ? 0 : index * 0.006 }} className={`relative flex aspect-square flex-col items-center justify-center gap-1 rounded-[14px] text-xs font-semibold tabular-nums transition-[filter,transform] hover:brightness-125 ${dayTone[level]} ${key === todayKey ? 'ring-1 ring-inset ring-orange-200/80' : ''}`}>
+                <span>{day}</span>
+                <span className={`h-1 w-1 rounded-full ${level === 0 ? 'bg-transparent' : level === 4 ? 'bg-[#27160e]/65' : 'bg-orange-300'}`}/>
+              </motion.div>;
             })}
           </div>
+          <div className="mt-4 flex items-center justify-between text-[10px] text-white/40">
+            <span>Menos actividad</span>
+            <div className="flex items-center gap-1.5" aria-label="Escala de actividad">
+              {dayTone.map((className, index) => <span key={className} title={`Nivel ${index}`} className={`h-3 w-3 rounded-full ${className.split(' ')[0]}`}/>)}
+            </div>
+            <span>Más</span>
           </div>
-          <div className="mt-4 flex justify-between pl-10 text-[9px] text-white/40">
-            {Array.from({ length: cellCount / 7 }, (_, weekIndex) => {
-              const firstDay = cells[weekIndex * 7];
-              const date = firstDay ? new Date(month.getFullYear(), month.getMonth(), firstDay) : null;
-              const label = date && (weekIndex === 0 || date.getDate() <= 7) ? new Intl.DateTimeFormat('es-MX', { month: 'short' }).format(date).replace('.', '') : '';
-              return <span key={`month-${weekIndex}`} className="flex-1 text-center">{label}</span>;
-            })}
-          </div>
-          <div className="mt-3 flex justify-end"><div className="flex items-center gap-1 text-[9px] text-white/40"><span>Menos</span>{['bg-white/[0.07]', 'bg-red-950', 'bg-red-800', 'bg-orange-600', 'bg-orange-300'].map((className) => <span key={className} className={`h-[10px] w-[10px] rounded-full ${className}`}/>)}<span>Más</span></div></div>
         </div>
       </section>
       <section className="grid gap-6 border-b border-white/10 py-6 sm:grid-cols-2">

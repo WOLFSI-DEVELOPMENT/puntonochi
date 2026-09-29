@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { categories, visits, mockPlaces } from './data';
 import { Bookmark, ChevronRight, Flame, Sparkles, MapPin, Star, Store } from 'lucide-react';
 import { BottomNav } from './components/BottomNav';
@@ -106,8 +106,8 @@ export default function App() {
         initShowColonias = true;
       } else if (parts[0] === 'eventos') {
         initialTab = 'noticias';
-      } else if (parts[0] === 'explorar' || parts[0] === 'guardados' || parts[0] === 'videos' || parts[0] === 'noticias' || parts[0] === 'mapa') {
-        initialTab = parts[0] === 'mapa' ? 'videos' : parts[0];
+      } else if (parts[0] === 'explorar' || parts[0] === 'guardados' || parts[0] === 'videos' || parts[0] === 'mercado' || parts[0] === 'noticias' || parts[0] === 'mapa') {
+        initialTab = parts[0] === 'mapa' || parts[0] === 'mercado' ? 'videos' : parts[0];
       } else {
         // It might be a category name
         const cat = categories.find(c => c.name.toLowerCase() === parts[0].toLowerCase());
@@ -145,6 +145,7 @@ export default function App() {
   const [showWelcome, setShowWelcome] = useState(false);
   const [publicProfileId, setPublicProfileId] = useState<string | null>(null);
   const [showStreakPage, setShowStreakPage] = useState(false);
+  const [marketplaceDetailOpen, setMarketplaceDetailOpen] = useState(false);
   const [signedInAccount, setSignedInAccount] = useState<SignedInAccount | null>(null);
   const [directoryVersion, setDirectoryVersion] = useState(0);
   const [suggestionVersion, setSuggestionVersion] = useState(0);
@@ -152,6 +153,29 @@ export default function App() {
   const [recentlyAddedPlaces, setRecentlyAddedPlaces] = useState<Place[]>([]);
   const [dailyUse, setDailyUse] = useState<DailyUse>(() => recordDailyUse());
   const streakDateRef = useRef(dailyUse.lastOpened);
+
+  useEffect(() => {
+    const handleTabNavigation = (event: Event) => {
+      const tab = (event as CustomEvent<string>).detail;
+      if (tab === 'noticias') setActiveTab('noticias');
+    };
+    window.addEventListener('navigate-tab', handleTabNavigation);
+    return () => window.removeEventListener('navigate-tab', handleTabNavigation);
+  }, []);
+
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [activeTab]);
+
+  useEffect(() => {
+    const handleMarketplaceDetailVisibility = (event: Event) => {
+      setMarketplaceDetailOpen(Boolean((event as CustomEvent<boolean>).detail));
+    };
+    window.addEventListener('marketplace-detail-visibility', handleMarketplaceDetailVisibility);
+    return () => window.removeEventListener('marketplace-detail-visibility', handleMarketplaceDetailVisibility);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -394,7 +418,7 @@ export default function App() {
     } else if (activeTab === 'noticias' && /^\/eventos\/[^/]+\/?$/.test(window.location.pathname)) {
       path = window.location.pathname;
     } else if (activeTab !== 'inicio') {
-      path = `/${activeTab}`;
+      path = activeTab === 'videos' ? '/mercado' : `/${activeTab}`;
     }
     
     window.history.pushState({}, '', path);
@@ -528,13 +552,13 @@ export default function App() {
           {/* Header Section */}
           <section className="relative px-5 mb-8">
             <div className="absolute right-5 top-[-4px] flex items-center gap-2">
-            {signedInAccount && <button type="button" onClick={() => setPublicProfileId(signedInAccount.id)} aria-label="Abrir mi perfil público" title="Mi perfil" className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-[#292a2d] p-[2px] text-white shadow-sm ring-1 ring-white/15 transition-transform active:scale-95">
-              {signedInAccount.picture ? <img src={signedInAccount.picture} alt="" referrerPolicy="no-referrer" className="h-full w-full rounded-full object-cover"/> : <span className="flex h-full w-full items-center justify-center rounded-full bg-blue-500 text-sm font-bold">{signedInAccount.name.slice(0, 1).toUpperCase()}</span>}
-            </button>}
             <button type="button" onClick={() => setShowStreakPage(true)} aria-label={`${dailyUse.totalDays} días usando PuntoNochi. Racha actual de ${dailyUse.currentStreak} días. Ver actividad`} title={`${dailyUse.totalDays} días usando PuntoNochi · racha de ${dailyUse.currentStreak} días`} className="flex min-h-9 items-center gap-1.5 rounded-full bg-[#292a2d] px-2.5 py-1 text-left text-white shadow-sm transition-transform active:scale-95">
               <Flame aria-hidden="true" className="h-4 w-4 shrink-0 fill-orange-400 text-orange-400" />
               <span className="leading-tight"><span className="block text-xs font-bold tabular-nums">{dailyUse.totalDays} días</span><span className="block text-[8px] font-medium text-white/55">racha {dailyUse.currentStreak}</span></span>
             </button>
+            {signedInAccount && <button type="button" onClick={() => setPublicProfileId(signedInAccount.id)} aria-label="Abrir mi perfil público" title="Mi perfil" className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-[#292a2d] p-[2px] text-white shadow-sm ring-1 ring-white/15 transition-transform active:scale-95">
+              {signedInAccount.picture ? <img src={signedInAccount.picture} alt="" referrerPolicy="no-referrer" className="h-full w-full rounded-full object-cover"/> : <span className="flex h-full w-full items-center justify-center rounded-full bg-blue-500 text-sm font-bold">{signedInAccount.name.slice(0, 1).toUpperCase()}</span>}
+            </button>}
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-neutral-900">
               Descubre<br/>
@@ -811,11 +835,12 @@ export default function App() {
           <DiscoverPage 
             key="discover" 
             onSelectBusiness={(place) => setSelectedBusiness(place)} 
+            account={signedInAccount}
           />
           </motion.div>
         )}
         {activeTab === 'videos' && (
-          <motion.div key="videos-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}><VideosPage key="videos" /></motion.div>
+          <motion.div key="videos-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}><VideosPage key="videos" onSelectBusiness={(place) => setSelectedBusiness(place)} /></motion.div>
         )}
         {activeTab === 'noticias' && (
           <motion.div key="news-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}><NewsPage key="noticias" /></motion.div>
@@ -827,7 +852,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Bottom Navigation & Search */}
-      {!showSearch && !showAdminPage && !showStreakPage && (
+      {!showSearch && !showAdminPage && !showStreakPage && !(activeTab === 'videos' && marketplaceDetailOpen) && (
         <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => setShowSearch(true)} />
       )}
 

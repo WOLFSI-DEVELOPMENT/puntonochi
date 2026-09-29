@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { CalendarDays, Camera, Grid2X2, LoaderCircle, MapPin, MessageCircle, Pencil, Star, UserRound, Users, X } from 'lucide-react';
+import { CalendarDays, Camera, Grid2X2, LoaderCircle, MapPin, MessageCircle, Pencil, Star, Store, UserRound, Users, X } from 'lucide-react';
 import { AccountRequiredPrompt } from './AccountSheets';
 
-type Profile = { id: string; name: string; picture: string | null; bio: string; posts: number; reviews: number; events: number; followers: number; following: number; isFollowing: boolean; isSelf: boolean };
+type Profile = { id: string; name: string; picture: string | null; bio: string; posts: number; reviews: number; events: number; listings: number; followers: number; following: number; isFollowing: boolean; isSelf: boolean };
 type Activity = {
   posts: { id: string; imageUrl: string; caption: string; createdAt: string; postType: string; placeName?: string | null }[];
   reviews: { id: string; placeName: string; rating: number; text: string; createdAt: string }[];
   events: { id: string; title: string; date: string; location: string; imageUrl: string }[];
+  marketplaceListings: { id: string; category: string; title: string; price: string; location: string; description: string; images: { id: string; url: string; sortOrder: number }[] }[];
 };
-type Tab = 'posts' | 'reviews' | 'events';
+type Tab = 'posts' | 'reviews' | 'events' | 'marketplace';
 
 async function readApiJson<T>(response: Response): Promise<T> {
   const body = await response.text();
@@ -19,7 +20,7 @@ async function readApiJson<T>(response: Response): Promise<T> {
 
 export function PublicProfileSheet({ profileId, onClose }: { profileId: string; onClose: () => void }) {
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [activity, setActivity] = useState<Activity>({ posts: [], reviews: [], events: [] });
+  const [activity, setActivity] = useState<Activity>({ posts: [], reviews: [], events: [], marketplaceListings: [] });
   const [tab, setTab] = useState<Tab>('posts');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -108,11 +109,12 @@ export function PublicProfileSheet({ profileId, onClose }: { profileId: string; 
         </>}
       </section>
       {profile && <>
-        <nav className="sticky top-[56px] z-10 flex border-y border-white/[0.07] bg-[#111214]/90 backdrop-blur-xl">{([{ key: 'posts', label: 'Publicaciones', icon: Grid2X2 }, { key: 'reviews', label: 'Reseñas', icon: MessageCircle }, { key: 'events', label: 'Eventos', icon: CalendarDays }] as const).map(({ key, label, icon: Icon }) => <button key={key} type="button" onClick={() => setTab(key)} aria-pressed={tab === key} className={`flex flex-1 items-center justify-center gap-2 py-3 text-xs font-semibold ${tab === key ? 'text-white' : 'text-white/45'}`}><Icon className="h-4 w-4"/><span>{label}</span><span className="text-white/35">{key === 'posts' ? profile.posts : key === 'reviews' ? profile.reviews : profile.events}</span></button>)}</nav>
+        <nav aria-label="Actividad del perfil" className="sticky top-[56px] z-10 flex overflow-x-auto border-y border-white/[0.07] bg-[#111214]/90 backdrop-blur-xl">{([{ key: 'posts', label: 'Posts', icon: Grid2X2 }, { key: 'reviews', label: 'Reseñas', icon: MessageCircle }, { key: 'events', label: 'Eventos', icon: CalendarDays }, { key: 'marketplace', label: 'Mercado', icon: Store }] as const).map(({ key, label, icon: Icon }) => <button key={key} type="button" onClick={() => setTab(key)} aria-pressed={tab === key} className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap px-2 py-3 text-[11px] font-semibold ${tab === key ? 'text-white' : 'text-white/45'}`}><Icon className="h-3.5 w-3.5 shrink-0"/><span>{label}</span><span className="text-white/35">{key === 'posts' ? profile.posts : key === 'reviews' ? profile.reviews : key === 'events' ? profile.events : profile.listings}</span></button>)}</nav>
         <section className="flex-1 px-4 py-4">
           {tab === 'posts' && (activity.posts.length ? <div className="grid grid-cols-3 gap-1">{activity.posts.map((post) => <div key={post.id} className="relative aspect-square overflow-hidden rounded-[16px] bg-[#202124]"><img src={post.imageUrl} alt={post.caption || 'Publicación'} loading="lazy" className="h-full w-full object-cover"/><span className="absolute inset-x-0 bottom-0 line-clamp-2 bg-gradient-to-t from-black/80 to-transparent p-2 pt-6 text-[10px]">{post.caption}</span></div>)}</div> : <Empty label="Todavía no hay publicaciones"/>)}
           {tab === 'reviews' && (activity.reviews.length ? <div className="space-y-2">{activity.reviews.map((review) => <article key={review.id} className="rounded-[22px] bg-[#202124] p-4"><div className="flex items-center justify-between gap-2"><h2 className="truncate text-sm font-bold">{review.placeName}</h2><span className="flex items-center gap-1 text-sm text-blue-300"><Star className="h-3.5 w-3.5 fill-current"/>{review.rating}</span></div><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-white/65">{review.text}</p></article>)}</div> : <Empty label="Todavía no hay reseñas"/>)}
           {tab === 'events' && (activity.events.length ? <div className="space-y-3">{activity.events.map((event) => <article key={event.id} className="overflow-hidden rounded-[22px] bg-[#202124]"><img src={event.imageUrl} alt="" className="aspect-video w-full object-cover"/><div className="p-4"><h2 className="text-base font-bold">{event.title}</h2><p className="mt-2 flex items-center gap-1.5 text-xs text-white/55"><CalendarDays className="h-3.5 w-3.5"/>{new Date(`${event.date}T12:00:00Z`).toLocaleDateString('es-MX', { dateStyle: 'medium', timeZone: 'UTC' })}</p><p className="mt-1 flex items-center gap-1.5 text-xs text-white/55"><MapPin className="h-3.5 w-3.5"/>{event.location}</p></div></article>)}</div> : <Empty label="Todavía no hay eventos"/>)}
+          {tab === 'marketplace' && (activity.marketplaceListings.length ? <div className="grid grid-cols-2 gap-2">{activity.marketplaceListings.map((listing) => <article key={listing.id} className="overflow-hidden rounded-[20px] bg-[#202124]"><div className="relative aspect-square bg-[#292a2d]">{listing.images[0]?.url ? <img src={listing.images[0].url} alt={listing.title} loading="lazy" className="h-full w-full object-cover"/> : <Store className="absolute left-1/2 top-1/2 h-9 w-9 -translate-x-1/2 -translate-y-1/2 text-white/25"/>}<span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[9px] font-semibold">{listing.category}</span></div><div className="p-3"><h2 className="line-clamp-2 text-xs font-bold">{listing.title}</h2><p className="mt-1 text-sm font-extrabold">{listing.price}</p><p className="mt-1 flex items-center gap-1 truncate text-[10px] text-white/45"><MapPin className="h-3 w-3 shrink-0"/>{listing.location}</p></div></article>)}</div> : <Empty label="Todavía no hay anuncios en el Mercado"/>)}
         </section>
       </>}
     </motion.main>

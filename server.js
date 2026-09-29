@@ -333,7 +333,7 @@ app.get('/api/account/content', requireNeon, requireAccount, async (req, res) =>
     await ensureSubmissionSchema();
     const sub = req.account.id;
     const base = `${req.protocol}://${req.get('host')}`;
-    const [reviews, posts, events] = await Promise.all([
+    const [reviews, posts, events, marketplaceListings] = await Promise.all([
       sql`SELECT review.id, review.place_id AS "placeId", place.name AS "placeName", review.rating,
         review.review_text AS text, review.created_at AS "createdAt"
         FROM community_reviews AS review JOIN places AS place ON place.id = review.place_id
@@ -344,12 +344,20 @@ app.get('/api/account/content', requireNeon, requireAccount, async (req, res) =>
       sql`SELECT id, title, event_date::text AS date, end_date::text AS "endDate", event_time AS time,
         location, description, created_at AS "createdAt" FROM public_events WHERE author_google_sub = ${sub}
         ORDER BY created_at DESC LIMIT 100`,
+      sql`SELECT listing.id, listing.category, listing.title, listing.price, listing.location, listing.description,
+        listing.details, listing.created_at AS "createdAt", listing.published_at AS "publishedAt",
+        COALESCE((SELECT json_agg(json_build_object('id', photo.id, 'sortOrder', photo.sort_order,
+          'url', ${base} || '/api/marketplace/listings/' || listing.id || '/images/' || photo.id) ORDER BY photo.sort_order)
+          FROM marketplace_listing_images AS photo WHERE photo.listing_id = listing.id), '[]'::json) AS images
+        FROM marketplace_listings AS listing WHERE listing.author_google_sub = ${sub} AND listing.status = 'published'
+        ORDER BY listing.published_at DESC LIMIT 100`,
     ]);
     res.set('Cache-Control', 'no-store');
     res.json({
       reviews,
       posts: posts.map((post) => ({ ...post, imageUrl: `${base}/api/community-posts/${post.id}/image`, coverUrl: `${base}/api/community-posts/${post.id}/cover` })),
       events: events.map((event) => eventResponse(req, event)),
+      marketplaceListings,
     });
   } catch (error) {
     console.error('Could not load account activity:', error);
@@ -414,6 +422,7 @@ app.get('/api/profiles/:id', requireNeon, async (req, res) => {
       (SELECT COUNT(*)::int FROM community_posts WHERE author_google_sub = ${profileId} AND status = 'published') AS posts,
       (SELECT COUNT(*)::int FROM community_reviews WHERE author_google_sub = ${profileId}) AS reviews,
       (SELECT COUNT(*)::int FROM public_events WHERE author_google_sub = ${profileId}) AS events,
+      (SELECT COUNT(*)::int FROM marketplace_listings WHERE author_google_sub = ${profileId} AND status = 'published') AS listings,
       (SELECT COUNT(*)::int FROM account_follows WHERE followed_google_sub = ${profileId}) AS followers,
       (SELECT COUNT(*)::int FROM account_follows WHERE follower_google_sub = ${profileId}) AS following`;
     let viewer = null;
@@ -434,7 +443,7 @@ app.get('/api/profiles/:id/activity', requireNeon, async (req, res) => {
     await ensureSubmissionSchema();
     const profileId = String(req.params.id).slice(0, 200);
     const base = `${req.protocol}://${req.get('host')}`;
-    const [posts, reviews, events] = await Promise.all([
+    const [posts, reviews, events, marketplaceListings] = await Promise.all([
       sql`SELECT id, post_type AS "postType", place_id AS "placeId", place_name AS "placeName", caption,
         created_at AS "createdAt" FROM community_posts WHERE author_google_sub = ${profileId} AND status = 'published'
         ORDER BY created_at DESC LIMIT 100`,
@@ -445,12 +454,20 @@ app.get('/api/profiles/:id/activity', requireNeon, async (req, res) => {
       sql`SELECT id, title, event_date::text AS date, end_date::text AS "endDate", event_time AS time,
         location, description, created_at AS "createdAt" FROM public_events WHERE author_google_sub = ${profileId}
         ORDER BY created_at DESC LIMIT 100`,
+      sql`SELECT listing.id, listing.category, listing.title, listing.price, listing.location, listing.description,
+        listing.details, listing.created_at AS "createdAt", listing.published_at AS "publishedAt",
+        COALESCE((SELECT json_agg(json_build_object('id', photo.id, 'sortOrder', photo.sort_order,
+          'url', ${base} || '/api/marketplace/listings/' || listing.id || '/images/' || photo.id) ORDER BY photo.sort_order)
+          FROM marketplace_listing_images AS photo WHERE photo.listing_id = listing.id), '[]'::json) AS images
+        FROM marketplace_listings AS listing WHERE listing.author_google_sub = ${profileId} AND listing.status = 'published'
+        ORDER BY listing.published_at DESC LIMIT 100`,
     ]);
     res.set('Cache-Control', 'public, max-age=15, stale-while-revalidate=60');
     res.json({
       posts: posts.map((post) => ({ ...post, imageUrl: `${base}/api/community-posts/${post.id}/image`, coverUrl: `${base}/api/community-posts/${post.id}/cover` })),
       reviews,
       events: events.map((event) => eventResponse(req, event)),
+      marketplaceListings,
     });
   } catch (error) {
     console.error('Could not load public profile activity:', error);
@@ -779,6 +796,32 @@ const ensureSubmissionSchema = () => {
     await sql`ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS post_type TEXT NOT NULL DEFAULT 'business' CHECK (post_type IN ('business', 'day'))`;
     await sql`ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS author_google_sub TEXT REFERENCES user_accounts(google_sub) ON DELETE SET NULL`;
     await sql`CREATE INDEX IF NOT EXISTS community_posts_author_idx ON community_posts (author_google_sub, created_at DESC)`;
+    await sql`CREATE TABLE IF NOT EXISTS marketplace_listings (
+      id TEXT PRIMARY KEY,
+      author_google_sub TEXT NOT NULL REFERENCES user_accounts(google_sub) ON DELETE CASCADE,
+      category TEXT NOT NULL CHECK (category IN ('Artículos', 'Empleos', 'Casas', 'Rentas', 'Comida', 'Servicios', 'Negocios', 'Otros')),
+      title TEXT NOT NULL,
+      price TEXT NOT NULL DEFAULT '',
+      location TEXT NOT NULL,
+      description TEXT NOT NULL,
+      details JSONB NOT NULL DEFAULT '{}'::jsonb,
+      status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      published_at TIMESTAMPTZ
+    )`;
+    await sql`CREATE INDEX IF NOT EXISTS marketplace_listings_public_idx ON marketplace_listings (category, published_at DESC) WHERE status = 'published'`;
+    await sql`CREATE INDEX IF NOT EXISTS marketplace_listings_author_idx ON marketplace_listings (author_google_sub, created_at DESC)`;
+    await sql`CREATE TABLE IF NOT EXISTS marketplace_listing_images (
+      id TEXT PRIMARY KEY,
+      listing_id TEXT NOT NULL REFERENCES marketplace_listings(id) ON DELETE CASCADE,
+      object_key TEXT NOT NULL UNIQUE,
+      file_name TEXT NOT NULL DEFAULT '',
+      mime_type TEXT NOT NULL CHECK (mime_type IN ('image/jpeg', 'image/png', 'image/webp')),
+      size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 1 AND 4194304),
+      sort_order SMALLINT NOT NULL CHECK (sort_order BETWEEN 0 AND 4),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (listing_id, sort_order)
+    )`;
     await sql`CREATE TABLE IF NOT EXISTS community_reviews (
       id TEXT PRIMARY KEY,
       place_id TEXT NOT NULL REFERENCES places(id) ON DELETE CASCADE,
@@ -817,6 +860,137 @@ const ensureSubmissionSchema = () => {
   })().catch((error) => { schemaReady = undefined; throw error; });
   return schemaReady;
 };
+
+const MARKETPLACE_CATEGORIES = new Set(['Artículos', 'Empleos', 'Casas', 'Rentas', 'Comida', 'Servicios', 'Negocios', 'Otros']);
+
+app.get('/api/marketplace/listings', requireNeon, async (req, res) => {
+  try {
+    await ensureSubmissionSchema();
+    const category = typeof req.query.category === 'string' && MARKETPLACE_CATEGORIES.has(req.query.category) ? req.query.category : null;
+    const listings = await sql`SELECT listing.id, listing.category, listing.title, listing.price, listing.location,
+      listing.description, listing.details, listing.created_at AS "createdAt", listing.published_at AS "publishedAt",
+      listing.author_google_sub AS "profileId", account.display_name AS "authorName", account.picture_url AS "authorPicture",
+      COALESCE(json_agg(json_build_object('id', photo.id, 'sortOrder', photo.sort_order,
+        'url', ${`${req.protocol}://${req.get('host')}`} || '/api/marketplace/listings/' || listing.id || '/images/' || photo.id)
+        ORDER BY photo.sort_order) FILTER (WHERE photo.id IS NOT NULL), '[]'::json) AS images
+      FROM marketplace_listings AS listing
+      JOIN user_accounts AS account ON account.google_sub = listing.author_google_sub
+      LEFT JOIN marketplace_listing_images AS photo ON photo.listing_id = listing.id
+      WHERE listing.status = 'published' AND (${category}::text IS NULL OR listing.category = ${category})
+      GROUP BY listing.id, account.display_name, account.picture_url
+      ORDER BY listing.published_at DESC LIMIT 100`;
+    res.set('Cache-Control', 'no-store');
+    res.json(listings);
+  } catch (error) {
+    console.error('Marketplace listing feed failed:', error);
+    res.status(500).json({ error: 'No se pudieron cargar los anuncios.' });
+  }
+});
+
+app.post('/api/marketplace/listings', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    const category = typeof req.body?.category === 'string' ? req.body.category : '';
+    const title = typeof req.body?.title === 'string' ? req.body.title.trim().slice(0, 100) : '';
+    const price = typeof req.body?.price === 'string' ? req.body.price.trim().slice(0, 60) : '';
+    const location = typeof req.body?.location === 'string' ? req.body.location.trim().slice(0, 120) : '';
+    const description = typeof req.body?.description === 'string' ? req.body.description.trim().slice(0, 2000) : '';
+    const rawDetails = req.body?.details && typeof req.body.details === 'object' && !Array.isArray(req.body.details) ? req.body.details : {};
+    const details = Object.fromEntries(Object.entries(rawDetails).slice(0, 24).map(([key, value]) => [String(key).slice(0, 50), String(value ?? '').trim().slice(0, 300)]));
+    if (!MARKETPLACE_CATEGORIES.has(category) || !title || !price || !location || !description) return res.status(400).json({ error: 'Completa título, precio, ubicación y descripción.' });
+    await ensureSubmissionSchema();
+    const id = randomUUID();
+    await sql`INSERT INTO marketplace_listings (id, author_google_sub, category, title, price, location, description, details)
+      VALUES (${id}, ${req.account.id}, ${category}, ${title}, ${price}, ${location}, ${description}, ${JSON.stringify(details)}::jsonb)`;
+    res.status(201).json({ id });
+  } catch (error) {
+    console.error('Marketplace listing draft failed:', error);
+    res.status(500).json({ error: 'No se pudo guardar el anuncio.' });
+  }
+});
+
+app.post('/api/marketplace/listings/:id/images', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
+  try {
+    const { base64, mimeType, fileName } = req.body || {};
+    if (typeof base64 !== 'string' || !['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) return res.status(400).json({ error: 'Elige una imagen JPG, PNG o WebP.' });
+    const bytes = Buffer.from(base64, 'base64');
+    if (!bytes.length || bytes.length > 4 * 1024 * 1024) return res.status(413).json({ error: 'Cada foto debe pesar 4 MB o menos.' });
+    await ensureSubmissionSchema();
+    const [listing] = await sql`SELECT id FROM marketplace_listings WHERE id = ${req.params.id} AND author_google_sub = ${req.account.id} AND status = 'draft'`;
+    if (!listing) return res.status(404).json({ error: 'No se encontró el borrador del anuncio.' });
+    const existing = await sql`SELECT id FROM marketplace_listing_images WHERE listing_id = ${listing.id} ORDER BY sort_order`;
+    if (existing.length >= 5) return res.status(400).json({ error: 'Cada anuncio permite hasta cinco fotos.' });
+    const imageId = randomUUID();
+    const objectKey = `marketplace-listings/${listing.id}/${imageId}`;
+    await s3.send(new PutObjectCommand({ Bucket: 'uploads', Key: objectKey, Body: bytes, ContentType: mimeType }));
+    try {
+      await sql`INSERT INTO marketplace_listing_images (id, listing_id, object_key, file_name, mime_type, size_bytes, sort_order)
+        VALUES (${imageId}, ${listing.id}, ${objectKey}, ${typeof fileName === 'string' ? fileName.slice(0, 180) : ''}, ${mimeType}, ${bytes.length}, ${existing.length})`;
+    } catch (error) {
+      await s3.send(new DeleteObjectCommand({ Bucket: 'uploads', Key: objectKey })).catch(() => undefined);
+      throw error;
+    }
+    res.status(201).json({ id: imageId, uploaded: true });
+  } catch (error) {
+    console.error('Marketplace listing image upload failed:', error);
+    res.status(500).json({ error: 'No se pudo guardar una de las fotos.' });
+  }
+});
+
+app.post('/api/marketplace/listings/:id/publish', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    await ensureSubmissionSchema();
+    const [listing] = await sql`UPDATE marketplace_listings SET status = 'published', published_at = NOW()
+      WHERE id = ${req.params.id} AND author_google_sub = ${req.account.id} AND status = 'draft'
+        AND EXISTS (SELECT 1 FROM marketplace_listing_images WHERE listing_id = marketplace_listings.id)
+      RETURNING id`;
+    if (!listing) return res.status(400).json({ error: 'Agrega al menos una foto antes de publicar el anuncio.' });
+    res.status(200).json({ id: listing.id, published: true });
+  } catch (error) {
+    console.error('Marketplace listing publish failed:', error);
+    res.status(500).json({ error: 'No se pudo publicar el anuncio.' });
+  }
+});
+
+app.delete('/api/marketplace/listings/:id/draft', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    await ensureSubmissionSchema();
+    const images = await sql`SELECT photo.object_key AS key FROM marketplace_listing_images AS photo
+      JOIN marketplace_listings AS listing ON listing.id = photo.listing_id
+      WHERE listing.id = ${req.params.id} AND listing.author_google_sub = ${req.account.id} AND listing.status = 'draft'`;
+    const [listing] = await sql`DELETE FROM marketplace_listings WHERE id = ${req.params.id} AND author_google_sub = ${req.account.id} AND status = 'draft' RETURNING id`;
+    if (!listing) return res.status(404).json({ deleted: false });
+    for (const image of images) if (s3) await s3.send(new DeleteObjectCommand({ Bucket: 'uploads', Key: String(image.key) })).catch(() => undefined);
+    res.json({ deleted: true });
+  } catch (error) {
+    console.error('Marketplace draft cleanup failed:', error);
+    res.status(500).json({ error: 'No se pudo limpiar el borrador.' });
+  }
+});
+
+app.get('/api/marketplace/listings/:id/images/:imageId', requireNeon, async (req, res) => {
+  try {
+    if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
+    await ensureSubmissionSchema();
+    const [image] = await sql`SELECT photo.object_key AS key, photo.mime_type AS "mimeType"
+      FROM marketplace_listing_images AS photo JOIN marketplace_listings AS listing ON listing.id = photo.listing_id
+      WHERE listing.id = ${req.params.id} AND photo.id = ${req.params.imageId} AND listing.status = 'published'`;
+    if (!image) return res.status(404).end();
+    const object = await s3.send(new GetObjectCommand({ Bucket: 'uploads', Key: String(image.key) }));
+    const bytes = await object.Body?.transformToByteArray();
+    if (!bytes) return res.status(502).end();
+    res.set('Content-Type', String(image.mimeType));
+    res.set('Cache-Control', 'public, max-age=86400, immutable');
+    res.send(Buffer.from(bytes));
+  } catch (error) {
+    console.error('Marketplace listing image read failed:', error);
+    res.status(500).end();
+  }
+});
 
 let pushSchemaReady;
 const ensurePushSchema = () => {
@@ -1379,6 +1553,23 @@ app.delete('/api/community-posts/:id', requireNeon, requireAccount, async (req, 
   } catch (error) {
     console.error('Community post draft cleanup failed:', error);
     res.status(500).json({ error: 'No se pudo limpiar el borrador.' });
+  }
+});
+
+app.get('/api/community-posts/feed', requireNeon, async (req, res) => {
+  try {
+    await ensureSubmissionSchema();
+    const posts = await sql`SELECT post.id, post.post_type AS "postType", post.place_id AS "placeId",
+      post.place_name AS "placeName", post.caption, post.created_at AS "createdAt",
+      post.author_google_sub AS "profileId", account.display_name AS "authorName", account.picture_url AS "authorPicture"
+      FROM community_posts AS post LEFT JOIN user_accounts AS account ON account.google_sub = post.author_google_sub
+      WHERE post.status = 'published' ORDER BY post.created_at DESC LIMIT 80`;
+    const base = `${req.protocol}://${req.get('host')}`;
+    res.set('Cache-Control', 'no-store');
+    res.json(posts.map((post) => ({ ...post, imageUrl: `${base}/api/community-posts/${post.id}/image`, coverUrl: `${base}/api/community-posts/${post.id}/cover` })));
+  } catch (error) {
+    console.error('Could not load community feed:', error);
+    res.status(500).json({ error: 'No se pudo cargar el feed de la comunidad.' });
   }
 });
 

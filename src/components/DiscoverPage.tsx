@@ -1,244 +1,287 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpRight, Bookmark, MapPin, Plus, Star, Store } from 'lucide-react';
-import { motion, useReducedMotion } from 'motion/react';
-import CornerKit, { type SquircleConfig } from '@cornerkit/core';
-import { mockPlaces } from '../data';
-import type { Place } from '../types';
-import { getBookmarkedPlaceIds, setBookmarkedPlaceIds } from '../profileStorage';
+import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { CalendarDays, Check, Clock3, Filter, Heart, House, Images, MapPin, Menu, MessageCircle, Plus, Search, Star, Store, UserRound, X } from 'lucide-react';
 import { CreatePostFlow } from './CreatePostFlow';
-import { BusinessPromotionSheet } from './BusinessPromotionSheet';
 import { ProfileSheet } from './ProfileSheet';
-import { AnimatePresence } from 'motion/react';
+import { mockPlaces } from '../data';
+import { getBookmarkedPlaceIds } from '../profileStorage';
+import type { Place } from '../types';
 
-const cornerKit = new CornerKit();
-const feedCorners: SquircleConfig = { radius: 28, smoothing: 1 };
-const adClient = 'ca-pub-7029279570287128';
-const overviewStorageKey = (placeId: string) => `puntonochi-ai-overview-v2:${placeId}`;
-type DayPhotoPost = { id: string; caption: string; createdAt: string; imageUrl: string; profileId?: string | null; authorName?: string | null; authorPicture?: string | null };
+type CommunityPost = {
+  id: string;
+  postType: 'day' | 'business';
+  caption: string;
+  createdAt: string;
+  imageUrl: string;
+  coverUrl?: string;
+  placeName?: string | null;
+  profileId?: string | null;
+  authorName?: string | null;
+  authorPicture?: string | null;
+};
+type CommunityEvent = {
+  id: string;
+  title: string;
+  date: string;
+  endDate: string | null;
+  time: string | null;
+  location: string;
+  description: string;
+  imageUrl: string;
+  createdAt?: string;
+  profileId?: string | null;
+  authorName?: string | null;
+  authorPicture?: string | null;
+};
+type FeedItem = { kind: 'post'; key: string; createdAt: string; post: CommunityPost } | { kind: 'event'; key: string; createdAt: string; event: CommunityEvent };
+type AccountSummary = { id: string; name: string; picture: string | null };
+type BusinessPreferenceProfile = { searches: string[]; categories: Record<string, number>; viewed: string[] };
 
-function CommunityDayPhotoCard({ post }: { post: DayPhotoPost }) {
-  return <motion.article data-explore-squircle className="relative isolate aspect-[9/16] w-full snap-start [scroll-snap-stop:always] overflow-hidden rounded-[28px] bg-[#1a1b1e]">
-    <img src={post.imageUrl} alt="" loading="lazy" decoding="async" fetchPriority="low" className="absolute inset-0 h-full w-full object-cover" />
-    <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/80" />
-    <div className="absolute inset-x-0 top-0 flex items-center justify-between p-5"><span className="bg-black/40 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur">Foto de la comunidad</span><time className="text-xs font-medium text-white/80">{new Date(post.createdAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}</time></div>
-    <div className="absolute inset-x-0 bottom-0 p-5">
-      {post.profileId ? <button type="button" onClick={(event) => { event.stopPropagation(); window.dispatchEvent(new CustomEvent('open-public-profile', { detail: post.profileId })); }} className="mb-2 flex items-center gap-2 text-left text-sm font-bold text-white"><span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-white/15">{post.authorPicture ? <img src={post.authorPicture} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover"/> : <span>{(post.authorName || '?').slice(0, 1)}</span>}</span>{post.authorName || 'Perfil de la comunidad'}</button> : <span className="mb-2 block text-xs text-white/55">Publicación de la comunidad</span>}
-      {post.caption && <p className="line-clamp-5 text-[15px] font-medium leading-relaxed text-white">{post.caption}</p>}
+function preferenceStorageKey(account: AccountSummary | null) { return `puntonochi-business-discovery-v1:${account?.id || 'guest'}`; }
+function readBusinessPreferences(key: string): BusinessPreferenceProfile {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || '{}') as Partial<BusinessPreferenceProfile>;
+    return { searches: Array.isArray(value.searches) ? value.searches : [], categories: value.categories || {}, viewed: Array.isArray(value.viewed) ? value.viewed : [] };
+  } catch { return { searches: [], categories: {}, viewed: [] }; }
+}
+
+function formatFeedDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short' }).format(date);
+}
+
+function formatEventDate(event: CommunityEvent) {
+  const date = new Date(`${event.date}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return 'Evento';
+  return new Intl.DateTimeFormat('es-MX', { weekday: 'short', day: 'numeric', month: 'short' }).format(date);
+}
+
+function AuthorAvatar({ picture, name, size = 'h-10 w-10' }: { picture?: string | null; name?: string | null; size?: string }) {
+  return <span className={`${size} flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#30333a] text-sm font-bold text-white`}>
+    {picture ? <img src={picture} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" /> : <span>{(name || 'N').slice(0, 1).toLocaleUpperCase('es-MX')}</span>}
+  </span>;
+}
+
+function StoriesRow({ posts, account, onCreate }: { posts: CommunityPost[]; account: AccountSummary | null; onCreate: () => void }) {
+  const storyPosts = posts.filter((post) => post.postType === 'day');
+  return <section aria-label="Momentos de la comunidad" className="mb-5">
+    <div className="mb-2 flex items-center justify-between px-1"><h2 className="text-sm font-bold text-white">Momentos</h2><span className="text-[10px] text-white/40">De Nochistlán</span></div>
+    <div className="flex gap-3 overflow-x-auto px-1 pb-1 scrollbar-hide">
+      <button type="button" onClick={onCreate} className="flex w-[66px] shrink-0 flex-col items-center gap-1.5 text-center">
+        <span className="relative flex h-[62px] w-[62px] items-center justify-center rounded-full border border-white/10 bg-[#24262a] p-1"><AuthorAvatar picture={account?.picture} name={account?.name} size="h-full w-full"/><span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-white text-black ring-2 ring-[#111214]"><Plus className="h-3 w-3" strokeWidth={2.8}/></span></span>
+        <span className="w-full truncate text-[10px] text-white/65">Tu momento</span>
+      </button>
+      {storyPosts.map((post) => <button type="button" key={post.id} onClick={() => document.getElementById(`community-post-${post.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className="flex w-[66px] shrink-0 flex-col items-center gap-1.5 text-center">
+        <span className="h-[62px] w-[62px] rounded-full bg-gradient-to-tr from-amber-400 via-pink-500 to-violet-500 p-[2px]"><span className="block h-full w-full rounded-full bg-[#111214] p-[2px]"><img src={post.imageUrl} alt="" loading="lazy" className="h-full w-full rounded-full object-cover"/></span></span>
+        <span className="w-full truncate text-[10px] text-white/65">{post.authorName || 'Comunidad'}</span>
+      </button>)}
     </div>
-  </motion.article>;
+  </section>;
 }
 
-function OverviewIcon() {
-  return <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-blue-300" fill="currentColor">
-    <path d="m14.878 1.282l.348 1.071a2.205 2.205 0 0 0 1.399 1.397l1.071.348l.021.006a.423.423 0 0 1 0 .798l-1.071.348a2.208 2.208 0 0 0-1.399 1.397l-.348 1.07a.423.423 0 0 1-.798 0l-.349-1.07a2.23 2.23 0 0 0-.532-.867a2.224 2.224 0 0 0-.866-.536l-1.071-.348a.423.423 0 0 1 0-.798l1.071-.348a2.208 2.208 0 0 0 1.377-1.397l.348-1.07a.423.423 0 0 1 .799 0Zm4.905 7.931l-.766-.248a1.577 1.577 0 0 1-.998-.999l-.25-.764a.302.302 0 0 0-.57 0l-.248.764a1.576 1.576 0 0 1-.984.999l-.765.248a.303.303 0 0 0 0 .57l.765.249a1.578 1.578 0 0 1 1 1.002l.248.764a.302.302 0 0 0 .57 0l.249-.764a1.576 1.576 0 0 1 .999-.999l.765-.248a.303.303 0 0 0 0-.57l-.015-.004ZM17 12.901a1.453 1.453 0 0 0 1 .02v.579a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 2 13.5v-7A2.5 2.5 0 0 1 4.5 4h5.588a1.419 1.419 0 0 0-.088.496c0 .176.031.346.09.504H4.5A1.5 1.5 0 0 0 3 6.5v7A1.5 1.5 0 0 0 4.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-.6ZM5 7.5a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 1-.5-.5ZM5 10a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 5 10Zm.5 2a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1h-5Z" />
-  </svg>;
-}
-
-function AIOverview({ place }: { place: Place }) {
-  const hostRef = useRef<HTMLDivElement>(null);
-  const [overview, setOverview] = useState(() => {
-    try { return localStorage.getItem(overviewStorageKey(place.id)) || ''; } catch { return ''; }
-  });
-  const [state, setState] = useState<'idle' | 'loading' | 'error'>(overview ? 'idle' : 'loading');
-
-  useEffect(() => {
-    if (overview) return;
-    const host = hostRef.current;
-    if (!host) return;
-    let active = true;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
-    const loadOverview = async () => {
-      try {
-        const response = await fetch(`/api/places/${encodeURIComponent(place.id)}/overview`);
-        const data = await response.json().catch(() => ({}));
-        if (!active) return;
-        if (response.status === 202 || data.generating) {
-          retryTimer = setTimeout(loadOverview, 1200);
-          return;
-        }
-        if (!response.ok) throw new Error(data.error || 'No se pudo generar el resumen.');
-        if (typeof data.overview !== 'string' || !data.overview.trim()) throw new Error('Resumen no disponible.');
-        const text = data.overview.trim();
-        setOverview(text);
-        setState('idle');
-        try { localStorage.setItem(overviewStorageKey(place.id), text); } catch { /* Cache is optional. */ }
-      } catch {
-        if (active) setState('error');
-      }
-    };
-    const observer = new IntersectionObserver((entries) => {
-      if (!entries.some((entry) => entry.isIntersecting)) return;
-      observer.disconnect();
-      setState('loading');
-      void loadOverview();
-    }, { rootMargin: '140px 0px', threshold: 0.05 });
-    observer.observe(host);
-    return () => { active = false; observer.disconnect(); if (retryTimer) clearTimeout(retryTimer); };
-  }, [overview, place.id]);
-
-  return <div ref={hostRef} className="mt-3 w-full" aria-live="polite">
-    <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-white/75"><OverviewIcon/>Resumen con IA</div>
-    {overview ? <p className="text-[13px] leading-relaxed text-white/75">{overview}</p> : state === 'error' ? <p className="text-xs leading-relaxed text-white/50">Resumen temporalmente no disponible.</p> : <div className="space-y-2 py-0.5" role="status" aria-label="Generando resumen"><div className="h-3 w-[92%] animate-pulse rounded-full bg-white/10"/><div className="h-3 w-[68%] animate-pulse rounded-full bg-white/[0.07]"/></div>}
-  </div>;
-}
-
-function ExplorePlaceCard({ place, index, saved, onOpen, onToggleBookmark, reduceMotion }: {
-  place: Place;
-  index: number;
-  saved: boolean;
-  onOpen: (place: Place) => void;
-  onToggleBookmark: (place: Place) => void;
-  reduceMotion: boolean | null;
-}) {
-  const image = place.images[0];
-
-  return <motion.article data-explore-squircle style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 760px' }} className="snap-start [scroll-snap-stop:always] relative isolate aspect-[9/16] w-full overflow-hidden rounded-[28px] bg-[#1a1b1e] shadow-xl shadow-black/25" initial={reduceMotion ? false : { opacity: 0, y: 20, scale: 0.985 }} whileInView={{ opacity: 1, y: 0, scale: 1 }} viewport={{ once: true, amount: 0.08 }} transition={{ type: 'spring', damping: 27, stiffness: 165, mass: 0.85 }}>
-    <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.03)_0%,rgba(10,11,13,0.16)_44%,rgba(17,18,20,0.76)_100%)]" />
-    <button type="button" onClick={() => onOpen(place)} aria-label={`Abrir ${place.name}`} className="absolute inset-0 z-[1] cursor-pointer" />
-    <div className="absolute inset-x-0 top-0 z-[2] p-2.5">
-      <div data-explore-squircle className="relative aspect-video overflow-hidden rounded-[24px] bg-black/30 shadow-lg shadow-black/20">
-        <img src={image} alt={`${place.name} en Nochistlán`} loading={index < 3 ? 'eager' : 'lazy'} fetchPriority={index === 0 ? 'high' : 'auto'} decoding="async" className="h-full w-full scale-[1.07] object-cover" />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-white/[0.06]" />
+function CommunityPostCard({ post, onOpenProfile, onOpenImage }: { post: CommunityPost; onOpenProfile: (id: string) => void; onOpenImage: (url: string, alt: string) => void }) {
+  const author = post.authorName || 'Comunidad de Nochistlán';
+  return <article id={`community-post-${post.id}`} className="community-feed-card overflow-hidden rounded-[26px] bg-[#1a1b1e]">
+    <div className="flex items-center gap-2.5 px-3.5 py-3">
+      {post.profileId ? <button type="button" aria-label={`Ver el perfil de ${author}`} onClick={() => onOpenProfile(post.profileId!)}><AuthorAvatar picture={post.authorPicture} name={author} size="h-9 w-9"/></button> : <AuthorAvatar picture={post.authorPicture} name={author} size="h-9 w-9"/>}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs font-bold text-white">{author}</p>
+        <p className="mt-0.5 truncate text-[10px] text-white/45">{post.postType === 'business' && post.placeName ? post.placeName : 'En la comunidad'}{formatFeedDate(post.createdAt) ? ` · ${formatFeedDate(post.createdAt)}` : ''}</p>
       </div>
+      <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-[9px] font-medium text-white/55">{post.postType === 'day' ? 'Momento' : 'Publicación'}</span>
     </div>
-    <button type="button" onClick={() => onToggleBookmark(place)} aria-pressed={saved} aria-label={saved ? `Quitar ${place.name} de guardados` : `Guardar ${place.name}`} className={`absolute right-5 top-5 z-10 flex h-11 w-11 items-center justify-center rounded-full shadow-lg backdrop-blur-md transition-transform active:scale-90 ${saved ? 'bg-blue-500 text-white' : 'bg-black/45 text-white'}`}><Bookmark className={`h-5 w-5 ${saved ? 'fill-current' : ''}`}/></button>
-    <button type="button" onClick={() => onOpen(place)} className="absolute inset-x-0 bottom-0 z-[2] flex h-[68%] flex-col items-start justify-start p-5 pt-7 text-left">
-      <span className="mb-3 rounded-full bg-black/30 px-3 py-1.5 text-[11px] font-semibold text-white/80 backdrop-blur-md">{place.category}</span>
-      <h2 className="line-clamp-2 text-[26px] font-bold leading-tight tracking-tight drop-shadow-sm">{place.name}</h2>
-      <p className="mt-2 flex items-center gap-1.5 text-sm text-white/65"><MapPin className="h-4 w-4 shrink-0"/><span className="line-clamp-1">{place.address || place.location}</span></p>
-      <div className="mt-4 flex w-full items-center justify-between border-t border-white/15 pt-3 text-xs text-white/60"><span className="flex items-center gap-1.5"><Star className="h-4 w-4 fill-amber-300 text-amber-300"/>{place.rating.toFixed(1)} <span className="text-white/40">({place.reviewCount})</span></span><span>{place.isOpen ? 'Abierto ahora' : 'Consulta horario'}</span></div>
-      <AIOverview place={place}/>
+    <button type="button" onClick={() => onOpenImage(post.imageUrl, post.caption || 'Publicación de la comunidad')} aria-label="Ampliar imagen de la publicación" className="block w-full cursor-zoom-in"><img src={post.imageUrl} alt={post.caption || 'Publicación de la comunidad'} loading="lazy" decoding="async" className="community-feed-image marketplace-squircle w-full object-cover" /></button>
+    <div className="px-3.5 pb-3.5 pt-3">
+      {post.caption && <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-white/90">{post.caption}</p>}
+      <div className="mt-3 flex items-center gap-5 border-t border-white/[0.07] pt-3 text-white/55"><span className="inline-flex items-center gap-1.5"><Heart className="h-[17px] w-[17px]"/><span className="text-[10px]">Me gusta</span></span><span className="inline-flex items-center gap-1.5"><MessageCircle className="h-[17px] w-[17px]"/><span className="text-[10px]">Comentar</span></span></div>
+    </div>
+  </article>;
+}
+
+function CommunityEventCard({ event, onOpenProfile, onOpenEvent }: { event: CommunityEvent; onOpenProfile: (id: string) => void; onOpenEvent: (id: string) => void }) {
+  const author = event.authorName || 'Comunidad de Nochistlán';
+  return <article className="community-feed-card overflow-hidden rounded-[26px] bg-[#1a1b1e]">
+    <div className="flex items-center gap-2.5 px-3.5 py-3">
+      {event.profileId ? <button type="button" aria-label={`Ver el perfil de ${author}`} onClick={() => onOpenProfile(event.profileId!)}><AuthorAvatar picture={event.authorPicture} name={author} size="h-9 w-9"/></button> : <AuthorAvatar picture={event.authorPicture} name={author} size="h-9 w-9"/>}
+      <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-white">{author}</p><p className="mt-0.5 text-[10px] text-white/45">Evento de la comunidad</p></div>
+      <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-[#292a2d] px-2.5 py-1.5 text-[10px] font-semibold text-white/75"><CalendarDays className="h-3.5 w-3.5 text-orange-300"/>{formatEventDate(event)}</span>
+    </div>
+      <button type="button" onClick={() => onOpenEvent(event.id)} aria-label={`Ver evento: ${event.title}`} className="community-event-image-wrap marketplace-squircle relative block w-full cursor-pointer text-left">
+      <img src={event.imageUrl} alt="" loading="lazy" decoding="async" className="community-feed-image marketplace-squircle w-full object-cover" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
     </button>
-  </motion.article>;
+    <div className="px-3.5 pb-4 pt-3">
+      <h3 className="text-base font-bold leading-snug text-white">{event.title}</h3>
+      <p className="mt-2 flex items-center gap-1.5 text-[11px] text-white/60"><Clock3 className="h-3.5 w-3.5 shrink-0 text-orange-300"/>{formatEventDate(event)}{event.time ? ` · ${event.time}` : ''}</p>
+      <p className="mt-1 flex items-center gap-1.5 text-[11px] text-white/60"><House className="h-3.5 w-3.5 shrink-0 text-white/40"/>{event.location}</p>
+      {event.description && <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-white/75">{event.description}</p>}
+      <div className="mt-3 flex items-center gap-1.5 border-t border-white/[0.07] pt-3 text-[10px] font-semibold text-white/60"><CalendarDays className="h-4 w-4"/>Evento local</div>
+    </div>
+  </article>;
 }
 
-function FeedAd() {
-  const adRef = useRef<HTMLModElement>(null);
-  useEffect(() => {
-    const ad = adRef.current;
-    if (!ad || ad.dataset.initialized) return;
-    let active = true;
-    const initialize = () => {
-      if (!active || ad.dataset.initialized) return;
-      ad.dataset.initialized = 'true';
-      try {
-        const adsWindow = window as Window & { adsbygoogle?: unknown[] };
-        adsWindow.adsbygoogle = adsWindow.adsbygoogle || [];
-        adsWindow.adsbygoogle.push({});
-      } catch (error) {
-        console.error('AdSense feed unit could not be initialized.', error);
-      }
-    };
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) {
-        observer.disconnect();
-        initialize();
-      }
-    }, { rootMargin: '600px 0px' });
-    observer.observe(ad);
-    return () => { active = false; observer.disconnect(); };
-  }, []);
-  return <div data-explore-squircle style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 760px' }} className="relative isolate my-0 snap-start [scroll-snap-stop:always] aspect-[9/16] w-full overflow-hidden rounded-[28px] bg-[#1a1b1e] shadow-xl shadow-black/25" aria-label="Publicidad">
-    <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.12)_0%,rgba(10,11,13,0.32)_44%,rgba(17,18,20,0.92)_100%)]" />
-    <div className="absolute inset-x-0 top-0 z-[1] p-2.5" aria-hidden="true"><div data-explore-squircle className="relative aspect-video overflow-hidden rounded-[24px] bg-[#25272a]"><div className="h-full w-full animate-pulse bg-[linear-gradient(120deg,#27292d,#3a3d42,#27292d)]"/><div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent"/></div></div>
-    <div className="absolute right-5 top-5 z-[2] rounded-full bg-black/45 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/75 backdrop-blur-md">Anuncio</div>
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] flex h-[68%] flex-col items-start justify-start p-5 pt-7" aria-hidden="true"><span className="mb-3 h-6 w-20 animate-pulse rounded-full bg-white/[0.12]"/><span className="h-7 w-[82%] animate-pulse rounded-full bg-white/[0.12]"/><span className="mt-2 h-7 w-[58%] animate-pulse rounded-full bg-white/[0.09]"/><span className="mt-4 h-4 w-[90%] animate-pulse rounded-full bg-white/[0.08]"/><span className="mt-2 h-4 w-[72%] animate-pulse rounded-full bg-white/[0.07]"/><span className="mt-4 w-full border-t border-white/15 pt-3"><span className="block h-3 w-24 animate-pulse rounded-full bg-white/[0.08]"/></span><span className="mt-4 h-3 w-[92%] animate-pulse rounded-full bg-white/[0.07]"/><span className="mt-2 h-3 w-[68%] animate-pulse rounded-full bg-white/[0.06]"/></div>
-    <ins ref={adRef} data-explore-feed-ad className="adsbygoogle absolute inset-0 z-[3] block h-full w-full" style={{ display: 'block', height: '100%' }} data-ad-format="fluid" data-ad-layout-key="-6t+ed+2i-1n-4w" data-ad-client={adClient} data-ad-slot="7895105729" />
-  </div>;
-}
-
-function PromoteBusinessCard({ onClick }: { onClick: () => void }) {
-  return <button type="button" onClick={onClick} data-explore-squircle style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 760px' }} className="relative isolate my-0 snap-start [scroll-snap-stop:always] aspect-[9/16] w-full overflow-hidden rounded-[28px] bg-[#1a1b1e] text-left text-white shadow-xl shadow-black/25 active:scale-[0.99] transition-transform">
-    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_65%_20%,rgba(44,117,226,.45),transparent_45%),linear-gradient(155deg,#283244_0%,#202226_52%,#111214_100%)]" />
-    <div className="absolute inset-x-0 top-0 z-[1] p-2.5"><div data-explore-squircle className="relative flex aspect-video items-center justify-center overflow-hidden rounded-[24px] bg-[linear-gradient(145deg,#374967,#242a34_56%,#18202d)]"><div className="absolute -right-8 -top-12 h-40 w-40 rounded-full bg-blue-400/25 blur-3xl"/><span className="relative flex h-20 w-20 items-center justify-center rounded-[26px] bg-white/10 text-blue-100 backdrop-blur-sm"><Store className="h-10 w-10"/></span></div></div>
-    <div className="absolute right-5 top-5 z-[2] rounded-full bg-black/35 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/80 backdrop-blur-md">Para negocios</div>
-    <div className="absolute inset-x-0 bottom-0 z-[2] flex h-[68%] flex-col items-start justify-start p-5 pt-7"><span className="mb-3 rounded-full bg-blue-400/15 px-3 py-1.5 text-[11px] font-semibold text-blue-100">Promoción local</span><h3 className="text-[26px] font-bold leading-tight tracking-tight">Haz que más personas te encuentren</h3><p className="mt-2 flex items-center gap-1.5 text-sm leading-relaxed text-white/65">Conecta con la comunidad y destaca tu negocio en PuntoNochi.</p><div className="mt-4 flex w-full items-center justify-between border-t border-white/15 pt-3 text-xs text-white/55"><span>Alcance local</span><span>Campaña patrocinada</span></div><span className="mt-5 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-black">Promocionar negocio <ArrowUpRight className="h-4 w-4"/></span></div>
+function BusinessDiscoveryCard({ place, onOpen }: { place: Place; onOpen: () => void }) {
+  const image = place.images?.[0] || place.logo;
+  return <button type="button" onClick={onOpen} className="group marketplace-squircle relative h-[210px] w-full overflow-hidden bg-[#202124] text-left" aria-label={`Ver ${place.name}`}>
+    {image ? <img src={image} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"/> : <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#30343b] to-[#1b1c1f]"><Store className="h-10 w-10 text-white/25"/></div>}
+    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/15 to-black/5"/>
+    <div className="absolute inset-x-0 bottom-0 p-3.5"><span className="rounded-full bg-black/45 px-2 py-1 text-[9px] font-semibold text-white/80 backdrop-blur">{place.category}</span><h3 className="mt-2 line-clamp-1 text-sm font-bold text-white">{place.name}</h3><p className="mt-1 flex items-center gap-1 text-[10px] text-white/65"><MapPin className="h-3 w-3 shrink-0"/><span className="truncate">{place.location}</span></p><p className="mt-1 flex items-center gap-1 text-[10px] text-white/70"><Star className="h-3 w-3 fill-amber-300 text-amber-300"/>{place.rating?.toFixed(1) || 'Nuevo'}<span className="text-white/45">· {place.isOpen ? 'Abierto' : 'Cerrado'}</span></p></div>
   </button>;
 }
 
-export function DiscoverPage({ onSelectBusiness }: { onSelectBusiness: (place: Place) => void }) {
-  const [showPromotion, setShowPromotion] = useState(false);
+export function DiscoverPage({ onSelectBusiness, account }: {
+  onSelectBusiness: (place: Place) => void;
+  account: AccountSummary | null;
+}) {
   const [showCreateFlow, setShowCreateFlow] = useState(false);
   const [showProfile, setShowProfile] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return params.has('accountAuth') || params.has('accountAuthError');
   });
-  const [feedVersion, setFeedVersion] = useState(0);
-  const [dayPosts, setDayPosts] = useState<DayPhotoPost[]>([]);
-  const [bookmarkIds, setBookmarkIds] = useState<string[]>(getBookmarkedPlaceIds);
-  const reduceMotion = useReducedMotion();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [feedFilter, setFeedFilter] = useState<'all' | 'posts' | 'business' | 'events'>('all');
+  const [feedLoading, setFeedLoading] = useState(true);
+  const [posts, setPosts] = useState<CommunityPost[]>([]);
+  const [events, setEvents] = useState<CommunityEvent[]>([]);
+  const [openedImage, setOpenedImage] = useState<{ url: string; alt: string } | null>(null);
+  const [businessQuery, setBusinessQuery] = useState('');
+  const preferenceKey = preferenceStorageKey(account);
+  const [preferenceProfile, setPreferenceProfile] = useState(() => readBusinessPreferences(preferenceStorageKey(account)));
+  const openEvent = (id: string) => {
+    window.history.pushState({}, '', `/eventos/${encodeURIComponent(id)}`);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    window.dispatchEvent(new CustomEvent('navigate-tab', { detail: 'noticias' }));
+  };
+  useEffect(() => setPreferenceProfile(readBusinessPreferences(preferenceKey)), [preferenceKey]);
+  const savePreferences = (update: (current: BusinessPreferenceProfile) => BusinessPreferenceProfile) => {
+    setPreferenceProfile((current) => {
+      const next = update(current);
+      try { localStorage.setItem(preferenceKey, JSON.stringify(next)); } catch { /* Personalization remains available in this session. */ }
+      return next;
+    });
+  };
+  const matchingBusinesses = useMemo(() => {
+    const normalize = (value: string) => value.toLocaleLowerCase('es-MX').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const terms = businessQuery.trim() ? normalize(businessQuery).split(/\s+/).filter(Boolean) : [];
+    const bookmarks = getBookmarkedPlaceIds();
+    const scored = mockPlaces.map((place, index) => {
+      const category = normalize(place.category);
+      const searchable = normalize([place.name, place.category, place.subtitle, place.location, place.address, ...(place.goodToKnow || [])].filter(Boolean).join(' '));
+      const queryScore = terms.reduce((score, term) => score + (searchable.includes(term) ? 16 : 0), 0);
+      const categoryScore = preferenceProfile.categories[category] || 0;
+      const learnedSearchScore = preferenceProfile.searches.reduce((score, term) => score + (searchable.includes(normalize(term)) ? 3 : 0), 0);
+      const viewIndex = preferenceProfile.viewed.indexOf(place.id);
+      const novelty = viewIndex < 0 ? 2 : -Math.max(0, 6 - viewIndex);
+      const bookmarkScore = bookmarks.includes(place.id) ? 4 : 0;
+      const quality = (place.rating || 0) * 0.4 + Math.min(place.reviewCount || 0, 25) * 0.08;
+      return { place, index, score: queryScore + categoryScore + learnedSearchScore + novelty + bookmarkScore + quality, searchable };
+    });
+    const filtered = terms.length ? scored.filter(({ searchable }) => terms.every((term) => searchable.includes(term))) : scored;
+    return filtered.sort((a, b) => b.score - a.score || a.index - b.index).slice(0, 30).map(({ place }) => place);
+  }, [businessQuery, preferenceProfile]);
+  useEffect(() => {
+    if (feedFilter !== 'business' || businessQuery.trim().length < 2) return;
+    const query = businessQuery.trim();
+    const timer = window.setTimeout(() => savePreferences((current) => ({ ...current, searches: [query, ...current.searches.filter((term) => term.toLocaleLowerCase('es-MX') !== query.toLocaleLowerCase('es-MX'))].slice(0, 20) })), 500);
+    return () => window.clearTimeout(timer);
+  }, [businessQuery, feedFilter, preferenceKey]);
+  const lastScrollTop = useRef(0);
 
   useEffect(() => {
     let active = true;
-    const loadDayPosts = () => fetch('/api/community-posts/day').then(async (response) => {
-      if (!response.ok) return [];
-      const result: unknown = await response.json();
-      return Array.isArray(result) ? result as DayPhotoPost[] : [];
-    }).then((posts) => { if (active) setDayPosts(posts); }).catch(() => undefined);
-    const refreshFeed = (event?: Event) => {
-      const detail = (event as CustomEvent<{ placeId?: string; imageUrl?: string }> | undefined)?.detail;
-      if (detail?.placeId && detail.imageUrl) {
-        const place = mockPlaces.find((candidate) => candidate.id === detail.placeId);
-        if (place && !place.images.includes(detail.imageUrl)) place.images = [...place.images, detail.imageUrl];
-      }
-      setFeedVersion((version) => version + 1);
-      void loadDayPosts();
+    const loadCommunityFeed = async () => {
+      const [postResult, eventResult] = await Promise.allSettled([
+        fetch('/api/community-posts/feed', { cache: 'no-store' }).then(async (response) => {
+          const value: unknown = await response.json();
+          if (!response.ok) throw new Error('Community posts unavailable');
+          return Array.isArray(value) ? value as CommunityPost[] : [];
+        }),
+        fetch('/api/events', { cache: 'no-store' }).then(async (response) => {
+          const value: unknown = await response.json();
+          if (!response.ok) throw new Error('Events unavailable');
+          return Array.isArray(value) ? value as CommunityEvent[] : [];
+        }),
+      ]);
+      if (!active) return;
+      if (postResult.status === 'fulfilled') setPosts(postResult.value);
+      if (eventResult.status === 'fulfilled') setEvents(eventResult.value);
+      setFeedLoading(false);
     };
-    const refreshBookmarks = () => setBookmarkIds(getBookmarkedPlaceIds());
+    const refreshFeed = () => { setFeedLoading(true); void loadCommunityFeed(); };
     window.addEventListener('community-post-published', refreshFeed);
-    window.addEventListener('business-directory-updated', refreshFeed);
-    window.addEventListener('puntonochi-bookmarks-updated', refreshBookmarks);
-    window.addEventListener('storage', refreshBookmarks);
-    void loadDayPosts();
+    window.addEventListener('community-event-published', refreshFeed);
+    window.addEventListener('storage', refreshFeed);
+    void loadCommunityFeed();
     return () => {
       active = false;
       window.removeEventListener('community-post-published', refreshFeed);
-      window.removeEventListener('business-directory-updated', refreshFeed);
-      window.removeEventListener('puntonochi-bookmarks-updated', refreshBookmarks);
-      window.removeEventListener('storage', refreshBookmarks);
+      window.removeEventListener('community-event-published', refreshFeed);
+      window.removeEventListener('storage', refreshFeed);
     };
   }, []);
 
-  const places = useMemo(() => mockPlaces.filter((place) => place.images?.[0]), [feedVersion]);
+  const dayPosts = useMemo(() => posts.filter((post) => post.postType === 'day'), [posts]);
+  const feedItems = useMemo<FeedItem[]>(() => [
+    ...posts.map((post) => ({ kind: 'post' as const, key: `post-${post.id}`, createdAt: post.createdAt, post })),
+    ...events.map((event) => ({ kind: 'event' as const, key: `event-${event.id}`, createdAt: event.createdAt || `${event.date}T12:00:00`, event })),
+  ].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()), [posts, events]);
+  const visibleFeedItems = useMemo(() => feedItems.filter((item) => {
+    if (feedFilter === 'events') return item.kind === 'event';
+    if (feedFilter === 'business') return item.kind === 'post' && item.post.postType === 'business';
+    if (feedFilter === 'posts') return item.kind === 'post' && item.post.postType === 'day';
+    return true;
+  }), [feedFilter, feedItems]);
 
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => cornerKit.applyAll('[data-explore-squircle]', feedCorners));
-    return () => window.cancelAnimationFrame(frame);
-  }, [places, dayPosts]);
-
-  const toggleBookmark = (place: Place) => {
-    const next = bookmarkIds.includes(place.id) ? bookmarkIds.filter((id) => id !== place.id) : [...bookmarkIds, place.id];
-    setBookmarkIds(next);
-    setBookmarkedPlaceIds(next);
+  const handleScroll = (event: UIEvent<HTMLElement>) => {
+    const nextTop = event.currentTarget.scrollTop;
+    if (nextTop > lastScrollTop.current + 2) setMenuOpen(false);
+    lastScrollTop.current = nextTop;
   };
 
-  const openPromotion = () => setShowPromotion(true);
+  const filterOptions = [
+    { id: 'all', label: 'Todo', icon: <Filter className="h-4 w-4"/> },
+    { id: 'posts', label: 'Publicaciones', icon: <Images className="h-4 w-4"/> },
+    { id: 'business', label: 'Negocios', icon: <Store className="h-4 w-4"/> },
+    { id: 'events', label: 'Eventos', icon: <CalendarDays className="h-4 w-4"/> },
+  ] as const;
 
-  return <motion.main style={{ height: 'calc(100dvh - env(safe-area-inset-top, 0px))', scrollPaddingTop: 72 }} className="snap-y snap-mandatory overflow-y-auto overscroll-y-contain bg-[#111111] px-4 pb-36 pt-3 text-white">
-    <header className="sticky top-0 z-30 isolate -mx-4 mb-4 flex items-center justify-between gap-3 px-4 py-3">
-      <div aria-hidden="true" className="pointer-events-none absolute -left-8 -right-8 -top-10 z-0 h-[172px]" style={{ background: 'linear-gradient(to bottom, rgba(17,17,17,0.08) 0%, rgba(17,17,17,0.42) 36%, rgba(17,17,17,0.62) 58%, rgba(17,17,17,0.28) 82%, transparent 100%)', filter: 'blur(24px)' }} />
-      <div className="relative z-10"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">PuntoNochi</p><h1 className="text-xl font-bold">Explorar</h1></div>
-      <div className="relative z-10 ml-auto flex items-center gap-2">
-        <button type="button" onClick={() => setShowProfile(true)} className="flex h-10 items-center gap-2 rounded-full bg-[#292a2d] px-4 text-sm font-semibold text-white"><Bookmark className="h-4 w-4"/><span>Perfil</span></button>
-        <button type="button" onClick={() => setShowCreateFlow(true)} aria-label="Crear publicación" className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black transition-transform active:scale-95"><Plus className="h-5 w-5" strokeWidth={2.5}/></button>
+  return <motion.main onScroll={handleScroll} style={{ height: 'calc(100dvh - env(safe-area-inset-top, 0px))', scrollPaddingTop: 68 }} className="relative snap-y overflow-y-auto overscroll-y-contain bg-[#111214] px-4 pb-28 pt-2 text-white">
+    <header className="explore-top-header sticky top-0 z-30 -mx-4 mb-3 flex h-[58px] items-center px-4">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[#111214]/75 backdrop-blur-xl" />
+      <div className="explore-top-left relative z-10">
+        <button type="button" onClick={() => setMenuOpen((open) => !open)} aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'} aria-expanded={menuOpen} className="explore-round-control"><Menu className="h-5 w-5"/></button>
+        <AnimatePresence>
+          {menuOpen && <motion.nav aria-label="Filtrar contenido" initial={{ opacity: 0, y: -7, scale: .97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -5, scale: .98 }} transition={{ duration: .16 }} className="explore-menu absolute left-0 top-[50px] w-52 overflow-hidden rounded-[22px] p-1.5 shadow-2xl">
+            {filterOptions.map((option) => <button key={option.id} type="button" onClick={() => { setFeedFilter(option.id); setMenuOpen(false); }} aria-pressed={feedFilter === option.id} className={`explore-menu-item ${feedFilter === option.id ? 'explore-filter-selected' : ''}`}>
+              {option.icon}<span className="flex-1">{option.label}</span>{feedFilter === option.id && <Check className="h-4 w-4"/>}
+            </button>)}
+          </motion.nav>}
+        </AnimatePresence>
+      </div>
+      <div className="explore-top-right relative z-10 ml-auto flex items-center gap-2">
+        <button type="button" onClick={() => setShowCreateFlow(true)} aria-label="Crear publicación" title="Crear publicación" className="explore-round-control explore-top-create"><Plus className="h-5 w-5" strokeWidth={2.6}/></button>
+        <button type="button" onClick={() => setShowProfile(true)} aria-label={account ? `Abrir perfil de ${account.name}` : 'Iniciar sesión o crear perfil'} className="explore-round-control explore-profile-button">
+          {account?.picture ? <img src={account.picture} alt="" referrerPolicy="no-referrer" className="h-full w-full rounded-full object-cover"/> : account ? <span>{account.name.slice(0,1).toLocaleUpperCase('es-MX')}</span> : <UserRound className="h-5 w-5"/>}
+        </button>
       </div>
     </header>
 
-    <div className="mx-auto flex max-w-[460px] flex-col gap-2 [scroll-behavior:smooth]">
-      {dayPosts.map((post) => <CommunityDayPhotoCard key={`${post.id}-${feedVersion}`} post={post} />)}
-      {places.map((place, index) => {
-        const saved = bookmarkIds.includes(place.id);
-        return <Fragment key={`${place.id}-${feedVersion}`}>
-          <ExplorePlaceCard place={place} index={index} saved={saved} onOpen={onSelectBusiness} onToggleBookmark={toggleBookmark} reduceMotion={reduceMotion}/>
-          {(index + 1) % 5 === 0 && <FeedAd/>}
-          {(index + 1) % 10 === 0 && <PromoteBusinessCard onClick={openPromotion}/>}
-        </Fragment>;
-      })}
-      {!places.length && <div className="aspect-[9/16] animate-pulse rounded-[28px] bg-[#202124]" aria-label="Cargando lugares" role="status"/>}
+    <div className="mx-auto max-w-xl">
+      {(feedFilter === 'all' || feedFilter === 'posts') && <StoriesRow posts={dayPosts} account={account} onCreate={() => setShowCreateFlow(true)} />}
+      {feedFilter === 'business' && <section aria-label="Negocios recomendados" className="mb-1"><label className="flex h-11 items-center gap-2 rounded-full bg-[#202124] px-4 text-white/45"><Search className="h-4 w-4 shrink-0"/><input value={businessQuery} onChange={(event) => setBusinessQuery(event.target.value)} aria-label="Buscar negocios" placeholder="Busca negocios, categorías o servicios" className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-white/40"/>{businessQuery && <button type="button" onClick={() => setBusinessQuery('')} aria-label="Limpiar búsqueda" className="text-xs text-white/50">Limpiar</button>}</label><p className="mt-2 px-1 text-[10px] text-white/40">Recomendaciones según tus búsquedas, favoritos y negocios visitados.</p></section>}
+      {feedFilter === 'business' ? <section aria-label="Negocios recomendados" className="grid grid-cols-2 gap-2.5">{matchingBusinesses.length ? matchingBusinesses.map((place) => <BusinessDiscoveryCard key={place.id} place={place} onOpen={() => { const category = place.category.toLocaleLowerCase('es-MX').normalize('NFD').replace(/[\u0300-\u036f]/g, ''); savePreferences((current) => ({ ...current, viewed: [place.id, ...current.viewed.filter((id) => id !== place.id)].slice(0, 30), categories: { ...current.categories, [category]: (current.categories[category] || 0) + 1 } })); onSelectBusiness(place); }}/>) : <div className="col-span-2 rounded-[22px] bg-[#1a1b1e] px-5 py-8 text-center"><Store className="mx-auto h-6 w-6 text-white/35"/><p className="mt-3 text-sm font-semibold text-white/85">No encontramos negocios</p><p className="mt-1 text-xs text-white/45">Prueba con otro nombre, categoría o servicio.</p></div>}</section> : <section aria-label="Publicaciones y eventos de la comunidad" className="flex flex-col gap-4">
+        {feedLoading && <div role="status" className="py-8 text-center text-xs text-white/45">Cargando lo que comparte la comunidad…</div>}
+        {!feedLoading && !visibleFeedItems.length && <div className="rounded-[26px] bg-[#1a1b1e] px-5 py-8 text-center"><p className="text-sm font-semibold text-white/85">{feedItems.length ? 'No hay contenido en esta categoría' : 'Aquí aparecerá la comunidad'}</p><p className="mx-auto mt-1.5 max-w-xs text-xs leading-relaxed text-white/45">{feedItems.length ? 'Prueba otra categoría para ver más contenido.' : 'Comparte un momento o publica un evento para empezar el feed.'}</p><button type="button" onClick={() => setShowCreateFlow(true)} className="mt-4 rounded-full bg-white px-4 py-2.5 text-xs font-bold text-black">Crear publicación</button></div>}
+        {visibleFeedItems.map((item) => item.kind === 'post'
+          ? <CommunityPostCard key={item.key} post={item.post} onOpenProfile={(id) => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: id }))} onOpenImage={(url, alt) => setOpenedImage({ url, alt })}/>
+          : <CommunityEventCard key={item.key} event={item.event} onOpenProfile={(id) => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: id }))} onOpenEvent={openEvent}/>
+        )}
+      </section>}
     </div>
 
-    <AnimatePresence>{showPromotion && <BusinessPromotionSheet onClose={() => setShowPromotion(false)} />}</AnimatePresence>
-    <AnimatePresence>{showCreateFlow && <CreatePostFlow onClose={() => setShowCreateFlow(false)} onPromoteBusiness={() => { setShowCreateFlow(false); setShowPromotion(true); }} />}</AnimatePresence>
+    <AnimatePresence>{openedImage && <motion.div role="dialog" aria-modal="true" aria-label={openedImage.alt} className="fixed inset-0 z-[100] flex cursor-zoom-out items-center justify-center bg-black/95 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setOpenedImage(null)} onKeyDown={(event) => { if (event.key === 'Escape') setOpenedImage(null); }}><button type="button" aria-label="Cerrar imagen" className="absolute right-4 top-[calc(env(safe-area-inset-top,0px)+16px)] z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white" onClick={() => setOpenedImage(null)}><X className="h-5 w-5"/></button><img src={openedImage.url} alt={openedImage.alt} className="max-h-full max-w-full cursor-default object-contain" onClick={(event) => event.stopPropagation()}/></motion.div>}</AnimatePresence>
+    <AnimatePresence>{showCreateFlow && <CreatePostFlow onClose={() => setShowCreateFlow(false)} onPromoteBusiness={() => setShowCreateFlow(false)} />}</AnimatePresence>
     <AnimatePresence>{showProfile && <ProfileSheet onClose={() => setShowProfile(false)} onSelectBusiness={onSelectBusiness} />}</AnimatePresence>
   </motion.main>;
 }
