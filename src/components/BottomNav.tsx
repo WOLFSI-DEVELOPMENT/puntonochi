@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { cn } from '../utils';
 import { getNavDesign, type NavDesign } from '../profileStorage';
 
@@ -58,12 +58,13 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch }: { activeTab:
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ duration: 0.15 }}
-                className="flex items-center h-full gap-1 w-full"
+                className="flex items-center h-full gap-0.5 w-full"
               >
                 <NavTab id="inicio" icon={<span className={`material-symbols-rounded ${design === 'simple' ? 'text-[21px]' : 'text-[26px]'}`}>home</span>} label="Inicio" active={activeTab === 'inicio'} onClick={() => handleTabClick('inicio')} simple={design === 'simple'} />
                 <NavTab id="explorar" icon={<span className={`material-symbols-rounded ${design === 'simple' ? 'text-[21px]' : 'text-[26px]'}`}>explore</span>} label="Explorar" active={activeTab === 'explorar'} onClick={() => handleTabClick('explorar')} simple={design === 'simple'} />
                 <NavTab id="videos" icon={<span className={`material-symbols-rounded ${design === 'simple' ? 'text-[21px]' : 'text-[26px]'}`}>storefront</span>} label="Mercado" active={activeTab === 'videos'} onClick={() => handleTabClick('videos')} simple={design === 'simple'} />
                 <NavTab id="noticias" icon={<span className={`material-symbols-rounded ${design === 'simple' ? 'text-[21px]' : 'text-[26px]'}`}>newspaper</span>} label="Noticias" active={activeTab === 'noticias'} onClick={() => handleTabClick('noticias')} simple={design === 'simple'} />
+                <NavTab id="crear" icon={<Plus className={design === 'simple' ? 'h-[21px] w-[21px]' : 'h-[25px] w-[25px]'}/>} label="Crear" active={activeTab === 'crear'} onClick={() => handleTabClick('crear')} simple={design === 'simple'} />
                 <NavTab id="buscar" icon={<span className={`material-symbols-rounded ${design === 'simple' ? 'text-[21px]' : 'text-[26px]'}`}>search</span>} label="Buscar" active={activeTab === 'buscar'} onClick={() => handleTabClick('buscar')} simple={design === 'simple'} />
               </motion.div>
             ) : (

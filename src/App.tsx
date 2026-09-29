@@ -11,6 +11,7 @@ import { ColoniaDetailPage } from './components/ColoniaDetailPage';
 import { BusinessDetailSheet } from './components/BusinessDetailSheet';
 const VideosPage = React.lazy(() => import('./components/VideosPage').then((module) => ({ default: module.VideosPage })));
 const NewsPage = React.lazy(() => import('./components/NewsPage').then((module) => ({ default: module.NewsPage })));
+const CreatePage = React.lazy(() => import('./components/CreatePage').then((module) => ({ default: module.CreatePage })));
 import { SearchPage, SearchBar } from './components/SearchPage';
 import { BusinessPromotionSheet } from './components/BusinessPromotionSheet';
 import { BusinessSubmissionSheet } from './components/BusinessSubmissionSheet';
@@ -25,6 +26,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { DAILY_USE_KEY, getBookmarkedPlaceIds, recordProfileActiveSeconds } from './profileStorage';
 import { PublicProfileSheet } from './components/PublicProfileSheet';
 import { StreakPage } from './components/StreakPage';
+import { Analytics } from '@vercel/analytics/react';
 
 const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
 const WELCOME_SEEN_KEY = 'puntonochi-welcome-seen-v1';
@@ -122,7 +124,7 @@ export default function App() {
         initShowColonias = true;
       } else if (parts[0] === 'eventos') {
         initialTab = 'noticias';
-      } else if (parts[0] === 'explorar' || parts[0] === 'guardados' || parts[0] === 'videos' || parts[0] === 'mercado' || parts[0] === 'noticias' || parts[0] === 'mapa') {
+      } else if (parts[0] === 'explorar' || parts[0] === 'guardados' || parts[0] === 'videos' || parts[0] === 'mercado' || parts[0] === 'noticias' || parts[0] === 'mapa' || parts[0] === 'crear') {
         initialTab = parts[0] === 'mapa' || parts[0] === 'mercado' ? 'videos' : parts[0];
       } else {
         // It might be a category name
@@ -207,6 +209,7 @@ export default function App() {
     window.addEventListener('account-session-updated', onAccountChange);
     return () => { active = false; window.removeEventListener('account-profile-updated', onAccountChange); window.removeEventListener('account-session-updated', onAccountChange); };
   }, []);
+
 
   useEffect(() => {
     const openProfile = (event: Event) => {
@@ -870,6 +873,9 @@ export default function App() {
         {activeTab === 'videos' && (
           <motion.div key="videos-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}><React.Suspense fallback={<div role="status" aria-label="Cargando Mercado" className="min-h-[50vh] bg-[#111214]"/>}><VideosPage key="videos" onSelectBusiness={(place) => setSelectedBusiness(place)} /></React.Suspense></motion.div>
         )}
+        {activeTab === 'crear' && (
+          <motion.div key="create-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}><React.Suspense fallback={<div role="status" aria-label="Cargando Crear" className="min-h-[50vh] bg-[#111214]"/>}><CreatePage account={signedInAccount}/></React.Suspense></motion.div>
+        )}
         {activeTab === 'noticias' && (
           <motion.div key="news-page" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduceMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}><React.Suspense fallback={<div role="status" aria-label="Cargando Noticias" className="min-h-[50vh] bg-[#111214]"/>}><NewsPage key="noticias" /></React.Suspense></motion.div>
         )}
@@ -964,6 +970,7 @@ export default function App() {
         {showWelcome && !showAdminPage && <WelcomePage onContinue={finishWelcome} />}
         {publicProfileId && <PublicProfileSheet profileId={publicProfileId} onClose={() => setPublicProfileId(null)} />}
       </AnimatePresence>
+      <Analytics />
     </div>
   );
 }

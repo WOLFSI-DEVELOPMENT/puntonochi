@@ -17,7 +17,8 @@ type Article = { title: string; description: string; content: string; url: strin
 type WeatherDay = { date: string; weatherCode: number; high: number | null; low: number | null; precipitationChance: number | null };
 type WeatherHour = { dateTime: string; temperature: number | null; weatherCode: number; precipitationChance: number | null };
 type NewsVideo = { id: string; title: string; channel: string; publishedAt: string; thumbnail: string; isShort: boolean };
-type PublicEvent = { id: string; title: string; date: string; endDate: string | null; time: string | null; location: string; description: string; imageUrl: string; createdAt?: string; profileId?: string | null; authorName?: string | null; authorPicture?: string | null };
+export type EventSummary = { id: string; title: string; date: string; endDate: string | null; time: string | null; location: string; description: string; imageUrl: string; createdAt?: string; profileId?: string | null; authorName?: string | null; authorPicture?: string | null };
+type PublicEvent = EventSummary;
 
 function eventDateLabel(event: PublicEvent) {
   const start = new Intl.DateTimeFormat('es-MX', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(`${event.date}T12:00:00Z`));
@@ -109,7 +110,7 @@ function WeatherSkeleton() {
   return <section aria-label="Cargando pronóstico" role="status" className="py-2"><div className="mb-4 h-4 w-44 animate-pulse rounded-full bg-[#3b3d40]" /><div className="flex gap-5 overflow-hidden border-b border-white/10 pb-3">{Array.from({ length: 5 }, (_, index) => <div key={index} className="h-11 min-w-16 flex-1 animate-pulse rounded-md bg-[#303134]" />)}</div><div className="mt-5 flex gap-5 overflow-hidden">{Array.from({ length: 7 }, (_, index) => <div key={index} className="h-16 w-10 shrink-0 animate-pulse rounded-md bg-[#303134]" />)}</div></section>;
 }
 
-function EventCreateSheet({ onClose, onCreated }: { onClose: () => void; onCreated: (event: PublicEvent) => void }) {
+export function EventCreateSheet({ onClose, onCreated }: { onClose: () => void; onCreated: (event: PublicEvent) => void }) {
   const sheetDrag = useSheetDrag(onClose);
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
