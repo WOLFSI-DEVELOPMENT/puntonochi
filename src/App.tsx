@@ -26,6 +26,8 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { DAILY_USE_KEY, getBookmarkedPlaceIds, recordProfileActiveSeconds } from './profileStorage';
 import { PublicProfileSheet } from './components/PublicProfileSheet';
 import { getStreakMilestone, StreakBadgeCelebration, StreakPage } from './components/StreakPage';
+import { PublicMenuPage } from './components/PublicMenuPage';
+import { PageLoadingSkeleton } from './components/PageLoadingSkeleton';
 import { Analytics } from '@vercel/analytics/react';
 
 const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
@@ -110,13 +112,16 @@ export default function App() {
     let initialTab = 'inicio';
     let initialCategory = null;
     let initialBusiness = null;
+    let initialMenuId: string | null = null;
     let initShowAllCategories = false;
     let initShowColonias = false;
     let initShowAdmin = false;
     const initShowSplash = path === '/' || /^\/inicio\/?$/.test(path);
 
     if (parts.length > 0) {
-      if (parts[0] === 'admin') {
+      if (parts[0] === 'menu' && parts[1]) {
+        initialMenuId = parts[1];
+      } else if (parts[0] === 'admin') {
         initShowAdmin = true;
       } else if (parts[0] === 'categories') {
         initShowAllCategories = true;
@@ -142,7 +147,7 @@ export default function App() {
       }
     }
     
-    return { initialTab, initialCategory, initialBusiness, initShowAllCategories, initShowColonias, initShowAdmin, initShowSplash };
+    return { initialTab, initialCategory, initialBusiness, initialMenuId, initShowAllCategories, initShowColonias, initShowAdmin, initShowSplash };
   };
 
   const init = getInitialState();
@@ -156,6 +161,7 @@ export default function App() {
   const [selectedColonia, setSelectedColonia] = useState<Colonia | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(init.initialCategory);
   const [selectedBusiness, setSelectedBusiness] = useState<Place | null>(init.initialBusiness);
+  const [publicMenuId] = useState<string | null>(init.initialMenuId);
   const [activeTab, setActiveTab] = useState(init.initialTab);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -469,7 +475,9 @@ export default function App() {
 
   useEffect(() => {
     let path = '/';
-    if (showAdminPage) {
+    if (publicMenuId) {
+      path = `/menu/${encodeURIComponent(publicMenuId)}`;
+    } else if (showAdminPage) {
       path = '/admin';
     } else if (showSearch) {
       path = '/buscar';
@@ -494,14 +502,17 @@ export default function App() {
     }
     
     window.history.pushState({}, '', path);
-  }, [selectedBusiness, selectedCategory, showAllCategories, showColonias, activeTab, showSearch, showAdminPage]);
+  }, [selectedBusiness, selectedCategory, showAllCategories, showColonias, activeTab, showSearch, showAdminPage, publicMenuId]);
 
   useEffect(() => {
     let title = 'PuntoNochi | Lugares, negocios y noticias de Nochistlán';
     let description = 'Descubre restaurantes, cafeterías, hoteles, servicios, videos y noticias de Nochistlán de Mejía, Zacatecas.';
     let noIndex = false;
 
-    if (selectedBusiness) {
+    if (publicMenuId) {
+      title = 'Menú digital | PuntoNochi';
+      description = 'Consulta el menú digital de un negocio local en Nochistlán.';
+    } else if (selectedBusiness) {
       title = `${selectedBusiness.name} | ${selectedBusiness.category} en Nochistlán | PuntoNochi`;
       description = `${selectedBusiness.name}: ${selectedBusiness.category} en ${selectedBusiness.location || 'Nochistlán de Mejía, Zacatecas'}. Consulta fotos, ubicación y datos del negocio en PuntoNochi.`;
     } else if (showAdminPage) {
@@ -602,7 +613,7 @@ export default function App() {
       document.head.appendChild(schemaScript);
     }
     schemaScript.textContent = JSON.stringify(pageSchema).replace(/</g, '\\u003c');
-  }, [activeTab, selectedBusiness, selectedCategory, showAllCategories, showColonias, showSearch, showAdminPage]);
+  }, [activeTab, selectedBusiness, selectedCategory, showAllCategories, showColonias, showSearch, showAdminPage, publicMenuId]);
 
   useEffect(() => {
     const onSearchQuery = (event: Event) => setSearchQuery((event as CustomEvent<string>).detail);
@@ -614,6 +625,8 @@ export default function App() {
       window.removeEventListener('business-directory-updated', onDirectoryChange);
     };
   }, []);
+
+  if (publicMenuId) return <PublicMenuPage id={publicMenuId}/>;
 
   return (
     <div id="app-root" className={`relative min-h-screen bg-[#f8f9fa] ${activeTab === 'explorar' ? 'pb-0' : 'pb-36'} font-sans text-neutral-900 selection:bg-blue-100`} style={{ fontFamily: "'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif" }}>
@@ -906,7 +919,7 @@ export default function App() {
 
         {activeTab === 'explorar' && (
           <motion.div key="explore-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}>
-          <React.Suspense fallback={<div role="status" aria-label="Cargando Explorar" className="min-h-[50vh] bg-[#111214]"/>}>
+          <React.Suspense fallback={<PageLoadingSkeleton page="explore"/>}>
             <DiscoverPage 
               key="discover" 
               onSelectBusiness={(place) => setSelectedBusiness(place)} 
@@ -916,13 +929,13 @@ export default function App() {
           </motion.div>
         )}
         {activeTab === 'videos' && (
-          <motion.div key="videos-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<div role="status" aria-label="Cargando Mercado" className="min-h-[50vh] bg-[#111214]"/>}><VideosPage key="videos" onSelectBusiness={(place) => setSelectedBusiness(place)} /></React.Suspense></motion.div>
+          <motion.div key="videos-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<PageLoadingSkeleton page="market"/>}><VideosPage key="videos" onSelectBusiness={(place) => setSelectedBusiness(place)} /></React.Suspense></motion.div>
         )}
         {activeTab === 'crear' && (
-          <motion.div key="create-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<div role="status" aria-label="Cargando Crear" className="min-h-[50vh] bg-[#111214]"/>}><CreatePage account={signedInAccount}/></React.Suspense></motion.div>
+          <motion.div key="create-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<PageLoadingSkeleton page="create"/>}><CreatePage account={signedInAccount}/></React.Suspense></motion.div>
         )}
         {activeTab === 'noticias' && (
-          <motion.div key="news-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<div role="status" aria-label="Cargando Noticias" className="min-h-[50vh] bg-[#111214]"/>}><NewsPage key="noticias" /></React.Suspense></motion.div>
+          <motion.div key="news-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<PageLoadingSkeleton page="news"/>}><NewsPage key="noticias" /></React.Suspense></motion.div>
         )}
       </AnimatePresence>
 

@@ -1,6 +1,6 @@
 import { useEffect, useState, FormEvent, ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, ArrowRight, Camera, Check, Clock3, ImagePlus, LoaderCircle, MapPin, Phone, Plus, Store, Tag, Trash2, X, ShieldCheck, UserRoundCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Camera, Check, Clock3, Globe2, ImagePlus, LoaderCircle, MapPin, Phone, Plus, Search, Store, Tag, Trash2, X, ShieldCheck, UserRoundCheck } from 'lucide-react';
 import { apiFetch } from '../api';
 import { mockPlaces } from '../data';
 import type { Place } from '../types';
@@ -49,7 +49,8 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
   const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadedPhotoCount, setUploadedPhotoCount] = useState(0);
-  const [mode, setMode] = useState<'choose' | 'add' | 'claim'>('choose');
+  const [mode, setMode] = useState<'choose' | 'add' | 'maps' | 'claim'>('choose');
+  const [mapsUrl, setMapsUrl] = useState('');
   const [addStep, setAddStep] = useState(0);
   const [claimStep, setClaimStep] = useState(0);
   const [selectedClaimPlace, setSelectedClaimPlace] = useState<Place | null>(null);
@@ -143,14 +144,27 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
     finally { setIsSubmitting(false); }
   };
 
+  const submitMapsImport = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSubmitting(true); setSubmitError('');
+    try {
+      const response = await apiFetch('/api/business-applications/import-maps', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: mapsUrl }) });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'No se pudo importar el negocio de Google Maps.');
+      setName(body.name || 'tu negocio');
+      setSubmitted(true);
+    } catch (error) { setSubmitError(error instanceof Error ? error.message : 'No se pudo importar el negocio. Inténtalo de nuevo.'); }
+    finally { setIsSubmitting(false); }
+  };
+
   return (
     <>
       <motion.button aria-label="Cerrar formulario" className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
-      <motion.section {...sheetDrag} data-business-sheet role="dialog" aria-modal="true" aria-label="Registra tu negocio" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360, mass: 0.82 }} className="fixed inset-x-0 bottom-0 z-[71] mx-auto flex max-h-[94dvh] w-full max-w-[680px] flex-col overflow-hidden bg-[#202124] text-white shadow-2xl">
+      <motion.section {...sheetDrag} data-business-sheet role="dialog" aria-modal="true" aria-label="Registra tu negocio" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360, mass: 0.82 }} className="fixed inset-x-3 bottom-3 z-[71] mx-auto flex max-h-[88dvh] w-auto max-w-md flex-col overflow-hidden rounded-[30px] bg-[#202124] text-white shadow-2xl sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2">
         <div className="relative flex shrink-0 items-center justify-between border-b border-white/[0.07] px-5 pb-4 pt-7">
           <SheetDragHandle controls={sheetDrag.dragControls} className="absolute inset-x-0 top-0" />
-          {mode !== 'choose' && !submitted && !claimSubmitted && <button type="button" onClick={() => { setMode('choose'); setSubmitError(''); }} aria-label="Volver a opciones" className="mr-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.07] text-white/80"><ArrowLeft className="h-5 w-5" /></button>}
-          <div className="min-w-0 flex-1 pt-2"><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">PuntoNochi · Negocios</p><h2 className="mt-1 text-xl font-bold">{submitted || claimSubmitted ? 'Solicitud recibida' : mode === 'choose' ? 'Tu negocio en PuntoNochi' : mode === 'claim' ? 'Reclamar o editar' : 'Agregar negocio'}</h2></div>
+          {mode !== 'choose' && !submitted && !claimSubmitted && <button type="button" onClick={() => { setMode(mode === 'maps' ? 'add' : 'choose'); setSubmitError(''); }} aria-label="Volver a opciones" className="mr-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.07] text-white/80"><ArrowLeft className="h-5 w-5" /></button>}
+          <div className="min-w-0 flex-1 pt-2"><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">PuntoNochi · Negocios</p><h2 className="mt-1 text-xl font-bold">{submitted || claimSubmitted ? 'Solicitud recibida' : mode === 'choose' ? 'Tu negocio en PuntoNochi' : mode === 'claim' ? 'Reclamar o editar' : mode === 'maps' ? 'Importar desde Maps' : 'Agregar negocio'}</h2></div>
           <button type="button" onClick={onClose} aria-label="Cerrar" className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.08] text-white/80"><X className="h-5 w-5" /></button>
         </div>
 
@@ -158,7 +172,7 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
           <div className="overflow-y-auto px-6 py-10 text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-400/15 text-emerald-300"><Check className="h-8 w-8" /></div>
             <h3 className="mt-5 text-2xl font-bold">¡Ya está en revisión!</h3>
-            <p className="mx-auto mt-3 max-w-sm text-[15px] leading-relaxed text-white/65">{claimSubmitted ? `El equipo revisará la solicitud de ${claimName} y eliminará el comprobante al resolverla.` : `Revisaremos los datos de ${name}.`}</p>
+            <p className="mx-auto mt-3 max-w-sm text-[15px] leading-relaxed text-white/65">{claimSubmitted ? `El equipo revisará la solicitud de ${claimName} y eliminará el comprobante al resolverla.` : `Tu negocio está siendo revisado por los moderadores. El proceso de aprobación tarda de 1 a 2 días hábiles.`}</p>
             <button type="button" onClick={onClose} className="mt-8 rounded-full bg-white px-7 py-3 text-sm font-bold text-[#202124]">Listo</button>
           </div>
         ) : mode === 'choose' ? (
@@ -173,6 +187,26 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
               </motion.button>
             </div>
           </div>
+        ) : mode === 'add' ? (
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-8 pt-5">
+            <p className="mb-4 text-sm leading-relaxed text-white/55">Importa la información pública de tu negocio desde Google Maps.</p>
+            <motion.button data-business-onboarding-card type="button" whileTap={{ scale: 0.985 }} onClick={() => { setMode('maps'); setSubmitError(''); }} className="mb-5 flex w-full items-center gap-4 rounded-[24px] bg-[#292a2d] p-4 text-left [corner-shape:squircle]">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white p-2"><GoogleMapsMark /></span><span className="min-w-0 flex-1"><span className="block text-sm font-bold">Importar desde Google Maps</span><span className="mt-1 block text-xs text-white/50">Nombre, dirección, horario y fotos</span></span><ArrowRight className="h-5 w-5 text-white/45" />
+            </motion.button>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/40">Más formas de importar</p>
+            <div className="grid grid-cols-3 gap-3">{[
+              { name: 'Instagram', image: 'https://cdn-icons-png.flaticon.com/512/1384/1384063.png' }, { name: 'Facebook', image: 'https://static.vecteezy.com/system/resources/previews/018/930/698/non_2x/facebook-logo-facebook-icon-transparent-free-png.png' }, { name: 'Website', icon: <Globe2 className="h-5 w-5" /> },
+              { name: "Nochi's Go", icon: <span className="text-sm font-black">NG</span> }, { name: 'TikTok', image: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a6/Tiktok_icon.svg/3840px-Tiktok_icon.svg.png' }, { name: 'Yelp', image: 'https://static.vecteezy.com/system/resources/previews/027/127/458/non_2x/yelp-logo-yelp-icon-transparent-free-png.png' },
+            ].map((source) => <div key={source.name} aria-disabled="true" className="flex aspect-square flex-col items-center justify-center gap-2 rounded-[22px] bg-[#292a2d] text-white/55 [corner-shape:squircle]"><span className="flex h-9 w-9 items-center justify-center text-white/75">{'image' in source && source.image ? <img src={source.image} alt="" aria-hidden="true" className={`object-contain ${source.name === 'Facebook' || source.name === 'Yelp' ? 'h-10 w-10' : 'h-8 w-8'}`} /> : 'icon' in source ? source.icon : null}</span><span className="text-xs font-semibold">{source.name}</span><span className="text-[10px] text-white/35">Próximamente</span></div>)}</div>
+          </div>
+        ) : mode === 'maps' ? (
+          <form onSubmit={submitMapsImport} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-8 pt-6">
+            <div className="mb-5 flex flex-col items-center text-center"><span className="mb-4 flex h-16 w-16 items-center justify-center rounded-[22px] bg-white"><GoogleMapsMark /></span><h3 className="text-lg font-bold">Encuentra tu ficha en Google Maps</h3><p className="mt-2 max-w-sm text-sm leading-relaxed text-white/55">Abre tu negocio en Google Maps, toca <b className="text-white/75">Compartir</b> y pega aquí el enlace. Importaremos los datos y las fotos disponibles.</p></div>
+            <label className="flex h-14 items-center gap-3 rounded-full bg-[#303135] px-4 ring-1 ring-white/[0.06]"><MapPin className="h-5 w-5 shrink-0 text-white/55" /><input required type="url" value={mapsUrl} onChange={(event) => setMapsUrl(event.target.value)} placeholder="Pega aquí el enlace de Maps" className="search-input-fix min-w-0 flex-1 appearance-none !bg-transparent p-0 text-sm text-white outline-none placeholder:text-white/40 focus:!bg-transparent focus:outline-none focus:ring-0" /><button type="submit" disabled={isSubmitting} aria-label="Importar negocio" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#202124] disabled:opacity-50">{isSubmitting ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}</button></label>
+            {submitError && <p role="alert" className="mt-4 rounded-2xl bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{submitError}</p>}
+            {isSubmitting && <p className="mt-4 text-center text-xs text-white/45">Buscando tu ficha y guardando sus fotos…</p>}
+            <p className="mt-5 text-center text-xs leading-relaxed text-white/40">Tu ficha no se publicará hasta que el equipo de PuntoNochi la revise y apruebe.</p>
+          </form>
         ) : (
           <>
           {mode === 'claim' ? (
@@ -247,6 +281,10 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
       </motion.section>
     </>
   );
+}
+
+function GoogleMapsMark() {
+  return <img src="https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a3/Google_Maps_icon_%282026%29.svg/1280px-Google_Maps_icon_%282026%29.svg.png" alt="" aria-hidden="true" className="h-full w-full object-contain" />;
 }
 
 const inputClass = 'h-12 w-full rounded-2xl !bg-[#303135] px-3.5 text-sm !text-white outline-none placeholder:!text-white/45 focus:ring-2 focus:ring-white/20';

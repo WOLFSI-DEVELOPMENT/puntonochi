@@ -20,6 +20,7 @@ type BusinessForm = {
   imageUrl: string;
 };
 type BusinessClaim = { id: string; placeId: string; name: string; address: string; phone: string; description: string; email: string; hours: Record<string, { closed: boolean; intervals: { open: string; close: string }[] }>; proofName: string; proofMimeType: string; proofBase64: string; createdAt: string };
+type BusinessApplication = { id: string; name: string; category: string; description: string; address: string; phone: string; hours: string; cost: number; email: string; location: string; googlePlaceId: string; mapsUrl: string; websiteUrl: string; latitude: number | null; longitude: number | null; rating: number | null; reviewCount: number | null; googleData: Record<string, unknown>; createdAt: string; photos: { id: number; name: string; mimeType: string; sizeBytes: number; url: string }[] };
 type CommunityEdit = { id: string; placeId: string; placeName: string; author: string; email: string; changes: Record<string, unknown>; createdAt: string };
 type DuplicateAddress = { id: string; name: string; address: string };
 
@@ -55,6 +56,7 @@ export function AdminPage({ onClose }: AdminPageProps) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [claims, setClaims] = useState<BusinessClaim[]>([]);
+  const [businessApplications, setBusinessApplications] = useState<BusinessApplication[]>([]);
   const [communityEdits, setCommunityEdits] = useState<CommunityEdit[]>([]);
   const [addressDuplicate, setAddressDuplicate] = useState<DuplicateAddress | null>(null);
   const [addressChecking, setAddressChecking] = useState(false);
@@ -66,6 +68,7 @@ export function AdminPage({ onClose }: AdminPageProps) {
     return result;
   };
   const loadClaims = async () => setClaims(await apiRequest<BusinessClaim[]>('/api/admin/business-claims'));
+  const loadBusinessApplications = async () => setBusinessApplications(await apiRequest<BusinessApplication[]>('/api/admin/business-applications'));
   const loadCommunityEdits = async () => setCommunityEdits(await apiRequest<CommunityEdit[]>('/api/admin/business-edit-suggestions'));
 
   useEffect(() => {
@@ -90,7 +93,7 @@ export function AdminPage({ onClose }: AdminPageProps) {
           return;
         }
         setAdminEmail(session.email || '');
-        await Promise.all([loadPlaces(), loadClaims(), loadCommunityEdits()]);
+        await Promise.all([loadPlaces(), loadClaims(), loadBusinessApplications(), loadCommunityEdits()]);
         if (active) setStatus('ready');
       })
       .catch((requestError: unknown) => {
@@ -199,6 +202,21 @@ export function AdminPage({ onClose }: AdminPageProps) {
     finally { setBusy(false); }
   };
 
+  const reviewBusinessApplication = async (application: BusinessApplication, decision: 'approved' | 'rejected') => {
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const result = await apiRequest<{ placeId?: string }>(`/api/admin/business-applications/${encodeURIComponent(application.id)}`, { method: 'PATCH', body: JSON.stringify({ status: decision }) });
+      const [, updatedPlaces] = await Promise.all([loadBusinessApplications(), loadPlaces()]);
+      if (decision === 'approved' && result.placeId) {
+        const published = updatedPlaces.find((place) => place.id === result.placeId);
+        if (published) { const cached = mockPlaces.find((place) => place.id === result.placeId); if (cached) Object.assign(cached, published); else mockPlaces.unshift(published as Place); }
+        window.dispatchEvent(new Event('business-directory-updated'));
+      }
+      setNotice(decision === 'approved' ? `${application.name} fue aprobado y agregado al directorio.` : `Se rechazó la solicitud de ${application.name}.`);
+    } catch (reviewError) { setError(reviewError instanceof Error ? reviewError.message : 'No se pudo revisar la solicitud.'); }
+    finally { setBusy(false); }
+  };
+
   const reviewCommunityEdit = async (suggestion: CommunityEdit, decision: 'approved' | 'rejected') => {
     setBusy(true); setError(''); setNotice('');
     try {
@@ -255,6 +273,17 @@ export function AdminPage({ onClose }: AdminPageProps) {
         </section>}
 
         {status === 'ready' && <div className="space-y-6">
+          <section className="space-y-3">
+            <div><h2 className="text-lg font-semibold">Nuevos negocios de Google Maps</h2><p className="mt-1 text-sm text-white/50">{businessApplications.length} solicitud{businessApplications.length === 1 ? '' : 'es'} pendiente{businessApplications.length === 1 ? '' : 's'} de aprobación.</p></div>
+            {businessApplications.map((application) => <article key={application.id} className="rounded-[24px] bg-[#202124] p-4 sm:p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">{application.name}</h3><p className="mt-1 text-sm text-white/55">{application.category} · {application.address}</p></div><time className="text-[11px] text-white/40">{new Date(application.createdAt).toLocaleDateString('es-MX')}</time></div>
+              <div className="mt-3 grid gap-2 text-sm text-white/70 sm:grid-cols-2"><p><span className="text-white/40">Teléfono:</span> {application.phone || 'No disponible'}</p><p><span className="text-white/40">Calificación:</span> {application.rating ? `${application.rating} / 5 (${application.reviewCount || 0} reseñas)` : 'No disponible'}</p><p><span className="text-white/40">Sitio web:</span> {application.websiteUrl ? <a className="underline" href={application.websiteUrl} target="_blank" rel="noreferrer">{application.websiteUrl}</a> : 'No disponible'}</p><p><span className="text-white/40">Costo:</span> {'$'.repeat(application.cost || 1)}</p></div>
+              {application.hours && <div className="mt-3 rounded-2xl bg-white/[0.04] p-3 text-xs leading-relaxed text-white/65"><p className="mb-1 font-semibold text-white/80">Horario</p>{application.hours.split('\n').map((line) => <p key={line}>{line}</p>)}</div>}
+              {application.photos.length > 0 && <div className="mt-3 flex gap-2 overflow-x-auto">{application.photos.map((photo) => <img key={photo.id} src={photo.url} alt={photo.name} className="h-28 w-36 shrink-0 rounded-2xl object-cover" />)}</div>}
+              <details className="mt-3 rounded-2xl bg-white/[0.04] p-3"><summary className="cursor-pointer text-xs font-semibold text-white/65">Ver todos los datos importados</summary><pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words text-[10px] text-white/50">{JSON.stringify(application.googleData, null, 2)}</pre></details>
+              <div className="mt-4 flex flex-wrap gap-2"><a href={application.mapsUrl} target="_blank" rel="noreferrer" className="rounded-full bg-white/[0.08] px-4 py-2 text-sm font-semibold">Abrir Google Maps</a><button type="button" disabled={busy} onClick={() => reviewBusinessApplication(application, 'approved')} className="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"><Check className="h-4 w-4" />Aprobar negocio</button><button type="button" disabled={busy} onClick={() => reviewBusinessApplication(application, 'rejected')} className="flex items-center gap-2 rounded-full bg-white/[0.08] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"><X className="h-4 w-4" />Rechazar</button></div>
+            </article>)}
+            {!businessApplications.length && <p className="rounded-[20px] bg-[#202124] p-4 text-sm text-white/55">No hay negocios nuevos pendientes de revisión.</p>}
+          </section>
           <section className="space-y-3">
             <div><h2 className="text-lg font-semibold">Sugerencias de la comunidad</h2><p className="mt-1 text-sm text-white/50">{communityEdits.length} sugerencia{communityEdits.length === 1 ? '' : 's'} pendiente{communityEdits.length === 1 ? '' : 's'} de cambios a negocios.</p></div>
             {communityEdits.map((suggestion) => <article key={suggestion.id} className="rounded-[24px] bg-[#202124] p-4 sm:p-5"><div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{suggestion.placeName}</h3><p className="mt-1 text-xs text-white/45">Sugerido por {suggestion.author}{suggestion.email ? ` · ${suggestion.email}` : ''}</p></div><time className="shrink-0 text-[11px] text-white/40">{new Date(suggestion.createdAt).toLocaleDateString('es-MX')}</time></div><div className="mt-3 space-y-2">{Object.entries(suggestion.changes || {}).map(([key, rawValue]) => <div key={key} className="rounded-2xl bg-white/[0.04] p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-white/40">{{ name: 'Nombre', category: 'Categoría', subtitle: 'Descripción', location: 'Ubicación', address: 'Dirección', phone: 'Teléfono', imageUrl: 'Imagen', weeklyHours: 'Horario' }[key] || key}</p><p className="mt-1 break-words text-sm text-white/80">{key === 'weeklyHours' && rawValue && typeof rawValue === 'object' ? formatWeeklyHours(rawValue as WeeklyHours) : String(rawValue || '(vacío)')}</p>{key === 'imageUrl' && typeof rawValue === 'string' && rawValue && <img src={rawValue} alt="Imagen sugerida" className="mt-2 h-24 w-full rounded-xl object-cover"/>}</div>)}</div><div className="mt-4 flex gap-2"><button type="button" disabled={busy} onClick={() => reviewCommunityEdit(suggestion, 'approved')} className="flex flex-1 items-center justify-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-black disabled:opacity-50"><Check className="h-4 w-4"/>Aprobar cambios</button><button type="button" disabled={busy} onClick={() => reviewCommunityEdit(suggestion, 'rejected')} className="flex flex-1 items-center justify-center gap-2 rounded-full bg-white/[0.08] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"><X className="h-4 w-4"/>Rechazar</button></div></article>)}

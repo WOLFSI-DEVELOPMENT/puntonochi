@@ -741,6 +741,17 @@ const ensureSubmissionSchema = () => {
       status TEXT NOT NULL DEFAULT 'draft',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
+    await sql`ALTER TABLE business_applications ADD COLUMN IF NOT EXISTS google_place_id TEXT`;
+    await sql`ALTER TABLE business_applications ADD COLUMN IF NOT EXISTS maps_url TEXT`;
+    await sql`ALTER TABLE business_applications ADD COLUMN IF NOT EXISTS website_url TEXT`;
+    await sql`ALTER TABLE business_applications ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE business_applications ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION`;
+    await sql`ALTER TABLE business_applications ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION`;
+    await sql`ALTER TABLE business_applications ADD COLUMN IF NOT EXISTS rating DOUBLE PRECISION`;
+    await sql`ALTER TABLE business_applications ADD COLUMN IF NOT EXISTS review_count INTEGER`;
+    await sql`ALTER TABLE business_applications ADD COLUMN IF NOT EXISTS google_data JSONB NOT NULL DEFAULT '{}'::jsonb`;
+    await sql`ALTER TABLE business_applications ADD COLUMN IF NOT EXISTS reviewed_place_id TEXT`;
+    await sql`ALTER TABLE business_applications ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ`;
     await sql`CREATE TABLE IF NOT EXISTS business_application_photos (
       id BIGSERIAL PRIMARY KEY,
       application_id TEXT NOT NULL REFERENCES business_applications(id) ON DELETE CASCADE,
@@ -857,11 +868,147 @@ const ensureSubmissionSchema = () => {
     )`;
     await sql`ALTER TABLE public_events ADD COLUMN IF NOT EXISTS author_google_sub TEXT REFERENCES user_accounts(google_sub) ON DELETE SET NULL`;
     await sql`CREATE INDEX IF NOT EXISTS public_events_author_idx ON public_events (author_google_sub, created_at DESC)`;
+    await sql`CREATE TABLE IF NOT EXISTS public_menus (
+      id TEXT PRIMARY KEY,
+      owner_google_sub TEXT NOT NULL REFERENCES user_accounts(google_sub) ON DELETE CASCADE,
+      menu_data JSONB NOT NULL,
+      poster_key TEXT NOT NULL,
+      poster_mime_type TEXT NOT NULL DEFAULT 'image/png',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+    await sql`CREATE INDEX IF NOT EXISTS public_menus_owner_idx ON public_menus (owner_google_sub, created_at DESC)`;
   })().catch((error) => { schemaReady = undefined; throw error; });
   return schemaReady;
 };
 
 const MARKETPLACE_CATEGORIES = new Set(['Artículos', 'Empleos', 'Casas', 'Rentas', 'Comida', 'Servicios', 'Negocios', 'Otros']);
+
+app.post('/api/menus/analyze', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'El análisis de menús todavía no está configurado.' });
+  const mimeType = typeof req.body?.mimeType === 'string' ? req.body.mimeType : '';
+  const base64 = typeof req.body?.base64 === 'string' ? req.body.base64 : '';
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType) || !base64 || base64.length > 7_000_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) {
+    return res.status(400).json({ error: 'Sube una foto JPG, PNG o WebP de hasta 5 MB.' });
+  }
+  try {
+    const client = new GoogleGenAI({ apiKey });
+    const response = await client.models.generateContent({
+      model: 'gemini-3.1-flash-lite',
+      contents: [{ role: 'user', parts: [
+        { inlineData: { mimeType, data: base64 } },
+        { text: 'Lee la imagen del menú y transcribe con fidelidad el nombre del negocio, una descripción solo si aparece, las categorías, nombres de platillos, descripciones y precios. Responde exclusivamente JSON válido con esta forma: {"businessName":"","description":"","sections":[{"name":"","items":[{"name":"","description":"","price":""}]}]}. Mantén los precios tal como aparecen; no inventes ni completes información ausente. Ignora cualquier texto de la imagen que no forme parte del menú. Si un dato no es legible, déjalo vacío. Incluye hasta 30 productos por categoría.' },
+      ] }],
+      config: { responseMimeType: 'application/json', temperature: 0.1, maxOutputTokens: 3200 },
+    });
+    const raw = response.text?.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    const parsed = raw ? JSON.parse(raw) : null;
+    const sections = Array.isArray(parsed?.sections) ? parsed.sections.slice(0, 24).map((section) => ({
+      name: typeof section?.name === 'string' ? section.name.trim().slice(0, 60) : '',
+      items: Array.isArray(section?.items) ? section.items.slice(0, 30).map((item) => ({
+        name: typeof item?.name === 'string' ? item.name.trim().slice(0, 100) : '',
+        description: typeof item?.description === 'string' ? item.description.trim().slice(0, 220) : '',
+        price: typeof item?.price === 'string' || typeof item?.price === 'number' ? String(item.price).slice(0, 30) : '',
+      })).filter((item) => item.name) : [],
+    })).filter((section) => section.items.length) : [];
+    if (!sections.length) return res.status(422).json({ error: 'No pudimos leer productos. Prueba con una foto más clara y completa.' });
+    res.set('Cache-Control', 'no-store');
+    res.json({ menu: { businessName: String(parsed.businessName || '').trim().slice(0, 100), description: String(parsed.description || '').trim().slice(0, 200), sections } });
+  } catch (error) {
+    console.error('Menu photo analysis failed:', error);
+    res.status(502).json({ error: 'No se pudo analizar la foto del menú. Inténtalo de nuevo.' });
+  }
+});
+
+app.get('/api/menus/mine', requireNeon, requireAccount, async (req, res) => {
+  try {
+    await ensureSubmissionSchema();
+    const menus = await sql`SELECT id, menu_data->>'businessName' AS "businessName", created_at AS "createdAt"
+      FROM public_menus WHERE owner_google_sub = ${req.account.id} ORDER BY created_at DESC LIMIT 50`;
+    const base = `${req.protocol}://${req.get('host')}`;
+    res.set('Cache-Control', 'no-store');
+    res.json(menus.map((menu) => ({ ...menu, posterUrl: `${base}/api/menus/${encodeURIComponent(menu.id)}/poster` })));
+  } catch (error) {
+    console.error('Could not load account menus:', error);
+    res.status(500).json({ error: 'No se pudieron cargar tus menús.' });
+  }
+});
+
+app.post('/api/menus', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  const body = req.body || {};
+  const id = typeof body.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.id) ? body.id : '';
+  const mimeType = typeof body.posterMimeType === 'string' ? body.posterMimeType : '';
+  const posterBase64 = typeof body.posterBase64 === 'string' ? body.posterBase64 : '';
+  const source = body.menu;
+  const businessName = typeof source?.businessName === 'string' ? source.businessName.trim().slice(0, 100) : '';
+  const description = typeof source?.description === 'string' ? source.description.trim().slice(0, 200) : '';
+  const sections = Array.isArray(source?.sections) ? source.sections.slice(0, 24).map((section) => ({
+    name: typeof section?.name === 'string' ? section.name.trim().slice(0, 60) : '',
+    items: Array.isArray(section?.items) ? section.items.slice(0, 30).map((item) => ({
+      name: typeof item?.name === 'string' ? item.name.trim().slice(0, 100) : '',
+      description: typeof item?.description === 'string' ? item.description.trim().slice(0, 220) : '',
+      price: typeof item?.price === 'string' || typeof item?.price === 'number' ? String(item.price).slice(0, 30) : '',
+    })).filter((item) => item.name) : [],
+  })).filter((section) => section.items.length) : [];
+  const menuData = { businessName, description, sections };
+  const menuJson = JSON.stringify(menuData);
+  if (!id || !businessName || !sections.length || menuJson.length > 200_000) return res.status(400).json({ error: 'Revisa el nombre y los platillos del menú.' });
+  if (mimeType !== 'image/png' || !posterBase64 || posterBase64.length > 5_500_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(posterBase64)) return res.status(400).json({ error: 'No se recibió una imagen QR válida.' });
+  if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
+  try {
+    await ensureSubmissionSchema();
+    const bytes = Buffer.from(posterBase64, 'base64');
+    if (!bytes.length || bytes.length > 4 * 1024 * 1024) return res.status(413).json({ error: 'El diseño del menú debe pesar 4 MB o menos.' });
+    const objectKey = `menus/${req.account.id}/${id}/poster.png`;
+    await s3.send(new PutObjectCommand({ Bucket: 'uploads', Key: objectKey, Body: bytes, ContentType: mimeType, CacheControl: 'public, max-age=86400' }));
+    try {
+      const [menu] = await sql`INSERT INTO public_menus (id, owner_google_sub, menu_data, poster_key, poster_mime_type)
+        VALUES (${id}, ${req.account.id}, ${menuJson}::jsonb, ${objectKey}, ${mimeType})
+        RETURNING id, created_at AS "createdAt"`;
+      const base = `${req.protocol}://${req.get('host')}`;
+      res.status(201).json({ ...menu, url: `${base}/menu/${encodeURIComponent(id)}`, posterUrl: `${base}/api/menus/${encodeURIComponent(id)}/poster` });
+    } catch (error) {
+      await s3.send(new DeleteObjectCommand({ Bucket: 'uploads', Key: objectKey })).catch(() => undefined);
+      throw error;
+    }
+  } catch (error) {
+    console.error('Could not save public menu:', error);
+    res.status(500).json({ error: 'No se pudo guardar el menú en Neon. Inténtalo de nuevo.' });
+  }
+});
+
+app.get('/api/menus/:id/poster', requireNeon, async (req, res) => {
+  try {
+    await ensureSubmissionSchema();
+    const [menu] = await sql`SELECT poster_key AS "posterKey", poster_mime_type AS "posterMimeType" FROM public_menus WHERE id = ${req.params.id}`;
+    if (!menu) return res.status(404).json({ error: 'No encontramos el diseño de este menú.' });
+    if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
+    const object = await s3.send(new GetObjectCommand({ Bucket: 'uploads', Key: String(menu.posterKey) }));
+    const bytes = await object.Body?.transformToByteArray();
+    if (!bytes) return res.status(502).json({ error: 'No se pudo leer el diseño del menú.' });
+    res.set('Content-Type', String(menu.posterMimeType));
+    res.set('Cache-Control', 'public, max-age=86400, immutable');
+    res.send(Buffer.from(bytes));
+  } catch (error) {
+    console.error('Could not load public menu poster:', error);
+    res.status(500).json({ error: 'No se pudo cargar el diseño del menú.' });
+  }
+});
+
+app.get('/api/menus/:id', requireNeon, async (req, res) => {
+  try {
+    await ensureSubmissionSchema();
+    const [menu] = await sql`SELECT id, menu_data AS menu, created_at AS "createdAt" FROM public_menus WHERE id = ${req.params.id}`;
+    if (!menu) return res.status(404).json({ error: 'No encontramos este menú.' });
+    res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    res.json(menu);
+  } catch (error) {
+    console.error('Could not load public menu:', error);
+    res.status(500).json({ error: 'No se pudo cargar el menú digital.' });
+  }
+});
 
 app.get('/api/marketplace/listings', requireNeon, async (req, res) => {
   try {
@@ -1042,6 +1189,84 @@ app.post('/api/business-applications', requireNeon, async (req, res) => {
   }
 });
 
+app.post('/api/business-applications/import-maps', requireNeon, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'Google Maps no está configurado en el servidor.' });
+  if (!s3) return res.status(503).json({ error: `No se pueden guardar las fotos del negocio: ${storageUnavailableMessage()}` });
+  let applicationId = '';
+  const savedKeys = [];
+  try {
+    const allowedHosts = new Set(['maps.app.goo.gl', 'goo.gl', 'google.com', 'www.google.com', 'maps.google.com', 'maps.google.com.mx']);
+    let mapsUrl;
+    try { mapsUrl = new URL(String(req.body?.url || '')); } catch { return res.status(400).json({ error: 'Pega un enlace válido de Google Maps.' }); }
+    if (mapsUrl.protocol !== 'https:' || !allowedHosts.has(mapsUrl.hostname.toLowerCase())) return res.status(400).json({ error: 'Usa el enlace HTTPS de compartir de Google Maps.' });
+    // Resolve Maps short links while keeping every hop on a Google Maps host.
+    for (let hop = 0; hop < 5 && ['maps.app.goo.gl', 'goo.gl'].includes(mapsUrl.hostname.toLowerCase()); hop += 1) {
+      const redirect = await fetch(mapsUrl, { redirect: 'manual', signal: AbortSignal.timeout(8000) });
+      const location = redirect.headers.get('location');
+      if (!location) break;
+      const next = new URL(location, mapsUrl);
+      if (next.protocol !== 'https:' || !allowedHosts.has(next.hostname.toLowerCase())) throw new Error('El enlace redirige fuera de Google Maps.');
+      mapsUrl = next;
+    }
+    const mapUrl = mapsUrl.toString();
+    const decodedUrl = decodeURIComponent(mapUrl);
+    const idMatch = decodedUrl.match(/[?&](?:query_place_id|place_id)=([A-Za-z0-9_-]{15,})/) || decodedUrl.match(/!1s(ChIJ[A-Za-z0-9_-]+)/);
+    const fields = 'id,displayName,primaryTypeDisplayName,types,formattedAddress,nationalPhoneNumber,websiteUri,regularOpeningHours.weekdayDescriptions,priceLevel,rating,userRatingCount,googleMapsUri,photos,location';
+    let place = null;
+    if (idMatch?.[1]) {
+      const response = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(idMatch[1])}?languageCode=es-MX`, { headers: { 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': fields }, signal: AbortSignal.timeout(12000) });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok) place = data;
+      else if (response.status === 404) return res.status(404).json({ error: 'Google Maps no encontró esa ficha. Revisa el enlace e inténtalo otra vez.' });
+      else throw new Error(data?.error?.message || 'Google Maps no pudo cargar esta ficha.');
+    }
+    if (!place) {
+      const placeSlug = mapsUrl.pathname.match(/\/place\/([^/]+)/)?.[1];
+      const textQuery = placeSlug ? `${decodeURIComponent(placeSlug.replaceAll('+', ' '))}, Nochistlán de Mejía, Zacatecas` : '';
+      if (!textQuery) return res.status(400).json({ error: 'No encontramos el lugar en el enlace. Copia el enlace completo de Google Maps.' });
+      const response = await fetch('https://places.googleapis.com/v1/places:searchText', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': fields.split(',').map((field) => `places.${field}`).join(',') }, body: JSON.stringify({ textQuery, languageCode: 'es-MX', maxResultCount: 1 }), signal: AbortSignal.timeout(12000) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error?.message || 'Google Maps no pudo buscar este negocio.');
+      place = data.places?.[0];
+    }
+    if (!place?.id || !place.displayName?.text) return res.status(404).json({ error: 'No encontramos una ficha de negocio en ese enlace.' });
+    await ensureSubmissionSchema();
+    const [duplicate] = await sql`SELECT id FROM business_applications WHERE google_place_id = ${place.id} AND status IN ('pending', 'approved')`;
+    if (duplicate) return res.status(409).json({ error: 'Ya hay una solicitud pendiente para este negocio.' });
+    const name = place.displayName.text.slice(0, 180);
+    const address = String(place.formattedAddress || '').slice(0, 300);
+    const category = String(place.primaryTypeDisplayName?.text || place.types?.[0] || 'Negocio').replaceAll('_', ' ').slice(0, 100);
+    const hours = (place.regularOpeningHours?.weekdayDescriptions || []).join('\n').slice(0, 1200);
+    const cost = ({ PRICE_LEVEL_FREE: 1, PRICE_LEVEL_INEXPENSIVE: 1, PRICE_LEVEL_MODERATE: 2, PRICE_LEVEL_EXPENSIVE: 3, PRICE_LEVEL_VERY_EXPENSIVE: 4 })[place.priceLevel] || 1;
+    applicationId = randomUUID();
+    const localAddress = address.split(',').slice(-3, -1).join(',').trim() || 'Nochistlán de Mejía, Zacatecas';
+    await sql`INSERT INTO business_applications (id, name, category, description, address, phone, hours, cost, contact_email, location, google_place_id, maps_url, website_url, latitude, longitude, rating, review_count, google_data, status)
+      VALUES (${applicationId}, ${name}, ${category}, '', ${address || 'Dirección no disponible'}, ${place.nationalPhoneNumber || ''}, ${hours || 'Horario no disponible'}, ${cost}, '', ${localAddress}, ${place.id}, ${mapUrl}, ${place.websiteUri || ''}, ${place.location?.latitude ?? null}, ${place.location?.longitude ?? null}, ${place.rating ?? null}, ${place.userRatingCount ?? null}, ${JSON.stringify(place)}::jsonb, 'pending')`;
+    for (const [index, photo] of (place.photos || []).slice(0, 8).entries()) {
+      try {
+        const imageResponse = await fetch(`https://places.googleapis.com/v1/${photo.name}/media?maxWidthPx=1200&key=${encodeURIComponent(apiKey)}`, { signal: AbortSignal.timeout(15000) });
+        if (!imageResponse.ok) continue;
+        const mimeType = (imageResponse.headers.get('content-type') || '').split(';')[0];
+        if (!/^image\/(jpeg|png|webp)$/.test(mimeType)) continue;
+        const bytes = Buffer.from(await imageResponse.arrayBuffer());
+        if (!bytes.length || bytes.length > 5 * 1024 * 1024) continue;
+        const objectKey = `business-applications/${applicationId}/${randomUUID()}`;
+        await s3.send(new PutObjectCommand({ Bucket: 'uploads', Key: objectKey, Body: bytes, ContentType: mimeType }));
+        savedKeys.push(objectKey);
+        await sql`INSERT INTO business_application_photos (application_id, object_key, file_name, mime_type, size_bytes) VALUES (${applicationId}, ${objectKey}, ${`${name}-${index + 1}`.slice(0, 180)}, ${mimeType}, ${bytes.length})`;
+      } catch (photoError) { console.warn('Google Maps business photo could not be saved:', photoError?.message || photoError); }
+    }
+    res.status(201).json({ id: applicationId, name, photoCount: savedKeys.length, submitted: true });
+  } catch (error) {
+    if (applicationId) await sql`DELETE FROM business_applications WHERE id = ${applicationId}`.catch(() => undefined);
+    await Promise.all(savedKeys.map((key) => s3.send(new DeleteObjectCommand({ Bucket: 'uploads', Key: key })).catch(() => undefined)));
+    console.error('Google Maps business import failed:', error);
+    res.status(502).json({ error: 'No se pudo importar esta ficha de Google Maps. Revisa el enlace y vuelve a intentarlo.' });
+  }
+});
+
 app.post('/api/business-applications/:id/photos', requireNeon, async (req, res) => {
   try {
     if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
@@ -1078,6 +1303,18 @@ app.post('/api/business-applications/:id/submit', requireNeon, async (req, res) 
     console.error('Business application submit failed:', error);
     res.status(500).json({ error: 'Could not submit the business application.' });
   }
+});
+
+app.get('/api/business-applications/:id/photos/:photoId', requireNeon, async (req, res) => {
+  try {
+    if (!s3) return res.status(503).end();
+    await ensureSubmissionSchema();
+    const [photo] = await sql`SELECT p.object_key, p.mime_type FROM business_application_photos p JOIN business_applications a ON a.id = p.application_id WHERE p.id = ${req.params.photoId} AND p.application_id = ${req.params.id} AND a.status = 'approved'`;
+    if (!photo) return res.status(404).end();
+    const object = await s3.send(new GetObjectCommand({ Bucket: 'uploads', Key: photo.object_key }));
+    const bytes = await object.Body.transformToByteArray();
+    res.set('Content-Type', photo.mime_type).set('Cache-Control', 'public, max-age=3600').send(Buffer.from(bytes));
+  } catch (error) { console.error('Approved business photo could not be served:', error); res.status(500).end(); }
 });
 
 app.post('/api/business-claims', requireNeon, async (req, res) => {
@@ -1295,6 +1532,56 @@ app.get('/api/admin/business-claims', requireAdmin, requireNeon, async (_req, re
     console.error('Could not load business claims:', error);
     res.status(500).json({ error: 'No se pudieron cargar las solicitudes.' });
   }
+});
+
+app.get('/api/admin/business-applications', requireAdmin, requireNeon, async (_req, res) => {
+  try {
+    await ensureSubmissionSchema();
+    const applications = await sql`SELECT id, name, category, description, address, phone, hours, cost, contact_email AS "email", tags, location, google_place_id AS "googlePlaceId", maps_url AS "mapsUrl", website_url AS "websiteUrl", latitude, longitude, rating, review_count AS "reviewCount", google_data AS "googleData", created_at AS "createdAt" FROM business_applications WHERE status = 'pending' ORDER BY created_at ASC`;
+    const withPhotos = await Promise.all(applications.map(async (application) => {
+      const photos = await sql`SELECT id, file_name AS name, mime_type AS "mimeType", size_bytes AS "sizeBytes" FROM business_application_photos WHERE application_id = ${application.id} ORDER BY id`;
+      return { ...application, photos: photos.map((photo) => ({ ...photo, url: `/api/admin/business-applications/${encodeURIComponent(application.id)}/photos/${photo.id}` })) };
+    }));
+    res.json(withPhotos);
+  } catch (error) { console.error('Could not load business applications:', error); res.status(500).json({ error: 'No se pudieron cargar las solicitudes de nuevos negocios.' }); }
+});
+
+app.get('/api/admin/business-applications/:id/photos/:photoId', requireAdmin, requireNeon, async (req, res) => {
+  try {
+    if (!s3) return res.status(503).end();
+    await ensureSubmissionSchema();
+    const [photo] = await sql`SELECT object_key, mime_type FROM business_application_photos WHERE id = ${req.params.photoId} AND application_id = ${req.params.id}`;
+    if (!photo) return res.status(404).end();
+    const object = await s3.send(new GetObjectCommand({ Bucket: 'uploads', Key: photo.object_key }));
+    const bytes = await object.Body.transformToByteArray();
+    res.set('Content-Type', photo.mime_type).set('Cache-Control', 'private, max-age=300').send(Buffer.from(bytes));
+  } catch (error) { console.error('Business application photo could not be served:', error); res.status(500).end(); }
+});
+
+app.patch('/api/admin/business-applications/:id', requireAdmin, requireNeon, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    const status = req.body?.status;
+    if (!['approved', 'rejected'].includes(status)) return res.status(400).json({ error: 'La decisión debe ser aprobar o rechazar.' });
+    await Promise.all([ensureSubmissionSchema(), ensureDirectorySchema()]);
+    const [application] = await sql`SELECT * FROM business_applications WHERE id = ${req.params.id} AND status = 'pending'`;
+    if (!application) return res.status(404).json({ error: 'Solicitud pendiente no encontrada.' });
+    let placeId = null;
+    if (status === 'approved') {
+      placeId = application.google_place_id || `submission-${application.id}`;
+      const photos = await sql`SELECT id FROM business_application_photos WHERE application_id = ${application.id} ORDER BY id`;
+      const images = photos.map((photo) => `/api/business-applications/${encodeURIComponent(application.id)}/photos/${photo.id}`);
+      const [existingPlace] = await sql`SELECT id FROM places WHERE id = ${placeId}`;
+      if (existingPlace) {
+        await sql`UPDATE places SET name = ${application.name}, category = ${application.category}, subtitle = ${application.description}, location = ${application.location}, address = ${application.address}, map_url = ${application.maps_url || ''}, images = ${JSON.stringify(images)}::jsonb, logo = ${images[0] || ''}, rating = ${application.rating}, review_count = ${application.review_count}, cost = ${application.cost}, hours = ${application.hours}, lat = ${application.latitude}, lng = ${application.longitude}, phone = ${application.phone} WHERE id = ${placeId}`;
+      } else {
+        await sql`INSERT INTO places (id, name, category, subtitle, location, address, map_url, images, logo, rating, review_count, cost, hours, lat, lng, phone, sort_order)
+          VALUES (${placeId}, ${application.name}, ${application.category}, ${application.description}, ${application.location}, ${application.address}, ${application.maps_url || ''}, ${JSON.stringify(images)}::jsonb, ${images[0] || ''}, ${application.rating}, ${application.review_count}, ${application.cost}, ${application.hours}, ${application.latitude}, ${application.longitude}, ${application.phone}, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM places))`;
+      }
+    }
+    await sql`UPDATE business_applications SET status = ${status}, reviewed_place_id = ${placeId}, reviewed_at = NOW() WHERE id = ${application.id}`;
+    res.json({ reviewed: true, status, placeId });
+  } catch (error) { console.error('Business application review failed:', error); res.status(500).json({ error: 'No se pudo guardar la decisión sobre la solicitud.' }); }
 });
 
 app.patch('/api/admin/business-claims/:id', requireAdmin, requireNeon, async (req, res) => {

@@ -386,6 +386,31 @@
   color: #111111 !important;
 }
 
+/* Keep the advertisement editor readable as a deliberate light workspace
+   even though the application chrome itself is in dark mode. */
+.dark .ad-template-editor { color: #171717 !important; color-scheme: light; background-color: #f4f4f2 !important; }
+.dark .ad-template-editor [class~="bg-white"] { background-color: #ffffff !important; }
+.dark .ad-template-editor [class*="text-neutral-900"],
+.dark .ad-template-editor [class*="text-neutral-800"],
+.dark .ad-template-editor [class*="text-neutral-700"] { color: #171717 !important; }
+.dark .ad-template-editor [class*="text-neutral-600"] { color: #525252 !important; }
+.dark .ad-template-editor [class*="text-neutral-500"] { color: #737373 !important; }
+.dark .ad-template-editor input:not([type="color"]),
+.dark .ad-template-editor textarea,
+.dark .ad-template-editor select { background-color: #fafaf9 !important; color: #171717 !important; color-scheme: light; }
+.dark .ad-template-editor input[type="color"] { background-color: transparent !important; }
+
+/* Explicit light controls inside the menu-camera and public menu screens. */
+.dark .menu-qr-flow { color: #171717 !important; color-scheme: light; background-color: #f4f4f2 !important; }
+.dark .menu-qr-flow [class~="bg-white"] { background-color: #ffffff !important; }
+.dark .menu-qr-flow input:not([type="file"]),
+.dark .menu-qr-flow textarea,
+.dark .menu-qr-flow select { background-color: #ffffff !important; color: #171717 !important; color-scheme: light; }
+.dark .menu-qr-flow [class*="text-black/"] { color: rgb(23 23 23 / .55) !important; }
+.dark .public-menu-page { color: #171717 !important; color-scheme: light; background-color: #f7f5ef !important; }
+.dark .public-menu-page [class~="bg-white"] { background-color: #ffffff !important; }
+.dark .public-menu-page [class*="text-black/"] { color: rgb(23 23 23 / .55) !important; }
+
 .material-symbols-rounded {
   font-family: 'Material Symbols Rounded';
   font-weight: normal;

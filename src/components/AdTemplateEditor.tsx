@@ -100,7 +100,7 @@ export function AdTemplateEditor({ template: initialTemplate, onClose, onExporte
     } catch (error) { window.alert(error instanceof Error ? error.message : 'No se pudo exportar el anuncio.'); } finally { setExporting(false); }
   };
   const colorPresets = ['#f5f4ef', '#ee4b2d', '#d8f36a', '#c6d8d1', '#171717', '#7895ba', '#edc9ce', '#f4dc75'];
-  return <main className="fixed inset-0 z-[95] flex flex-col overflow-y-auto bg-[#f4f4f2] text-[#171717]">
+  return <main className="ad-template-editor fixed inset-0 z-[95] flex flex-col overflow-y-auto bg-[#f4f4f2] text-[#171717]">
     <header className="sticky top-0 z-10 flex h-[62px] shrink-0 items-center justify-between border-b border-black/[.06] bg-[#f4f4f2]/95 px-4 backdrop-blur-xl sm:px-7"><button type="button" onClick={onClose} aria-label="Volver a plantillas" className="flex h-10 items-center gap-2 rounded-full px-3 text-sm font-semibold hover:bg-black/5"><ArrowLeft className="h-4 w-4"/>Plantillas</button><span className="text-xs font-semibold text-black/45">Editor de anuncio</span><button type="button" onClick={onClose} aria-label="Cerrar editor" className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-black/5"><X className="h-5 w-5"/></button></header>
     <div className="mx-auto flex w-full max-w-[1050px] flex-1 flex-col items-center px-4 pb-10 pt-5 sm:px-8">
       <div className="mb-4 flex w-full max-w-[650px] items-center justify-between gap-3"><div><h1 className="text-xl font-bold">Personaliza tu anuncio</h1><p className="mt-1 text-xs text-black/50">Ajusta el diseño y expórtalo para tus redes.</p></div><span className="rounded-full bg-white px-3 py-1.5 text-[11px] font-medium text-black/55 shadow-sm">{template.name}</span></div>
