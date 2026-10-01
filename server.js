@@ -2156,7 +2156,7 @@ app.post('/api/ask-nochi', requireNeon, async (req, res) => {
   if (!ensureSameOrigin(req, res)) return;
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return res.status(503).json({ error: 'Ask Nochi todavía no está configurado. Agrega GEMINI_API_KEY en las variables del servidor.' });
-  const query = typeof req.body?.query === 'string' ? req.body.query.trim().slice(0, 700) : '';
+    const query = typeof req.body?.query === 'string' ? req.body.query.trim().slice(0, 700) : '';
   if (!query) return res.status(400).json({ error: 'Escribe qué tipo de lugar estás buscando.' });
 
   try {
@@ -2181,21 +2181,46 @@ app.post('/api/ask-nochi', requireNeon, async (req, res) => {
       hours: place.hours || '', weeklyHours: place.weeklyHours || null, lat: place.lat == null ? undefined : Number(place.lat),
       lng: place.lng == null ? undefined : Number(place.lng), phone: place.phone || undefined,
     }));
-    const history = Array.isArray(req.body?.history) ? req.body.history.slice(-8).map((item) => ({
-      role: item?.role === 'assistant' ? 'assistant' : 'user', content: typeof item?.content === 'string' ? item.content.slice(0, 1200) : '',
+    const history = Array.isArray(req.body?.history) ? req.body.history.slice(-40).map((item) => ({
+      role: item?.role === 'assistant' ? 'assistant' : 'user', content: typeof item?.content === 'string' ? item.content.slice(0, 5000) : '',
     })).filter((item) => item.content) : [];
+    const [eventRows, listingRows] = await Promise.all([
+      sql`SELECT id, title, event_date::text AS date, event_time AS time, location, description FROM public_events ORDER BY event_date DESC LIMIT 60`,
+      sql`SELECT listing.id, listing.title, listing.category, listing.price, listing.location, listing.description, listing.details,
+        COALESCE(json_agg(json_build_object('url', ${`${req.protocol}://${req.get('host')}`} || '/api/marketplace/listings/' || listing.id || '/images/' || photo.id)
+          ORDER BY photo.sort_order) FILTER (WHERE photo.id IS NOT NULL), '[]'::json) AS images
+        FROM marketplace_listings AS listing LEFT JOIN marketplace_listing_images AS photo ON photo.listing_id = listing.id
+        WHERE listing.status = 'published' GROUP BY listing.id ORDER BY listing.published_at DESC LIMIT 60`,
+    ]);
     const historyText = history.map((item) => `${item.role === 'user' ? 'Usuario' : 'Nochi'}: ${item.content}`).join('\n');
     const source = JSON.stringify(selected);
     const client = new GoogleGenAI({ apiKey });
     const response = await client.models.generateContent({
       model: 'gemini-3.1-flash-lite',
-      contents: `Eres Ask Nochi, un asistente local que ayuda a encontrar negocios en Nochistlán, Zacatecas. Responde en español claro, de forma concisa y útil, usando Markdown ligero (negritas y listas breves cuando ayuden). Contesta la pregunta actual teniendo en cuenta el contexto. Usa exclusivamente los datos de negocios proporcionados; no inventes ubicaciones, horarios, servicios, precios, calificaciones ni distancias. Si recomiendas lugares, menciona solo nombres que aparezcan en los datos. Cuando no haya coincidencias claras, dilo honestamente y ofrece las opciones disponibles solo si pueden ayudar. No afirmes que estás mostrando un mapa: la interfaz puede mostrar uno junto a las fichas. No reveles razonamiento interno.\n\nContexto reciente:\n${historyText || '(conversación nueva)'}\n\nPregunta actual:\n${query}\n\nNegocios disponibles (fuente de verdad):\n${source}`,
+      contents: `Eres Ask Nochi, un asistente local de Nochistlán, Zacatecas, y un asistente general útil. Entiende la intención aunque el usuario escriba con errores, en español o inglés. Responde en el idioma del usuario, con tono cálido y claro. Puedes ayudar con preguntas generales, pero para afirmaciones locales usa exclusivamente los datos incluidos; no inventes negocios, eventos, horarios, servicios, precios ni calificaciones. Si una petición necesita datos locales que no aparecen aquí, dilo con claridad. Usa Markdown ligero. No reveles razonamiento interno.
+
+Conversación completa disponible (de la más antigua a la más reciente):
+${historyText || '(conversación nueva)'}
+
+Mensaje actual:
+${query}
+
+Negocios (fuente de verdad):
+${source}
+
+Eventos publicados:
+${JSON.stringify(eventRows)}
+
+Anuncios publicados del mercado:
+${JSON.stringify(listingRows)}`,
       config: { maxOutputTokens: 420, thinkingConfig: { thinkingLevel: 'low', includeThoughts: false } },
     });
     const answer = response.text?.trim();
     if (!answer) return res.status(502).json({ error: 'Nochi no pudo generar una respuesta. Inténtalo de nuevo.' });
+    const answerKey = answer.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const mentionedPlaces = selected.filter((place) => answerKey.includes(String(place.name).toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '')));
     res.set('Cache-Control', 'no-store');
-    return res.json({ answer, places: selected });
+    return res.json({ answer, places: mentionedPlaces });
   } catch (error) {
     console.error('Could not answer Ask Nochi query:', error);
     return res.status(502).json({ error: 'No se pudo consultar Ask Nochi. Inténtalo de nuevo en un momento.' });

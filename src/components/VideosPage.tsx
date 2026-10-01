@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { ArrowLeft, Bike, BriefcaseBusiness, ChevronRight, Clock3, Heart, House, MapPin, MessageCircle, Phone, Plus, Search, Share2, ShieldCheck, Store, Utensils, UserRound, X } from 'lucide-react';
+import { ArrowLeft, Bike, BriefcaseBusiness, ChevronRight, Clock3, Heart, House, MapPin, MessageCircle, Phone, Plus, Share2, ShieldCheck, Store, Utensils, UserRound, X } from 'lucide-react';
 import { AccountAuthSheet } from './AccountSheets';
 import { ProfileSheet } from './ProfileSheet';
 import { PublicProfileSheet } from './PublicProfileSheet';
@@ -20,10 +20,6 @@ const categories = [
   { label: 'Otros', emoji: '✨', note: 'Más cosas cerca de ti' },
 ];
 
-function normalizeMarketplaceText(value: string) {
-  return value.toLocaleLowerCase('es-MX').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
 type Listing = { id: string; category: string; title: string; price: string; location: string; description: string; details: Record<string, string>; createdAt: string; profileId: string; authorName: string; authorPicture: string | null; images: { id: string; url: string; sortOrder: number }[] };
 type MarketplaceAccount = { id: string; name: string; picture: string | null };
 
@@ -38,9 +34,6 @@ export function VideosPage({ onSelectBusiness }: { onSelectBusiness?: (place: Pl
   const [showProfile, setShowProfile] = useState(false);
   const [publicProfileId, setPublicProfileId] = useState('');
   const [feedLoadError, setFeedLoadError] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const normalizedQuery = normalizeMarketplaceText(searchQuery.trim());
-  const matchesSearch = (value: string) => !normalizedQuery || normalizeMarketplaceText(value).includes(normalizedQuery);
   const loadListings = () => fetch('/api/marketplace/listings', { cache: 'no-store', credentials: 'same-origin' }).then(async (response) => {
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || 'No se pudieron cargar los anuncios.');
@@ -57,9 +50,8 @@ export function VideosPage({ onSelectBusiness }: { onSelectBusiness?: (place: Pl
     return () => { active = false; window.removeEventListener('account-session-updated', refresh); window.removeEventListener('account-profile-updated', refresh); };
   }, []);
   useEffect(() => { window.addEventListener('marketplace-listing-published', loadListings); return () => window.removeEventListener('marketplace-listing-published', loadListings); }, []);
-  const marketplaceListings = normalizedQuery ? listings.filter((listing) => matchesSearch(`${listing.title} ${listing.price} ${listing.location} ${listing.category} ${listing.description} ${Object.values(listing.details || {}).join(' ')}`)) : listings;
+  const marketplaceListings = listings;
   const combinedListingCount = marketplaceListings.length;
-  const matchingCategories = normalizedQuery ? categories.filter((category) => matchesSearch(`${category.label} ${category.note}`)) : categories;
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('marketplace-detail-visibility', { detail: Boolean(selectedPublishedListing) }));
     return () => window.dispatchEvent(new CustomEvent('marketplace-detail-visibility', { detail: false }));
@@ -97,33 +89,25 @@ export function VideosPage({ onSelectBusiness }: { onSelectBusiness?: (place: Pl
         </div>
       </section>
 
-      <label className="marketplace-squircle relative z-[1] mx-auto -mt-5 flex h-12 w-[calc(100%-40px)] max-w-xl items-center gap-2.5 bg-white px-3.5 text-xs text-neutral-400 shadow-[0_5px_18px_rgba(22,28,45,0.10)]">
-        <Search aria-hidden="true" className="h-4 w-4 text-neutral-500" />
-        <input type="search" aria-label="Buscar en el mercado" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Busca artículos, casas, comida..." className="marketplace-search-input min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-neutral-400" />
-        {searchQuery && <button type="button" onClick={() => setSearchQuery('')} aria-label="Limpiar búsqueda" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-neutral-400"><X className="h-4 w-4"/></button>}
-      </label>
-
       <div className="mx-auto max-w-xl px-4">
-        {(!normalizedQuery || matchingCategories.length > 0) && <section aria-labelledby="categories-title" className="mt-6">
-          <div className="mb-2.5 flex items-center justify-between px-1"><h2 id="categories-title" className="text-sm font-bold">{normalizedQuery ? 'Categorías' : 'Explora categorías'}</h2>{!normalizedQuery && <button type="button" onClick={() => setShowAllCategories(true)} className="text-[10px] font-medium text-neutral-400">Ver todas <ChevronRight aria-hidden="true" className="inline h-3 w-3" /></button>}</div>
+        <section aria-labelledby="categories-title" className="mt-6">
+          <div className="mb-2.5 flex items-center justify-between px-1"><h2 id="categories-title" className="text-sm font-bold">Explora categorías</h2><button type="button" onClick={() => setShowAllCategories(true)} className="text-[10px] font-medium text-neutral-400">Ver todas <ChevronRight aria-hidden="true" className="inline h-3 w-3" /></button></div>
           <div className="grid grid-cols-2 gap-2.5">
-            {matchingCategories.map((category) => <button type="button" onClick={() => setSelectedCategory(category)} key={category.label} className={`marketplace-category marketplace-squircle marketplace-category-${categories.indexOf(category) + 1}`}>
+            {categories.map((category) => <button type="button" onClick={() => setSelectedCategory(category)} key={category.label} className={`marketplace-category marketplace-squircle marketplace-category-${categories.indexOf(category) + 1}`}>
               <span aria-hidden="true" className="marketplace-category-emoji">{category.emoji}</span>
               <span className="marketplace-category-label">{category.label}</span>
               <span className="marketplace-category-note">{category.note}</span>
             </button>)}
           </div>
-        </section>}
+        </section>
 
-        {(!normalizedQuery || combinedListingCount > 0 || feedLoadError) && <section aria-labelledby="listings-title" className="mt-6">
-          <div className="mb-2.5 flex items-end justify-between px-1"><div><h2 id="listings-title" className="text-sm font-bold">{normalizedQuery ? 'Anuncios encontrados' : 'Anuncios cerca de ti'}</h2><p className="mt-0.5 text-[10px] text-neutral-500">{normalizedQuery ? `${combinedListingCount} resultados` : 'Publicaciones de la comunidad'}</p></div>{!normalizedQuery && <button type="button" onClick={() => setShowAllCategories(true)} className="text-[10px] font-semibold text-neutral-400">Ver todo <ChevronRight aria-hidden="true" className="inline h-3 w-3" /></button>}</div>
+        <section aria-labelledby="listings-title" className="mt-6">
+          <div className="mb-2.5 flex items-end justify-between px-1"><div><h2 id="listings-title" className="text-sm font-bold">Anuncios cerca de ti</h2><p className="mt-0.5 text-[10px] text-neutral-500">{combinedListingCount} publicaciones de la comunidad</p></div><button type="button" onClick={() => setShowAllCategories(true)} className="text-[10px] font-semibold text-neutral-400">Ver todo <ChevronRight aria-hidden="true" className="inline h-3 w-3" /></button></div>
           {feedLoadError && <p role="status" className="mb-3 rounded-[16px] bg-[#202124] px-3 py-2 text-[11px] text-white/55">{feedLoadError}</p>}
           {marketplaceListings.length ? <div className="grid grid-cols-2 gap-2.5">
             {marketplaceListings.map((listing) => <MarketplacePublishedListingCard key={listing.id} listing={listing} onOpenListing={() => setSelectedPublishedListing(listing)} onOpenProfile={setPublicProfileId} />)}
           </div> : !feedLoadError && <div className="rounded-[18px] bg-[#202124] px-4 py-8 text-center"><Store className="mx-auto h-6 w-6 text-white/35"/><h3 className="mt-3 text-sm font-semibold text-white">Todavía no hay anuncios</h3><p className="mt-1 text-xs text-white/45">Sé la primera persona en publicar en el Mercado.</p></div>}
-        </section>}
-
-        {normalizedQuery && !matchingCategories.length && !marketplaceListings.length && <div className="mt-6 rounded-[18px] bg-[#202124] px-5 py-8 text-center"><Search className="mx-auto h-6 w-6 text-white/35"/><h2 className="mt-3 text-sm font-bold text-white">No encontramos resultados</h2><p className="mt-1 text-xs text-white/45">Prueba con otro nombre o categoría.</p></div>}
+        </section>
 
       </div>
     <AnimatePresence>{showCreateListing && <MarketplaceListingFlow onClose={() => setShowCreateListing(false)}/>}</AnimatePresence>
@@ -161,7 +145,6 @@ function MarketplaceCategoriesPage({ listings, onBack, onSelectCategory }: { lis
   return <main className="marketplace-page marketplace-browse-page min-h-screen px-4 pb-36">
     <div className="mx-auto w-full max-w-2xl">
       <MarketplacePageHeader title="Todas las categorías" subtitle="Encuentra algo para ti, cerca de casa." onBack={onBack}/>
-      <label className="marketplace-squircle mb-5 flex h-11 items-center gap-2 bg-[#202124] px-4 text-xs text-white/45"><Search className="h-4 w-4"/><span className="sr-only">Buscar categorías</span><input placeholder="Explora artículos, servicios, comida..." className="min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-white/45"/></label>
       <section aria-label="Todas las categorías" className="grid grid-cols-2 gap-2.5">
         {categories.map((category, index) => {
           const count = listings.filter((listing) => listing.category === category.label).length;

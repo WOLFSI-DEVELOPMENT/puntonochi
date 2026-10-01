@@ -9,10 +9,11 @@ import { AllCategoriesPage } from './components/AllCategoriesPage';
 import { DestacadosPage } from './components/DestacadosPage';
 import { ColoniaDetailPage } from './components/ColoniaDetailPage';
 import { BusinessDetailSheet } from './components/BusinessDetailSheet';
+import { HomeVideosSection } from './components/HomeVideosSection';
 const VideosPage = React.lazy(() => import('./components/VideosPage').then((module) => ({ default: module.VideosPage })));
 const NewsPage = React.lazy(() => import('./components/NewsPage').then((module) => ({ default: module.NewsPage })));
 const CreatePage = React.lazy(() => import('./components/CreatePage').then((module) => ({ default: module.CreatePage })));
-import { SearchPage, SearchBar, AskNochiInline } from './components/SearchPage';
+import { SearchPage, AskNochiPage } from './components/SearchPage';
 import { BusinessPromotionSheet } from './components/BusinessPromotionSheet';
 import { BusinessSubmissionSheet } from './components/BusinessSubmissionSheet';
 import { AdminPage } from './components/AdminPage';
@@ -25,6 +26,7 @@ import { Category, Place, Colonia } from './types';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { DAILY_USE_KEY, getBookmarkedPlaceIds, recordProfileActiveSeconds } from './profileStorage';
 import { PublicProfileSheet } from './components/PublicProfileSheet';
+import { ProfileSheet } from './components/ProfileSheet';
 import { getStreakMilestone, StreakBadgeCelebration, StreakPage } from './components/StreakPage';
 import { PublicMenuPage } from './components/PublicMenuPage';
 import { PageLoadingSkeleton } from './components/PageLoadingSkeleton';
@@ -129,6 +131,8 @@ export default function App() {
         initShowColonias = true;
       } else if (parts[0] === 'eventos') {
         initialTab = 'noticias';
+      } else if (parts[0] === 'ask-nochi') {
+        initialTab = 'ask-nochi';
       } else if (parts[0] === 'explorar' || parts[0] === 'guardados' || parts[0] === 'videos' || parts[0] === 'mercado' || parts[0] === 'noticias' || parts[0] === 'mapa' || parts[0] === 'crear') {
         initialTab = parts[0] === 'mapa' || parts[0] === 'mercado' ? 'videos' : parts[0];
       } else {
@@ -152,6 +156,12 @@ export default function App() {
 
   const init = getInitialState();
 
+  useEffect(() => {
+    const back = () => setActiveTab('inicio');
+    window.addEventListener('askNochiBack', back);
+    return () => window.removeEventListener('askNochiBack', back);
+  }, []);
+
   const [showColonias, setShowColonias] = useState(init.initShowColonias);
   const [showAllCategories, setShowAllCategories] = useState(init.initShowAllCategories);
   const [showAdminPage, setShowAdminPage] = useState(init.initShowAdmin);
@@ -165,11 +175,11 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(init.initialTab);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [homeAskMode, setHomeAskMode] = useState(false);
   const [loading, setLoading] = useState(init.initShowSplash);
   const [showWelcome, setShowWelcome] = useState(false);
   const [welcomeTransitionDone, setWelcomeTransitionDone] = useState(true);
   const [publicProfileId, setPublicProfileId] = useState<string | null>(null);
+  const [showProfileSheet, setShowProfileSheet] = useState(false);
   const [showStreakPage, setShowStreakPage] = useState(false);
   const [streakBadgeCelebration, setStreakBadgeCelebration] = useState<{ days: number; name: string } | null>(null);
   const [marketplaceDetailOpen, setMarketplaceDetailOpen] = useState(false);
@@ -363,27 +373,17 @@ export default function App() {
       .slice(0, 8);
   }, [directoryVersion, suggestionVersion]);
 
-  const homeSearchResults = useMemo(() => {
-    const terms = searchQuery.trim().toLocaleLowerCase('es').split(/\s+/).filter(Boolean);
-    if (!terms.length) return [];
-    return mockPlaces.filter((place) => {
-      const searchable = [place.name, place.category, place.subtitle, place.location, place.address].filter(Boolean).join(' ').toLocaleLowerCase('es');
-      return terms.every((term) => searchable.includes(term));
-    });
-  }, [searchQuery, directoryVersion]);
-
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const term = searchQuery.trim().replace(/\s+/g, ' ');
-      const inlineSearchActive = activeTab === 'inicio' || showAllCategories || Boolean(selectedCategory);
-      if ((!showSearch && !inlineSearchActive) || term.length < 2) return;
+      if (!showSearch || term.length < 2) return;
       const recent = readLocalList(RECENT_SEARCHES_KEY).filter((item) => item.toLocaleLowerCase('es') !== term.toLocaleLowerCase('es'));
       try { localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify([term, ...recent].slice(0, 12))); } catch { /* Suggestions still work without storage. */ }
       void fetch('/api/activity/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: term }) }).catch(() => undefined);
       setSuggestionVersion((version) => version + 1);
     }, 700);
     return () => window.clearTimeout(timer);
-  }, [searchQuery, showSearch, activeTab, showAllCategories, selectedCategory]);
+  }, [searchQuery, showSearch]);
 
   useEffect(() => {
     const refreshSuggestions = () => setSuggestionVersion((version) => version + 1);
@@ -649,17 +649,8 @@ export default function App() {
               Descubre<br/>
               <span className="text-[#1a73e8]">Nochistlán</span>
             </h1>
-            {homeAskMode
-              ? <AskNochiInline places={mockPlaces} onClose={() => setHomeAskMode(false)} onSelectPlace={(place) => { setSelectedCategory(null); setSelectedBusiness(place); setHomeAskMode(false); }} />
-              : <SearchBar value={searchQuery} onChange={setSearchQuery} onToggleAsk={() => { setHomeAskMode(true); setSearchQuery(''); }} className="mt-5" />}
           </section>
-          {!homeAskMode && searchQuery.trim() ? <section className="mb-10 px-5" aria-live="polite">
-            <div className="mb-4"><h2 className="text-xl font-bold">Resultados ({homeSearchResults.length})</h2><p className="mt-1 text-sm text-neutral-500">Negocios que coinciden con tu búsqueda</p></div>
-            <div className="space-y-3">{homeSearchResults.map((place) => <button type="button" key={place.id} onClick={() => setSelectedBusiness(place)} className="flex min-h-[106px] w-full items-center gap-3 rounded-[24px] bg-[#292a2d] p-[5px] text-left text-white">
-              <div className="aspect-video w-[38%] max-w-[160px] shrink-0 overflow-hidden rounded-[19px] bg-[#35363a]">{place.images?.[0] && <img src={place.images[0]} alt="" loading="lazy" className="h-full w-full object-cover"/>}</div>
-              <div className="min-w-0 flex-1 py-2 pr-3"><h3 className="line-clamp-2 text-[15px] font-bold">{place.name}</h3><p className="mt-1 line-clamp-1 text-xs text-white/60">{place.category}{place.subtitle ? ` · ${place.subtitle}` : ''}</p><p className="mt-1 truncate text-[11px] text-white/45">{place.location || place.address || 'Nochistlán'}</p></div>
-            </button>)}{homeSearchResults.length === 0 && <p className="rounded-[20px] bg-neutral-100 px-4 py-5 text-sm text-neutral-500">No encontramos negocios que coincidan. Prueba con otro nombre, giro o colonia.</p>}</div>
-          </section> : !homeAskMode ? <>
+          <>
           {/* Personalized suggestions */}
           <section className="mb-10">
             <div className="px-5 mb-4">
@@ -771,11 +762,13 @@ export default function App() {
               {popularPlaces.map((place) => <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[30px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
                 <img src={place.images[0]} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
-                <span className="absolute left-4 top-4 inline-flex items-center gap-1 bg-[#f97316] px-2.5 py-1 text-[11px] font-bold text-white"><Flame className="h-3.5 w-3.5 fill-white"/>EN TENDENCIA</span>
+                <span className="absolute left-4 top-4 inline-flex items-center gap-1 rounded-full bg-[#7773e8] px-2.5 py-1 text-[11px] font-bold text-white shadow-[0_4px_12px_rgba(38,33,120,.25)]"><Flame className="h-3.5 w-3.5 fill-white"/>En tendencia</span>
                 <div className="absolute bottom-4 left-4 right-4"><h3 className="line-clamp-2 text-lg font-bold leading-tight">{place.name}</h3><p className="mt-1 truncate text-xs text-white/80">{place.category} · {place.location || place.address || 'Nochistlán'}</p>{place.rating > 0 && <p className="mt-1 flex items-center gap-1 text-xs text-white/85"><Star className="h-3 w-3 fill-current text-yellow-300"/>{place.rating.toFixed(1)}{place.reviewCount ? ` · ${place.reviewCount} reseñas` : ''}</p>}</div>
               </button>)}
             </div>
           </section>}
+
+          <HomeVideosSection onViewAll={() => setActiveTab('noticias')} />
 
           <section className="mb-10">
             <div className="mb-4 px-5">
@@ -913,7 +906,7 @@ export default function App() {
             </div>
             <button type="button" onClick={() => setShowBusinessSubmission(true)} style={{ backgroundColor: '#ffffff', color: '#111111' }} className="w-full rounded-full !bg-white px-6 py-3.5 text-sm font-bold !text-black transition-transform active:scale-[0.99]">Agrega tu negocio</button>
           </section>
-          </> : null}
+          </>
         </motion.main>
       )}
 
@@ -945,12 +938,13 @@ export default function App() {
       <AnimatePresence>{streakBadgeCelebration && <StreakBadgeCelebration key={`streak-badge-${streakBadgeCelebration.days}`} days={streakBadgeCelebration.days} name={streakBadgeCelebration.name} onDone={() => setStreakBadgeCelebration(null)}/>}</AnimatePresence>
 
       {/* Bottom Navigation & Search */}
-      {!showSearch && !showAdminPage && !showStreakPage && !(activeTab === 'videos' && marketplaceDetailOpen) && (
-        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => setShowSearch(true)} />
+      {activeTab !== 'ask-nochi' && !showAdminPage && !showStreakPage && !(activeTab === 'videos' && marketplaceDetailOpen) && (
+        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => setShowSearch(false)} onOpenProfile={() => { if (signedInAccount) setPublicProfileId(signedInAccount.id); else setShowProfileSheet(true); }} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} />
       )}
 
       {/* Pages & Overlays */}
       <AnimatePresence>
+        {activeTab === 'ask-nochi' && <AskNochiPage key="ask-nochi" onSelectBusiness={(place) => { setActiveTab('inicio'); setSelectedBusiness(place); }} />}
         {showAdminPage && <AdminPage key="admin-page" onClose={() => setShowAdminPage(false)} />}
         {showBusinessPromotion && <BusinessPromotionSheet key="business-promotion" onClose={() => setShowBusinessPromotion(false)} />}
         {showBusinessSubmission && <BusinessSubmissionSheet key="business-submission" onClose={() => setShowBusinessSubmission(false)} />}
@@ -958,8 +952,12 @@ export default function App() {
           <SearchPage
             key="search-page"
             query={searchQuery}
-            onQueryChange={setSearchQuery}
             onClose={() => setShowSearch(false)}
+            onOpenEvents={() => setActiveTab('noticias')}
+            onOpenMarketplace={() => setActiveTab('videos')}
+            places={selectedCategory ? mockPlaces.filter((place) => place.category === selectedCategory.name) : mockPlaces}
+            categoryScoped={Boolean(selectedCategory)}
+            categoryName={selectedCategory?.name}
             onSelectBusiness={(place) => {
               setSelectedCategory(null);
               setSelectedBusiness(place);
@@ -972,8 +970,6 @@ export default function App() {
             key="all-categories"
             onClose={() => setShowAllCategories(false)}
             onSelectCategory={(cat) => setSelectedCategory(cat)}
-            query={searchQuery}
-            onQueryChange={setSearchQuery}
           />
         )}
         {showColonias && (
@@ -1008,8 +1004,6 @@ export default function App() {
             category={selectedCategory} 
             onClose={() => setSelectedCategory(null)} 
             onSelectBusiness={(place) => setSelectedBusiness(place)} 
-            query={searchQuery}
-            onQueryChange={setSearchQuery}
           />
         )}
         {selectedBusiness && (
@@ -1029,6 +1023,7 @@ export default function App() {
         <SmartOnboarding enabled={!loading && !showWelcome && welcomeTransitionDone && !showAdminPage} onLocation={setDeviceLocation} />
         {showWelcome && !showAdminPage && <WelcomePage onContinue={finishWelcome} />}
         {publicProfileId && <PublicProfileSheet profileId={publicProfileId} onClose={() => setPublicProfileId(null)} />}
+        {showProfileSheet && <ProfileSheet onClose={() => setShowProfileSheet(false)} onSelectBusiness={(place) => setSelectedBusiness(place)} />}
       </AnimatePresence>
       <Analytics />
     </div>

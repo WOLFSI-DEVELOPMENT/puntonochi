@@ -4,16 +4,13 @@ import { ChevronLeft, MoreHorizontal, Star } from 'lucide-react';
 import { Category, Place } from '../types';
 import { mockPlaces } from '../data';
 import CornerKit from '@cornerkit/core';
-import { SearchBar } from './SearchPage';
 
 const categoryCorners = new CornerKit();
 
-export function CategoryPage({ category, onClose, onSelectBusiness, query, onQueryChange }: { category: Category, onClose: () => void, onSelectBusiness: (place: Place) => void, query: string, onQueryChange: (query: string) => void }) {
-  const normalizedQuery = query.trim().toLocaleLowerCase('es');
+export function CategoryPage({ category, onClose, onSelectBusiness }: { category: Category, onClose: () => void, onSelectBusiness: (place: Place) => void }) {
   const places = mockPlaces.filter((place) => {
     if (place.category !== category.name) return false;
-    if (!normalizedQuery) return true;
-    return [place.name, place.category, place.subtitle, place.location, place.address].filter(Boolean).join(' ').toLocaleLowerCase('es').includes(normalizedQuery);
+    return true;
   });
 
   useEffect(() => {
@@ -53,7 +50,6 @@ export function CategoryPage({ category, onClose, onSelectBusiness, query, onQue
       </div>
 
       <div className="p-5 pb-32">
-        <SearchBar value={query} onChange={onQueryChange} className="mb-5" />
         <div className="flex flex-col gap-4">
           {places.map((place) => (
             <motion.button
