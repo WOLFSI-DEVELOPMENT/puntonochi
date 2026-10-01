@@ -296,7 +296,7 @@ function AskNochiSheet({ places, onClose, onSelectPlace }: { places: Place[]; on
 
         <div className="relative z-10 shrink-0 bg-[linear-gradient(to_top,rgba(255,255,255,.07)_0%,rgba(255,255,255,.035)_12%,rgba(255,255,255,.012)_24%,transparent_42%)] px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
           <form onSubmit={(event) => { event.preventDefault(); void sendMessage(input); }} className="flex min-h-[56px] items-center gap-2 rounded-full bg-[#292a2d] p-1.5 pl-5">
-            <input ref={composerRef} value={input} onChange={(event) => setInput(event.target.value)} placeholder="Pregunta a Nochi…" aria-label="Pregunta a Nochi" autoComplete="off" className="ask-nochi-input min-w-0 flex-1 appearance-none !rounded-none !border-0 !bg-transparent !shadow-none py-3 text-[15px] text-white outline-none ring-0 placeholder:text-white/40 focus:!border-0 focus:!bg-transparent focus:!shadow-none focus:outline-none focus:ring-0" />
+            <input ref={composerRef} value={input} onChange={(event) => setInput(event.target.value)} placeholder="Pregunta a Nochi…" aria-label="Pregunta a Nochi" autoComplete="off" className="ask-nochi-input min-w-0 w-full flex-1 appearance-none !rounded-none !border-0 !bg-transparent !shadow-none py-3 text-[16px] text-white outline-none ring-0 placeholder:text-white/40 focus:!border-0 focus:!bg-transparent focus:!shadow-none focus:outline-none focus:ring-0" />
             <button type="submit" disabled={!input.trim() || busy} aria-label="Enviar pregunta" className="flex h-11 min-w-12 shrink-0 items-center justify-center rounded-full bg-[#0a84ff] px-4 text-white transition-opacity disabled:opacity-35"><ArrowRight className="h-5 w-5"/></button>
           </form>
         </div>

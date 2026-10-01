@@ -74,7 +74,7 @@ export function CreatePage({ account }: { account: Account | null }) {
 
   if (!authChecked || !authenticated) return <main className="min-h-[calc(100dvh-88px)] bg-[#111214] px-5 pt-24 text-white"><div className="mx-auto max-w-lg rounded-[28px] bg-[#1b1c1f] p-6 text-center"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10"><WandSparkles className="h-6 w-6"/></span><h1 className="mt-4 text-xl font-bold">Crear en PuntoNochi</h1><p className="mt-2 text-sm text-white/55">{authChecked ? 'Inicia sesión para ver tus proyectos y crear contenido.' : 'Comprobando tu sesión…'}</p></div><AnimatePresence>{authChecked && !authenticated && showAuth && <AccountAuthSheet initialMode="login" onClose={() => setShowAuth(false)}/>}</AnimatePresence><AnimatePresence>{authChecked && !authenticated && !showAuth && <AccountRequiredPrompt onClose={() => setShowAuth(true)} message="Inicia sesión para acceder a Crear, guardar tus proyectos y publicar contenido."/>}</AnimatePresence></main>;
 
-  return <main className="min-h-[calc(100dvh-88px)] bg-[#111214] px-4 pb-32 pt-8 text-white sm:px-6">
+  return <main className="min-h-[calc(100dvh-88px)] bg-[#111214] px-4 pb-32 pt-[73px] text-white sm:px-6">
     <div className="mx-auto max-w-2xl">
       <header className="mb-6"><p className="text-[10px] font-bold uppercase tracking-[.18em] text-white/40">PuntoNochi · Crear</p><h1 className="mt-2 text-3xl font-bold tracking-tight">¿Qué hacemos hoy?</h1><p className="mt-1 text-sm text-white/50">Crea algo para compartir con Nochistlán.</p></header>
 
