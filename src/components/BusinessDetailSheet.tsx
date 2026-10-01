@@ -6,6 +6,7 @@ import { mockPlaces } from '../data';
 import CornerKit from '@cornerkit/core';
 import { CommunityActionsSheet } from './CommunityActionsSheet';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
+import { VerifiedBusinessName } from './VerifiedBusinessName';
 
 const BusinessLocationMap = lazy(() => import('./BusinessLocationMap').then((module) => ({ default: module.BusinessLocationMap })));
 const BusinessMapOverlay = lazy(() => import('./BusinessLocationMap').then((module) => ({ default: module.BusinessMapOverlay })));
@@ -61,6 +62,22 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
     }).then((details) => { if (active) setGoogleDetails(details); }).catch(() => undefined);
     return () => { active = false; };
   }, [place.id]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const body = document.body;
+    const previous = { rootOverflow: root.style.overflow, bodyOverflow: body.style.overflow, rootOverscroll: root.style.overscrollBehavior, bodyOverscroll: body.style.overscrollBehavior };
+    root.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    root.style.overscrollBehavior = 'none';
+    body.style.overscrollBehavior = 'none';
+    return () => {
+      root.style.overflow = previous.rootOverflow;
+      body.style.overflow = previous.bodyOverflow;
+      root.style.overscrollBehavior = previous.rootOverscroll;
+      body.style.overscrollBehavior = previous.bodyOverscroll;
+    };
+  }, []);
 
   const todayName = new Intl.DateTimeFormat('es-MX', { weekday: 'long' }).format(new Date());
   const todaySchedule = place.weeklyHours?.[todayName.charAt(0).toLocaleUpperCase('es') + todayName.slice(1)];
@@ -189,11 +206,12 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
         exit={{ y: "100%" }}
         transition={{ type: "spring", damping: 32, stiffness: 360, mass: 0.82 }}
         {...detailDrag}
-        className="fixed inset-x-0 bottom-0 z-[61] h-[92vh] rounded-t-[32px] bg-[#171717] overflow-hidden flex flex-col"
+        data-no-tab-swipe
+        className="fixed inset-x-0 bottom-0 z-[61] h-[min(92dvh,900px)] max-h-[calc(100dvh-env(safe-area-inset-top))] overflow-hidden rounded-t-[32px] bg-[#171717] flex flex-col"
       >
         <SheetDragHandle controls={detailDrag.dragControls} tone="dark" className="absolute inset-x-0 top-0 z-20" />
         
-        <div className="flex-1 overflow-y-auto pb-8">
+        <div data-no-tab-swipe className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-8">
           {/* Hero Section */}
           <div className="relative w-full h-[240px]">
             <img 
@@ -220,7 +238,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
           </div>
 
           <div className="px-5 pt-12 pb-6">
-            <h1 className="text-[28px] font-bold text-neutral-900 leading-tight mb-1">{place.name}</h1>
+            <h1 className="mb-1 text-[28px] font-bold leading-tight text-neutral-900"><VerifiedBusinessName name={place.name}/></h1>
             <p className="text-[15px] font-medium text-neutral-600">
               {place.category} • <span className="text-[#1a73e8] hover:underline cursor-pointer">{place.location}</span>
             </p>

@@ -4,6 +4,7 @@ import { ChevronLeft, MoreHorizontal, Star } from 'lucide-react';
 import { Category, Place } from '../types';
 import { mockPlaces } from '../data';
 import CornerKit from '@cornerkit/core';
+import { VerifiedBusinessName } from './VerifiedBusinessName';
 
 const categoryCorners = new CornerKit();
 
@@ -69,7 +70,7 @@ export function CategoryPage({ category, onClose, onSelectBusiness }: { category
               <div className="flex items-center gap-3 px-3 pb-3 pt-3">
                 {place.logo && <img src={place.logo} alt="" loading="lazy" className="h-11 w-11 shrink-0 rounded-full bg-[#35363a] object-cover" />}
                 <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-[17px] font-bold text-white">{place.name}</h3>
+                  <h3 className="truncate text-[17px] font-bold text-white"><VerifiedBusinessName name={place.name}/></h3>
                   <p className="truncate text-[14px] font-medium text-white/55">{place.subtitle || `${place.category} • ${place.location}`}</p>
                 </div>
               </div>

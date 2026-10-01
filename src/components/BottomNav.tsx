@@ -7,6 +7,7 @@ type Tab = { id: string; label: string; icon: string };
 const extraTabs: Tab[] = [
   { id: 'videos', label: 'Mercado', icon: 'storefront' },
   { id: 'noticias', label: 'Noticias', icon: 'newspaper' },
+  { id: 'guias', label: 'Guías locales', icon: 'menu_book' },
   { id: 'crear', label: 'Crear', icon: 'add' },
 ];
 const askTab: Tab = { id: 'ask-nochi', label: 'Pregúntale a Nochi', icon: 'sparkle_filled' };
@@ -69,7 +70,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
 
           <button type="button" aria-label="Buscar" onClick={() => { setMenuOpen(false); setIsSearching(true); onOpenSearch(); }} className={cn('flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-full px-4 text-left text-white/65 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70', design === 'dynamic' ? 'liquid-glass' : 'bg-white/[0.10] shadow-[0_8px_28px_rgba(0,0,0,0.24)] backdrop-blur-[36px] backdrop-saturate-150')}><span className="material-symbols-rounded shrink-0 text-[20px] font-bold">search</span><span className="truncate text-xs font-medium">Buscar</span></button>
 
-          <button type="button" aria-label="Más secciones" aria-expanded={menuOpen} title="Más secciones" onClick={() => setMenuOpen((open) => !open)} className={cn(buttonClass, 'text-white/20')}><span className={cn('material-symbols-rounded text-[23px] font-bold', menuOpen || ['videos', 'noticias', 'crear'].includes(activeTab) ? 'text-white' : 'text-white/35')}>grid_view</span></button>
+          <button type="button" aria-label="Más secciones" aria-expanded={menuOpen} title="Más secciones" onClick={() => setMenuOpen((open) => !open)} className={cn(buttonClass, 'text-white/20')}><span className={cn('material-symbols-rounded text-[23px] font-bold', menuOpen || ['videos', 'noticias', 'crear', 'guias'].includes(activeTab) ? 'text-white' : 'text-white/35')}>grid_view</span></button>
           <button type="button" aria-label="Perfil" title="Perfil" onClick={() => { setMenuOpen(false); onOpenProfile(); }} className={cn(buttonClass, 'overflow-hidden p-0')}>
             {profilePicture ? <img src={profilePicture} alt="" referrerPolicy="no-referrer" className="h-full w-full rounded-full object-cover"/> : profileName ? <span className="flex h-full w-full items-center justify-center rounded-full bg-blue-500 text-sm font-bold">{profileName.slice(0, 1).toUpperCase()}</span> : <span className="material-symbols-rounded text-[23px] font-bold text-white/35">person</span>}
           </button>

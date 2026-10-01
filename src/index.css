@@ -8,6 +8,12 @@
   html { min-height: 100dvh; background: #121212; }
   body { min-height: 100vh; min-height: 100dvh; margin: 0; overflow-x: hidden; }
   #app-root { min-height: 100vh; min-height: 100dvh; padding-top: env(safe-area-inset-top, 0px); }
+  .auto-layout-root { width: 100%; max-width: 100%; min-height: var(--auto-layout-viewport-height, 100dvh); overflow-x: clip; --auto-layout-safe-bottom: env(safe-area-inset-bottom, 0px); }
+  .auto-layout-frame { width: min(calc(100% - (var(--auto-layout-gutter, 16px) * 2)), var(--auto-layout-frame-max, var(--auto-layout-content-max, 1200px))); margin-inline: auto; }
+  .auto-layout-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--auto-layout-grid-min, 260px)), 1fr)); gap: var(--auto-layout-grid-gap, 16px); }
+  [data-layout-mode="compact"] { --auto-layout-control-size: 44px; --auto-layout-section-gap: 24px; }
+  [data-layout-mode="medium"] { --auto-layout-control-size: 46px; --auto-layout-section-gap: 30px; }
+  [data-layout-mode="wide"] { --auto-layout-control-size: 48px; --auto-layout-section-gap: 36px; }
   html, body, * {
     font-family: 'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif;
     -ms-overflow-style: none;
@@ -385,20 +391,6 @@
   background-color: #ffffff !important;
   color: #111111 !important;
 }
-
-/* Keep the advertisement editor readable as a deliberate light workspace
-   even though the application chrome itself is in dark mode. */
-.dark .ad-template-editor { color: #171717 !important; color-scheme: light; background-color: #f4f4f2 !important; }
-.dark .ad-template-editor [class~="bg-white"] { background-color: #ffffff !important; }
-.dark .ad-template-editor [class*="text-neutral-900"],
-.dark .ad-template-editor [class*="text-neutral-800"],
-.dark .ad-template-editor [class*="text-neutral-700"] { color: #171717 !important; }
-.dark .ad-template-editor [class*="text-neutral-600"] { color: #525252 !important; }
-.dark .ad-template-editor [class*="text-neutral-500"] { color: #737373 !important; }
-.dark .ad-template-editor input:not([type="color"]),
-.dark .ad-template-editor textarea,
-.dark .ad-template-editor select { background-color: #fafaf9 !important; color: #171717 !important; color-scheme: light; }
-.dark .ad-template-editor input[type="color"] { background-color: transparent !important; }
 
 /* Explicit light controls inside the menu-camera and public menu screens. */
 .dark .menu-qr-flow { color: #171717 !important; color-scheme: light; background-color: #f4f4f2 !important; }

@@ -6,6 +6,7 @@ import { ProfileSheet } from './ProfileSheet';
 import { mockPlaces } from '../data';
 import { getBookmarkedPlaceIds } from '../profileStorage';
 import type { Place } from '../types';
+import { VerifiedBusinessName } from './VerifiedBusinessName';
 
 type CommunityPost = {
   id: string;
@@ -142,7 +143,7 @@ function BusinessDiscoveryCard({ place, onOpen }: { place: Place; onOpen: () => 
   return <button type="button" onClick={onOpen} className="explore-lazy-card group marketplace-squircle relative h-[210px] w-full overflow-hidden bg-[#202124] text-left" aria-label={`Ver ${place.name}`}>
     {image ? <img src={image} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"/> : <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#30343b] to-[#1b1c1f]"><Store className="h-10 w-10 text-white/25"/></div>}
     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/15 to-black/5"/>
-    <div className="absolute inset-x-0 bottom-0 p-3.5"><span className="rounded-full bg-black/45 px-2 py-1 text-[9px] font-semibold text-white/80 backdrop-blur">{place.category}</span><h3 className="mt-2 line-clamp-1 text-sm font-bold text-white">{place.name}</h3><p className="mt-1 flex items-center gap-1 text-[10px] text-white/65"><MapPin className="h-3 w-3 shrink-0"/><span className="truncate">{place.location}</span></p><p className="mt-1 flex items-center gap-1 text-[10px] text-white/70"><Star className="h-3 w-3 fill-amber-300 text-amber-300"/>{place.rating?.toFixed(1) || 'Nuevo'}<span className="text-white/45">· {place.isOpen ? 'Abierto' : 'Cerrado'}</span></p></div>
+    <div className="absolute inset-x-0 bottom-0 p-3.5"><span className="rounded-full bg-black/45 px-2 py-1 text-[9px] font-semibold text-white/80 backdrop-blur">{place.category}</span><h3 className="mt-2 line-clamp-1 text-sm font-bold text-white"><VerifiedBusinessName name={place.name}/></h3><p className="mt-1 flex items-center gap-1 text-[10px] text-white/65"><MapPin className="h-3 w-3 shrink-0"/><span className="truncate">{place.location}</span></p><p className="mt-1 flex items-center gap-1 text-[10px] text-white/70"><Star className="h-3 w-3 fill-amber-300 text-amber-300"/>{place.rating?.toFixed(1) || 'Nuevo'}<span className="text-white/45">· {place.isOpen ? 'Abierto' : 'Cerrado'}</span></p></div>
   </button>;
 }
 

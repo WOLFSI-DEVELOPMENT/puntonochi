@@ -3,12 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import CornerKit from '@cornerkit/core';
 import { motion, useReducedMotion } from 'motion/react';
 
-type InstagramReel = { id: string; url: string };
-type InstagramEmbedWindow = Window & { instgrm?: { Embeds?: { process: () => void } } };
-const reels: InstagramReel[] = [
-  { id: 'DdAZyNZlKlj', url: 'https://www.instagram.com/ayuntamientodenochistlan/reel/DdAZyNZlKlj/' },
-  { id: 'Dd4s-ojCDrY', url: 'https://www.instagram.com/ayuntamientodenochistlan/reel/Dd4s-ojCDrY/' },
-];
+const videoUrl = 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1790871656/Expo_Eventos_2026_qekh1y.mp4';
 const cornerKit = new CornerKit();
 const videoCardCorners = { radius: 28, smoothing: 1 };
 
@@ -18,24 +13,6 @@ export function HomeVideosSection({ onViewAll }: { onViewAll: () => void }) {
 
   useEffect(() => {
     trackRef.current?.querySelectorAll<HTMLElement>('[data-home-video-card]').forEach((card) => cornerKit.apply(card, videoCardCorners));
-    let active = true;
-    const processEmbeds = () => { if (active) (window as InstagramEmbedWindow).instgrm?.Embeds?.process(); };
-    const script = document.querySelector<HTMLScriptElement>('script[src="https://www.instagram.com/embed.js"]');
-    if ((window as InstagramEmbedWindow).instgrm?.Embeds) processEmbeds();
-    else if (script) script.addEventListener('load', processEmbeds, { once: true });
-    else {
-      const embedScript = document.createElement('script');
-      embedScript.src = 'https://www.instagram.com/embed.js';
-      embedScript.async = true;
-      embedScript.onload = processEmbeds;
-      document.body.appendChild(embedScript);
-    }
-    const processTimer = window.setTimeout(processEmbeds, 300);
-    return () => {
-      active = false;
-      window.clearTimeout(processTimer);
-      script?.removeEventListener('load', processEmbeds);
-    };
   }, []);
 
   return <section aria-label="Videos de Nochistlán" className="mb-10">
@@ -44,21 +21,19 @@ export function HomeVideosSection({ onViewAll }: { onViewAll: () => void }) {
       <button type="button" onClick={onViewAll} className="flex shrink-0 items-center gap-1 text-xs font-semibold text-neutral-500">Noticias <ChevronRight className="h-4 w-4"/></button>
     </div>
     <div ref={trackRef} className="flex snap-x snap-mandatory gap-4 overflow-x-auto overflow-y-visible px-8 py-5 [perspective:1100px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {reels.map((reel, index) => <motion.div
-        key={reel.id}
+      <motion.div
+        key="expo-eventos-2026"
         data-home-video-card
-        initial={reduceMotion ? false : { opacity: 0, y: 14, rotateY: index % 2 ? 4 : -4 }}
+        initial={reduceMotion ? false : { opacity: 0, y: 14, rotateY: -4 }}
         whileInView={{ opacity: 1, y: 0, rotateY: 0 }}
         viewport={{ once: true, amount: .3 }}
-        whileHover={reduceMotion ? undefined : { rotateY: index % 2 ? -3 : 3, rotateX: 1, scale: 1.01, z: 6 }}
+        whileHover={reduceMotion ? undefined : { rotateY: 3, rotateX: 1, scale: 1.01, z: 6 }}
         transition={{ type: 'spring', stiffness: 240, damping: 22 }}
-        style={{ flex: '0 0 min(90vw, 460px)', minWidth: 326, maxWidth: 460, overflow: 'hidden', borderRadius: 28, background: '#fff', boxShadow: '0 8px 24px rgba(0,0,0,.16)', transformStyle: 'preserve-3d' }}
+        style={{ flex: '0 0 min(86vw, 430px)', minWidth: 300, maxWidth: 430, overflow: 'hidden', background: '#111', boxShadow: '0 8px 24px rgba(0,0,0,.16)', transformStyle: 'preserve-3d' }}
         className="snap-start"
       >
-        <blockquote className="instagram-media" data-instgrm-permalink={`${reel.url}?utm_source=ig_embed`} data-instgrm-version="14" style={{ background: '#fff', border: 0, borderRadius: 28, boxShadow: 'none', margin: '0 auto', maxWidth: 460, minWidth: 326, padding: 0, width: '100%' }}>
-          <div style={{ padding: 16 }}><a href={reel.url} target="_blank" rel="noopener noreferrer" style={{ color: '#262626', display: 'block', fontFamily: 'Arial,sans-serif', fontSize: 14, lineHeight: '18px', padding: '140px 0', textAlign: 'center', textDecoration: 'none' }}>Reproducir Reel en Instagram</a></div>
-        </blockquote>
-      </motion.div>)}
+        <video src={videoUrl} controls playsInline preload="metadata" aria-label="Expo Eventos 2026" className="block aspect-video w-full object-cover" />
+      </motion.div>
     </div>
   </section>;
 }

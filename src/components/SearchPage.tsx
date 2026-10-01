@@ -3,6 +3,7 @@ import { ArrowRight, Bookmark, Image as ImageIcon, MapPin, MessageCircle, Plus, 
 import { AnimatePresence, motion } from 'motion/react';
 import { Place } from '../types';
 import CornerKit from '@cornerkit/core';
+import { VerifiedBusinessName } from './VerifiedBusinessName';
 
 const ASK_RECENTS_KEY = 'puntonochi-ask-nochi-recent-v1';
 const AskNochiMap = lazy(() => import('./BusinessLocationMap').then((module) => ({ default: module.BusinessLocationMap })));
@@ -21,7 +22,7 @@ function BusinessCard({ place, onSelect }: { place: Place; onSelect: (place: Pla
       {place.images?.[0] ? <img src={place.images[0]} alt="" loading="lazy" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-white/35"><MapPin className="h-7 w-7"/></div>}
     </div>
     <div className="flex min-w-0 flex-1 flex-col justify-center py-2 pr-3">
-      <h2 className="line-clamp-2 text-[15px] font-bold leading-snug">{place.name}</h2>
+      <h2 className="line-clamp-2 text-[15px] font-bold leading-snug"><VerifiedBusinessName name={place.name}/></h2>
       <p className="mt-1 line-clamp-1 text-[12px] font-medium text-white/60">{place.category}{place.subtitle ? ` · ${place.subtitle}` : ''}</p>
       <p className="mt-1.5 flex min-w-0 items-center gap-1 text-[11px] text-white/45"><MapPin className="h-3 w-3 shrink-0"/><span className="truncate">{place.location || place.address || 'México'}</span></p>
       {place.rating > 0 && <p className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-white/70"><Star className="h-3 w-3 fill-amber-300 text-amber-300"/>{place.rating.toFixed(1)}<span className="font-normal text-white/40">· {place.reviewCount || 0} reseñas</span></p>}
@@ -293,7 +294,7 @@ function AskNochiSheet({ places, onClose, onSelectPlace }: { places: Place[]; on
           </div>
         </div>
 
-        <div className="relative z-10 shrink-0 bg-[linear-gradient(to_bottom,transparent_0%,rgba(23,23,23,.88)_28%,#171717_62%)] px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-8">
+        <div className="relative z-10 shrink-0 bg-[linear-gradient(to_top,rgba(255,255,255,.07)_0%,rgba(255,255,255,.035)_12%,rgba(255,255,255,.012)_24%,transparent_42%)] px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
           <form onSubmit={(event) => { event.preventDefault(); void sendMessage(input); }} className="flex min-h-[56px] items-center gap-2 rounded-full bg-[#292a2d] p-1.5 pl-5">
             <input ref={composerRef} value={input} onChange={(event) => setInput(event.target.value)} placeholder="Pregunta a Nochi…" aria-label="Pregunta a Nochi" autoComplete="off" className="ask-nochi-input min-w-0 flex-1 appearance-none !rounded-none !border-0 !bg-transparent !shadow-none py-3 text-[15px] text-white outline-none ring-0 placeholder:text-white/40 focus:!border-0 focus:!bg-transparent focus:!shadow-none focus:outline-none focus:ring-0" />
             <button type="submit" disabled={!input.trim() || busy} aria-label="Enviar pregunta" className="flex h-11 min-w-12 shrink-0 items-center justify-center rounded-full bg-[#0a84ff] px-4 text-white transition-opacity disabled:opacity-35"><ArrowRight className="h-5 w-5"/></button>

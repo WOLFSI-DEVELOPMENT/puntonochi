@@ -7,6 +7,7 @@ export function useSheetDrag(onDismiss: () => void) {
     dragControls: controls,
     drag: 'y' as const,
     dragListener: false,
+    dragDirectionLock: true,
     dragConstraints: { top: 0, bottom: 0 },
     dragElastic: { top: 0, bottom: 0.14 },
     dragMomentum: false,

@@ -10,6 +10,9 @@ import { DestacadosPage } from './components/DestacadosPage';
 import { ColoniaDetailPage } from './components/ColoniaDetailPage';
 import { BusinessDetailSheet } from './components/BusinessDetailSheet';
 import { HomeVideosSection } from './components/HomeVideosSection';
+import { VerifiedBusinessName } from './components/VerifiedBusinessName';
+import { GuideComposerOverlay, HomeGuidesSection, LocalGuidesPage } from './components/LocalGuidesPage';
+import { AutoLayoutRoot } from './layout/AutoLayout';
 const VideosPage = React.lazy(() => import('./components/VideosPage').then((module) => ({ default: module.VideosPage })));
 const NewsPage = React.lazy(() => import('./components/NewsPage').then((module) => ({ default: module.NewsPage })));
 const CreatePage = React.lazy(() => import('./components/CreatePage').then((module) => ({ default: module.CreatePage })));
@@ -133,7 +136,7 @@ export default function App() {
         initialTab = 'noticias';
       } else if (parts[0] === 'ask-nochi') {
         initialTab = 'ask-nochi';
-      } else if (parts[0] === 'explorar' || parts[0] === 'guardados' || parts[0] === 'videos' || parts[0] === 'mercado' || parts[0] === 'noticias' || parts[0] === 'mapa' || parts[0] === 'crear') {
+      } else if (parts[0] === 'explorar' || parts[0] === 'guardados' || parts[0] === 'videos' || parts[0] === 'mercado' || parts[0] === 'noticias' || parts[0] === 'mapa' || parts[0] === 'crear' || parts[0] === 'guias') {
         initialTab = parts[0] === 'mapa' || parts[0] === 'mercado' ? 'videos' : parts[0];
       } else {
         // It might be a category name
@@ -168,6 +171,7 @@ export default function App() {
   const [showDestacados, setShowDestacados] = useState(false);
   const [showBusinessPromotion, setShowBusinessPromotion] = useState(false);
   const [showBusinessSubmission, setShowBusinessSubmission] = useState(false);
+  const [showGuideComposer, setShowGuideComposer] = useState(false);
   const [selectedColonia, setSelectedColonia] = useState<Colonia | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(init.initialCategory);
   const [selectedBusiness, setSelectedBusiness] = useState<Place | null>(init.initialBusiness);
@@ -538,6 +542,9 @@ export default function App() {
     } else if (activeTab === 'videos') {
       title = 'Videos de Nochistlán | PuntoNochi';
       description = 'Mira videos cortos y largos sobre lugares y novedades de Nochistlán.';
+    } else if (activeTab === 'guias') {
+      title = 'Guías locales de Nochistlán | PuntoNochi';
+      description = 'Explora y comparte guías locales con recomendaciones de la comunidad de Nochistlán.';
     } else if (activeTab === 'noticias') {
       title = 'Noticias de México y Nochistlán | PuntoNochi';
       description = 'Consulta noticias y videos informativos de México y Nochistlán en PuntoNochi.';
@@ -629,7 +636,7 @@ export default function App() {
   if (publicMenuId) return <PublicMenuPage id={publicMenuId}/>;
 
   return (
-    <div id="app-root" className={`relative min-h-screen bg-[#f8f9fa] ${activeTab === 'explorar' ? 'pb-0' : 'pb-36'} font-sans text-neutral-900 selection:bg-blue-100`} style={{ fontFamily: "'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif" }}>
+    <AutoLayoutRoot id="app-root" className={`auto-layout-root relative min-h-screen bg-[#f8f9fa] ${activeTab === 'explorar' ? 'pb-0' : 'pb-36'} font-sans text-neutral-900 selection:bg-blue-100`} style={{ fontFamily: "'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif" }}>
       {/* Dynamic Main Content based on activeTab */}
       <AnimatePresence mode="wait" initial={false}>
       {activeTab === 'inicio' && (
@@ -668,7 +675,7 @@ export default function App() {
                     {getBookmarkedPlaceIds().includes(place.id) && <Bookmark className="h-4 w-4 fill-white drop-shadow" />}
                   </div>
                   <div className="absolute bottom-4 left-4 right-4">
-                    <h3 className="line-clamp-2 text-lg font-bold leading-tight">{place.name}</h3>
+                    <h3 className="line-clamp-2 text-lg font-bold leading-tight"><VerifiedBusinessName name={place.name}/></h3>
                     <p className="mt-1 flex items-center gap-1 truncate text-xs text-white/80"><MapPin className="h-3 w-3 shrink-0"/>{distanceFromDevice(place, deviceLocation) !== null ? `${distanceFromDevice(place, deviceLocation)!.toFixed(1)} km de aquí` : place.location || place.address || 'Nochistlán'}</p>
                     {place.rating > 0 && <p className="mt-1 flex items-center gap-1 text-xs text-white/85"><Star className="h-3 w-3 fill-current text-yellow-300"/>{place.rating.toFixed(1)}{place.reviewCount ? ` · ${place.reviewCount} reseñas` : ''}</p>}
                   </div>
@@ -747,7 +754,7 @@ export default function App() {
                 {place.images?.[0] ? <img src={place.images[0]} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 flex items-center justify-center bg-[#303135]"><Store className="h-12 w-12 text-white/25"/></div>}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
                 <span className="absolute left-4 top-4 rounded-full bg-black/35 px-3 py-1 text-xs font-semibold backdrop-blur-sm">{place.category}</span>
-                <div className="absolute bottom-4 left-4 right-4"><h3 className="line-clamp-2 text-lg font-bold leading-tight">{place.name}</h3><p className="mt-1 flex items-center gap-1 truncate text-xs text-white/80"><MapPin className="h-3 w-3 shrink-0"/>{place.location || place.address || 'Nochistlán'}</p>{place.rating > 0 && <p className="mt-1 flex items-center gap-1 text-xs text-white/85"><Star className="h-3 w-3 fill-current text-yellow-300"/>{place.rating.toFixed(1)}{place.reviewCount ? ` · ${place.reviewCount} reseñas` : ''}</p>}</div>
+                <div className="absolute bottom-4 left-4 right-4"><h3 className="line-clamp-2 text-lg font-bold leading-tight"><VerifiedBusinessName name={place.name}/></h3><p className="mt-1 flex items-center gap-1 truncate text-xs text-white/80"><MapPin className="h-3 w-3 shrink-0"/>{place.location || place.address || 'Nochistlán'}</p>{place.rating > 0 && <p className="mt-1 flex items-center gap-1 text-xs text-white/85"><Star className="h-3 w-3 fill-current text-yellow-300"/>{place.rating.toFixed(1)}{place.reviewCount ? ` · ${place.reviewCount} reseñas` : ''}</p>}</div>
               </button>)}
             </div> : <p className="mx-5 rounded-[22px] bg-neutral-100 px-4 py-4 text-sm text-neutral-500">Los negocios que visites aparecerán aquí.</p>}
           </section>
@@ -763,11 +770,12 @@ export default function App() {
                 <img src={place.images[0]} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
                 <span className="absolute left-4 top-4 inline-flex items-center gap-1 rounded-full bg-[#7773e8] px-2.5 py-1 text-[11px] font-bold text-white shadow-[0_4px_12px_rgba(38,33,120,.25)]"><Flame className="h-3.5 w-3.5 fill-white"/>En tendencia</span>
-                <div className="absolute bottom-4 left-4 right-4"><h3 className="line-clamp-2 text-lg font-bold leading-tight">{place.name}</h3><p className="mt-1 truncate text-xs text-white/80">{place.category} · {place.location || place.address || 'Nochistlán'}</p>{place.rating > 0 && <p className="mt-1 flex items-center gap-1 text-xs text-white/85"><Star className="h-3 w-3 fill-current text-yellow-300"/>{place.rating.toFixed(1)}{place.reviewCount ? ` · ${place.reviewCount} reseñas` : ''}</p>}</div>
+                <div className="absolute bottom-4 left-4 right-4"><h3 className="line-clamp-2 text-lg font-bold leading-tight"><VerifiedBusinessName name={place.name}/></h3><p className="mt-1 truncate text-xs text-white/80">{place.category} · {place.location || place.address || 'Nochistlán'}</p>{place.rating > 0 && <p className="mt-1 flex items-center gap-1 text-xs text-white/85"><Star className="h-3 w-3 fill-current text-yellow-300"/>{place.rating.toFixed(1)}{place.reviewCount ? ` · ${place.reviewCount} reseñas` : ''}</p>}</div>
               </button>)}
             </div>
           </section>}
 
+          <HomeGuidesSection onViewAll={() => setActiveTab('guias')} onCreateGuide={() => setShowGuideComposer(true)} />
           <HomeVideosSection onViewAll={() => setActiveTab('noticias')} />
 
           <section className="mb-10">
@@ -780,7 +788,7 @@ export default function App() {
                 {place.images?.[0] ? <img src={place.images[0]} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 flex items-center justify-center bg-[#303135]"><Store className="h-12 w-12 text-white/25"/></div>}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
                 <span className="absolute left-4 top-4 bg-[#1a73e8] px-2.5 py-1 text-[11px] font-bold text-white">NUEVO</span>
-                <div className="absolute bottom-4 left-4 right-4"><h3 className="line-clamp-2 text-lg font-bold leading-tight">{place.name}</h3><p className="mt-1 truncate text-xs text-white/80">{place.category} · {place.location || place.address || 'Nochistlán'}</p>{place.createdAt && <time className="mt-1 block text-[11px] text-white/65">Agregado el {new Date(place.createdAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}</time>}</div>
+                <div className="absolute bottom-4 left-4 right-4"><h3 className="line-clamp-2 text-lg font-bold leading-tight"><VerifiedBusinessName name={place.name}/></h3><p className="mt-1 truncate text-xs text-white/80">{place.category} · {place.location || place.address || 'Nochistlán'}</p>{place.createdAt && <time className="mt-1 block text-[11px] text-white/65">Agregado el {new Date(place.createdAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}</time>}</div>
               </button>)}
             </div> : <p className="mx-5 rounded-[22px] bg-neutral-100 px-4 py-4 text-sm text-neutral-500">Los negocios nuevos que agreguemos aparecerán aquí.</p>}
           </section>
@@ -796,7 +804,7 @@ export default function App() {
                 {place.images?.[0] && <img src={place.images[0]} alt={place.name} loading="lazy" className="absolute inset-0 h-full w-full object-cover"/>}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent"/>
                 <Bookmark className="absolute right-3 top-3 h-4 w-4 fill-white drop-shadow"/>
-                <div className="absolute bottom-3 left-3 right-3"><h3 className="line-clamp-2 text-sm font-bold leading-tight">{place.name}</h3><p className="mt-1 truncate text-[11px] text-white/75">{place.category} · {place.location || 'Nochistlán'}</p></div>
+                <div className="absolute bottom-3 left-3 right-3"><h3 className="line-clamp-2 text-sm font-bold leading-tight"><VerifiedBusinessName name={place.name}/></h3><p className="mt-1 truncate text-[11px] text-white/75">{place.category} · {place.location || 'Nochistlán'}</p></div>
               </button>)}
             </div> : <div className="mx-5 rounded-[22px] bg-neutral-100 px-4 py-5 text-sm text-neutral-500">Aún no tienes favoritos. Guarda un negocio con el marcador para encontrarlo aquí.</div>}
           </section>
@@ -930,6 +938,7 @@ export default function App() {
         {activeTab === 'noticias' && (
           <motion.div key="news-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<PageLoadingSkeleton page="news"/>}><NewsPage key="noticias" /></React.Suspense></motion.div>
         )}
+        {activeTab === 'guias' && <motion.div key="local-guides-page" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .18 }}><LocalGuidesPage onCreateGuide={() => setShowGuideComposer(true)}/></motion.div>}
       </AnimatePresence>
 
       <AnimatePresence>
@@ -948,6 +957,7 @@ export default function App() {
         {showAdminPage && <AdminPage key="admin-page" onClose={() => setShowAdminPage(false)} />}
         {showBusinessPromotion && <BusinessPromotionSheet key="business-promotion" onClose={() => setShowBusinessPromotion(false)} />}
         {showBusinessSubmission && <BusinessSubmissionSheet key="business-submission" onClose={() => setShowBusinessSubmission(false)} />}
+        {showGuideComposer && <GuideComposerOverlay key="guide-composer-overlay" onClose={() => setShowGuideComposer(false)}/>}
         {showSearch && (
           <SearchPage
             key="search-page"
@@ -1026,6 +1036,6 @@ export default function App() {
         {showProfileSheet && <ProfileSheet onClose={() => setShowProfileSheet(false)} onSelectBusiness={(place) => setSelectedBusiness(place)} />}
       </AnimatePresence>
       <Analytics />
-    </div>
+    </AutoLayoutRoot>
   );
 }

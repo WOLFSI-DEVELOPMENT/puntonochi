@@ -1860,6 +1860,152 @@ app.get('/api/community-posts/feed', requireNeon, async (req, res) => {
   }
 });
 
+let guideSchemaReady;
+const ensureGuideSchema = () => {
+  if (!guideSchemaReady) guideSchemaReady = (async () => {
+    await ensureSubmissionSchema();
+    await sql`CREATE TABLE IF NOT EXISTS community_guides (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      content_markdown TEXT NOT NULL,
+      place_name TEXT NOT NULL,
+      place_address TEXT NOT NULL DEFAULT '',
+      google_place_id TEXT,
+      image_key TEXT NOT NULL,
+      image_mime_type TEXT NOT NULL,
+      author_google_sub TEXT REFERENCES user_accounts(google_sub) ON DELETE SET NULL,
+      status TEXT NOT NULL DEFAULT 'published' CHECK (status IN ('published')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+    await sql`CREATE INDEX IF NOT EXISTS community_guides_created_idx ON community_guides (created_at DESC)`;
+  })().catch((error) => { guideSchemaReady = undefined; throw error; });
+  return guideSchemaReady;
+};
+
+app.get('/api/places/suggest', async (req, res) => {
+  const query = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 120) : '';
+  if (query.length < 2) return res.json([]);
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY;
+  if (!apiKey) return res.json([]);
+  try {
+    const response = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': 'suggestions.placePrediction.placeId,suggestions.placePrediction.text,suggestions.placePrediction.structuredFormat' },
+      body: JSON.stringify({ input: query, languageCode: 'es-MX', includedRegionCodes: ['MX'], locationBias: { circle: { center: { latitude: 21.3617, longitude: -102.8455 }, radius: 30000 } } }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return res.json([]);
+    res.set('Cache-Control', 'no-store');
+    return res.json((data.suggestions || []).flatMap((item) => {
+      const prediction = item.placePrediction;
+      if (!prediction?.text?.text) return [];
+      return [{ id: prediction.placeId || '', description: prediction.text.text, name: prediction.structuredFormat?.mainText?.text || prediction.text.text, address: prediction.structuredFormat?.secondaryText?.text || '' }];
+    }).slice(0, 6));
+  } catch (error) {
+    console.error('Guide place suggestions failed:', error);
+    return res.json([]);
+  }
+});
+
+app.post('/api/guides/format', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'La IA no está configurada. Revisa el formato y publica tu guía.' });
+  const title = typeof req.body?.title === 'string' ? req.body.title.trim().slice(0, 120) : '';
+  const summary = typeof req.body?.summary === 'string' ? req.body.summary.trim().slice(0, 240) : '';
+  const draft = typeof req.body?.content === 'string' ? req.body.content.trim().slice(0, 12000) : '';
+  if (!title || !draft) return res.status(400).json({ error: 'Escribe el título y el contenido de tu guía.' });
+  try {
+    const client = new GoogleGenAI({ apiKey });
+    const response = await client.models.generateContent({
+      model: 'gemini-3.1-flash-lite',
+      contents: `Edita el borrador de una guía comunitaria local para que sea claro, útil y fácil de leer. Conserva los hechos y la voz del autor; corrige ortografía y organiza con Markdown ligero usando encabezados y listas cuando ayuden. No inventes información ni añadas recomendaciones que no aparezcan en el borrador. Devuelve solo el contenido final en Markdown, sin cercas de código.\n\nTítulo: ${title}\nResumen: ${summary}\n\nBorrador del autor:\n${draft}`,
+      config: { maxOutputTokens: 2200, thinkingConfig: { thinkingLevel: 'low', includeThoughts: false } },
+    });
+    const content = response.text?.trim();
+    if (!content) return res.status(502).json({ error: 'La IA no pudo preparar el texto. Inténtalo otra vez.' });
+    return res.json({ content });
+  } catch (error) {
+    console.error('Guide formatting failed:', error);
+    return res.status(502).json({ error: 'No se pudo dar formato con IA. Puedes revisar el texto y publicar.' });
+  }
+});
+
+app.get('/api/guides', requireNeon, async (req, res) => {
+  try {
+    await ensureGuideSchema();
+    const rows = await sql`SELECT guide.id, guide.title, guide.summary, guide.content_markdown AS content,
+      guide.place_name AS "placeName", guide.place_address AS "placeAddress", guide.google_place_id AS "googlePlaceId",
+      guide.author_google_sub AS "profileId", account.display_name AS "authorName", account.picture_url AS "authorPicture",
+      guide.created_at AS "createdAt", guide.image_key AS "imageKey"
+      FROM community_guides AS guide LEFT JOIN user_accounts AS account ON account.google_sub = guide.author_google_sub
+      WHERE guide.status = 'published' ORDER BY guide.created_at DESC LIMIT 100`;
+    const base = `${req.protocol}://${req.get('host')}`;
+    res.set('Cache-Control', 'no-store');
+    return res.json(rows.map(({ imageKey, ...guide }) => ({ ...guide, imageUrl: `${base}/api/guides/${guide.id}/image` })));
+  } catch (error) {
+    console.error('Could not load community guides:', error);
+    return res.status(500).json({ error: 'No se pudieron cargar las guías.' });
+  }
+});
+
+app.post('/api/guides', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  const body = req.body || {};
+  const title = typeof body.title === 'string' ? body.title.trim().slice(0, 120) : '';
+  const summary = typeof body.summary === 'string' ? body.summary.trim().slice(0, 240) : '';
+  const content = typeof body.content === 'string' ? body.content.trim().slice(0, 12000) : '';
+  const placeName = typeof body.placeName === 'string' ? body.placeName.trim().slice(0, 180) : '';
+  const placeAddress = typeof body.placeAddress === 'string' ? body.placeAddress.trim().slice(0, 300) : '';
+  const googlePlaceId = typeof body.googlePlaceId === 'string' ? body.googlePlaceId.trim().slice(0, 200) : '';
+  const mimeType = typeof body.mimeType === 'string' ? body.mimeType : '';
+  const base64 = typeof body.base64 === 'string' ? body.base64 : '';
+  if (!title || !summary || !content || !placeName) return res.status(400).json({ error: 'Completa el título, resumen, contenido y lugar.' });
+  if (!/^image\/(jpeg|png|webp|gif)$/.test(mimeType) || !base64) return res.status(400).json({ error: 'Agrega una imagen JPG, PNG, WebP o GIF.' });
+  const bytes = Buffer.from(base64, 'base64');
+  if (!bytes.length || bytes.length > 5 * 1024 * 1024) return res.status(413).json({ error: 'La imagen debe pesar 5 MB o menos.' });
+  if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
+  const id = randomUUID();
+  const imageKey = `community-guides/${id}/${randomUUID()}`;
+  try {
+    await ensureGuideSchema();
+    await s3.send(new PutObjectCommand({ Bucket: 'uploads', Key: imageKey, Body: bytes, ContentType: mimeType }));
+    try {
+      const [guide] = await sql`INSERT INTO community_guides (id, title, summary, content_markdown, place_name, place_address, google_place_id, image_key, image_mime_type, author_google_sub)
+        VALUES (${id}, ${title}, ${summary}, ${content}, ${placeName}, ${placeAddress}, ${googlePlaceId || null}, ${imageKey}, ${mimeType}, ${req.account.id})
+        RETURNING id, title, summary, content_markdown AS content, place_name AS "placeName", place_address AS "placeAddress", google_place_id AS "googlePlaceId", author_google_sub AS "profileId", created_at AS "createdAt"`;
+      const base = `${req.protocol}://${req.get('host')}`;
+      res.status(201).json({ ...guide, authorName: req.account.name, authorPicture: req.account.picture, imageUrl: `${base}/api/guides/${id}/image` });
+    } catch (error) {
+      await s3.send(new DeleteObjectCommand({ Bucket: 'uploads', Key: imageKey })).catch(() => undefined);
+      throw error;
+    }
+  } catch (error) {
+    console.error('Community guide publish failed:', error);
+    return res.status(500).json({ error: 'No se pudo publicar la guía.' });
+  }
+});
+
+app.get('/api/guides/:id/image', requireNeon, async (req, res) => {
+  try {
+    if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
+    await ensureGuideSchema();
+    const [guide] = await sql`SELECT image_key AS key, image_mime_type AS "mimeType" FROM community_guides WHERE id = ${req.params.id} AND status = 'published'`;
+    if (!guide) return res.status(404).json({ error: 'Imagen de guía no encontrada.' });
+    const object = await s3.send(new GetObjectCommand({ Bucket: 'uploads', Key: String(guide.key) }));
+    const bytes = await object.Body?.transformToByteArray();
+    if (!bytes) return res.status(502).json({ error: 'No se pudo leer la imagen.' });
+    res.set('Content-Type', String(guide.mimeType));
+    res.set('Cache-Control', 'public, max-age=3600');
+    return res.send(Buffer.from(bytes));
+  } catch (error) {
+    console.error('Community guide image load failed:', error);
+    return res.status(500).json({ error: 'No se pudo cargar la imagen de guía.' });
+  }
+});
+
 app.get('/api/community-posts/day', requireNeon, async (req, res) => {
   try {
     await ensureSubmissionSchema();
