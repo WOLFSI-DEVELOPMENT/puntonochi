@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Share, Phone, Globe, ShoppingBag, MoreHorizontal, Navigation, BookOpen, Link, MapPin, Map as MapIcon, MessageCircle, Twitter, Facebook, QrCode, Star } from 'lucide-react';
+import { X, Share, Phone, Globe, ShoppingBag, MoreHorizontal, Navigation, BookOpen, Link, MapPin, Map as MapIcon, MessageCircle, Twitter, Facebook, QrCode, Star, Instagram } from 'lucide-react';
 import { Place, Review } from '../types';
 import { mockPlaces } from '../data';
 import CornerKit from '@cornerkit/core';
@@ -242,6 +242,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
             <p className="text-[15px] font-medium text-neutral-600">
               {place.category} • <span className="text-[#1a73e8] hover:underline cursor-pointer">{place.location}</span>
             </p>
+            {place.subtitle && place.subtitle.toLocaleLowerCase('es') !== 'establishment' && <p className="mt-1 text-[13px] text-white/55">{place.subtitle}</p>}
             <div className="mt-1.5 flex items-center gap-1.5 text-[13px]" aria-label={`${place.rating > 0 ? `Calificación ${place.rating.toFixed(1)}, ` : ''}${place.reviewCount || 0} reseñas`}>
               <Star aria-hidden="true" className={`h-3.5 w-3.5 ${place.rating > 0 ? 'fill-amber-400 text-amber-400' : 'text-white/35'}`} />
               <span className="font-semibold text-white/85">{place.rating > 0 ? place.rating.toFixed(1) : 'Nuevo'}</span>
@@ -251,7 +252,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
 
             {/* Action Buttons */}
             <div className="flex items-start gap-2 overflow-x-auto scrollbar-hide py-5 snap-x">
-              <button type="button" onClick={() => setShowPhoneModal(true)} disabled={!place.phone} className="flex min-w-[62px] flex-1 snap-start flex-col items-center gap-2 text-white disabled:opacity-40" aria-label="Llamar al negocio">
+              <button type="button" onClick={() => setShowPhoneModal(true)} disabled={!place.phone && !place.alternatePhone} className="flex min-w-[62px] flex-1 snap-start flex-col items-center gap-2 text-white disabled:opacity-40" aria-label="Llamar al negocio">
                 <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#292a2d]"><Phone className="h-5 w-5" strokeWidth={1.8}/></span>
                 <span className="whitespace-nowrap text-[11px] font-semibold">Llamar</span>
               </button>
@@ -271,6 +272,10 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
                   <span className="whitespace-nowrap text-[11px] font-semibold">Sitio</span>
                 </button>;
               })()}
+              {place.instagramUrl && <a href={place.instagramUrl} target="_blank" rel="noopener noreferrer" className="flex min-w-[62px] flex-1 snap-start flex-col items-center gap-2 text-white" aria-label="Abrir Instagram del negocio">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#292a2d]"><Instagram className="h-5 w-5" strokeWidth={1.8}/></span>
+                <span className="whitespace-nowrap text-[11px] font-semibold">Instagram</span>
+              </a>}
               <button type="button" onClick={() => { setCommunityReviewMode('menu'); setShowCommunityActions(true); }} className="flex min-w-[62px] flex-1 snap-start flex-col items-center gap-2 text-white" aria-label="Más opciones">
                 <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#292a2d]"><MoreHorizontal className="h-5 w-5" strokeWidth={1.8}/></span>
                 <span className="whitespace-nowrap text-[11px] font-semibold">Más</span>
@@ -302,7 +307,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
                     })}
                 </div>
                 {googleDetails?.googleMapsUri && <a href={googleDetails.googleMapsUri} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-[12px] font-medium text-white/55 underline decoration-white/25 underline-offset-2" translate="no">Google Maps</a>}
-                <p className="mt-3 text-[12px] leading-relaxed text-white/45">Tip: Muchos negocios suelen cerrar cerca de las 3:00 p. m. y abrir de nuevo alrededor de las 4:00 p. m.; algunos no vuelven a abrir ese día. Confirma el horario antes de ir.</p>
+                {!place.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es').includes('hotel nochistlan') && <p className="mt-3 text-[12px] leading-relaxed text-white/45">Tip: Muchos negocios suelen cerrar cerca de las 3:00 p. m. y abrir de nuevo alrededor de las 4:00 p. m.; algunos no vuelven a abrir ese día. Confirma el horario antes de ir.</p>}
               </section>
               <section aria-labelledby="community-reviews-title" className="pt-1 text-white">
                 <div className="mb-3 flex items-baseline justify-between gap-3"><h3 id="community-reviews-title" className="text-[18px] font-bold">Opiniones</h3><span className="text-[12px] text-white/45">{reviewTotal} reseñas</span></div>
@@ -609,13 +614,8 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
               <SheetDragHandle controls={phoneDrag.dragControls} tone="dark" className="-mx-5 -mt-5 mb-2" />
               
               <div className="mt-6 mb-2 flex flex-col gap-3">
-                <a 
-                  href={`tel:${place.phone}`}
-                  className="w-full bg-[#f1f3f4] text-neutral-900 font-bold text-[16px] py-4 rounded-full flex items-center justify-center active:bg-[#e8eaed] transition-colors"
-                >
-                  <Phone className="w-5 h-5 mr-2" strokeWidth={2} />
-                  {place.phone}
-                </a>
+                {place.phone && <a href={`tel:${place.phone.replace(/[^\d+]/g, '')}`} className="w-full bg-[#f1f3f4] text-neutral-900 font-bold text-[16px] py-4 rounded-full flex items-center justify-center active:bg-[#e8eaed] transition-colors"><Phone className="w-5 h-5 mr-2" strokeWidth={2} /><span><span className="mr-2 text-[12px] font-medium text-neutral-500">Celular</span>{place.phone}</span></a>}
+                {place.alternatePhone && <a href={`tel:${place.alternatePhone.replace(/[^\d+]/g, '')}`} className="w-full bg-[#f1f3f4] text-neutral-900 font-bold text-[16px] py-4 rounded-full flex items-center justify-center active:bg-[#e8eaed] transition-colors"><Phone className="w-5 h-5 mr-2" strokeWidth={2} /><span><span className="mr-2 text-[12px] font-medium text-neutral-500">Teléfono</span>{place.alternatePhone}</span></a>}
                 <button 
                   onClick={() => setShowPhoneModal(false)}
                   className="w-full bg-transparent text-neutral-500 font-bold text-[16px] py-4 rounded-full flex items-center justify-center active:bg-neutral-50 transition-colors"

@@ -7,6 +7,7 @@ export interface Place {
   address?: string;
   mapUrl?: string;
   websiteUrl?: string;
+  instagramUrl?: string;
   images: string[];
   logo?: string;
   rating: number;
@@ -20,6 +21,7 @@ export interface Place {
   lat?: number;
   lng?: number;
   phone?: string;
+  alternatePhone?: string;
   createdAt?: string | null;
   reviews?: Review[];
   communityPosts?: { id: string; imageUrl: string; caption: string; createdAt: string; profileId?: string | null; authorName?: string | null; authorPicture?: string | null }[];
