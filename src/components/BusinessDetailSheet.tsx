@@ -81,7 +81,8 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
 
   const todayName = new Intl.DateTimeFormat('es-MX', { weekday: 'long' }).format(new Date());
   const todaySchedule = place.weeklyHours?.[todayName.charAt(0).toLocaleUpperCase('es') + todayName.slice(1)];
-  const closingTime = todaySchedule?.intervals?.at(-1)?.close;
+  const is24Hours = Boolean(place.weeklyHours && Object.keys(place.weeklyHours).length === 7 && Object.values(place.weeklyHours).every((schedule) => !schedule.closed && schedule.intervals.length === 1 && schedule.intervals[0].open === '00:00' && schedule.intervals[0].close === '23:59'));
+  const closingTime = is24Hours ? undefined : todaySchedule?.intervals?.at(-1)?.close;
   const formatTime = (time: string) => {
     const [hour, minute] = time.split(':').map(Number);
     return new Date(2000, 0, 1, hour, minute).toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' });
@@ -91,7 +92,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
     ? Object.entries(place.weeklyHours).sort(([a], [b]) => {
       const order = ['lunes', 'martes', 'miércoles', 'miercoles', 'jueves', 'viernes', 'sábado', 'sabado', 'domingo'];
       return order.indexOf(a.toLocaleLowerCase('es')) - order.indexOf(b.toLocaleLowerCase('es'));
-    }).map(([day, schedule]) => `${day}: ${schedule.closed ? 'Cerrado' : schedule.intervals.map(({ open, close }) => `${formatTime(open)}–${formatTime(close)}`).join(', ') || 'Horario no disponible'}`)
+    }).map(([day, schedule]) => `${day}: ${is24Hours ? 'Abierto 24 horas' : schedule.closed ? 'Cerrado' : schedule.intervals.map(({ open, close }) => `${formatTime(open)}–${formatTime(close)}`).join(', ') || 'Horario no disponible'}`)
     : [];
   const reviewSamples = communityReviews.length ? communityReviews : (googleDetails?.reviews || []);
   const reviewAverage = communityReviews.length
@@ -294,7 +295,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
               <section aria-labelledby="place-hours-title" className="pt-1 text-white">
                 <h3 id="place-hours-title" className="mb-2 text-[17px] font-bold">Horario</h3>
                 <div className="divide-y divide-white/[0.07]">
-                  {(googleDetails?.weekdayDescriptions?.length ? googleDetails.weekdayDescriptions : fallbackSchedule.length ? fallbackSchedule : [place.hours || 'Horario no disponible'])
+                  {(is24Hours ? fallbackSchedule : googleDetails?.weekdayDescriptions?.length ? googleDetails.weekdayDescriptions : fallbackSchedule.length ? fallbackSchedule : [place.hours || 'Horario no disponible'])
                     .map((entry, index) => {
                       const separator = entry.indexOf(':');
                       const day = separator >= 0 ? entry.slice(0, separator).trim() : (fallbackSchedule.length ? '' : 'Horario regular');
