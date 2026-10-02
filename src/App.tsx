@@ -20,7 +20,6 @@ import { SearchPage, AskNochiPage } from './components/SearchPage';
 import { BusinessPromotionSheet } from './components/BusinessPromotionSheet';
 import { BusinessSubmissionSheet } from './components/BusinessSubmissionSheet';
 import { AdminPage } from './components/AdminPage';
-import { SplashScreen } from './components/SplashScreen';
 import { InstallAppPrompt } from './components/InstallAppPrompt';
 import { SmartOnboarding, readDeviceLocation, type DeviceLocation } from './components/SmartOnboarding';
 import { WelcomePage } from './components/WelcomePage';
@@ -121,7 +120,7 @@ export default function App() {
     let initShowAllCategories = false;
     let initShowColonias = false;
     let initShowAdmin = false;
-    const initShowSplash = path === '/' || /^\/inicio\/?$/.test(path);
+    const initShowWelcome = path === '/' || /^\/inicio\/?$/.test(path);
 
     if (parts.length > 0) {
       if (parts[0] === 'menu' && parts[1]) {
@@ -154,7 +153,7 @@ export default function App() {
       }
     }
     
-    return { initialTab, initialCategory, initialBusiness, initialMenuId, initShowAllCategories, initShowColonias, initShowAdmin, initShowSplash };
+    return { initialTab, initialCategory, initialBusiness, initialMenuId, initShowAllCategories, initShowColonias, initShowAdmin, initShowWelcome };
   };
 
   const init = getInitialState();
@@ -179,8 +178,12 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(init.initialTab);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(init.initShowSplash);
-  const [showWelcome, setShowWelcome] = useState(false);
+  const loading = false;
+  const [showWelcome, setShowWelcome] = useState(() => {
+    if (!init.initShowWelcome) return false;
+    try { return localStorage.getItem(WELCOME_SEEN_KEY) !== 'true'; }
+    catch { return true; }
+  });
   const [welcomeTransitionDone, setWelcomeTransitionDone] = useState(true);
   const [publicProfileId, setPublicProfileId] = useState<string | null>(null);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
@@ -282,15 +285,6 @@ export default function App() {
     window.addEventListener('open-public-profile', openProfile);
     return () => window.removeEventListener('open-public-profile', openProfile);
   }, []);
-
-  const finishSplash = () => {
-    setLoading(false);
-    try {
-      if (localStorage.getItem(WELCOME_SEEN_KEY) !== 'true') setShowWelcome(true);
-    } catch {
-      setShowWelcome(true);
-    }
-  };
 
   const finishWelcome = () => {
     try { localStorage.setItem(WELCOME_SEEN_KEY, 'true'); } catch { /* Welcome still closes if storage is unavailable. */ }
@@ -1025,10 +1019,6 @@ export default function App() {
           />
         )}
 
-        {/* PuntoNochi Animated Brand Splash Screen */}
-        {loading && !showAdminPage && (
-          <SplashScreen key="splash-screen" onFinish={finishSplash} />
-        )}
         <InstallAppPrompt enabled={!loading} />
         <SmartOnboarding enabled={!loading && !showWelcome && welcomeTransitionDone && !showAdminPage} onLocation={setDeviceLocation} />
         {showWelcome && !showAdminPage && <WelcomePage onContinue={finishWelcome} />}
