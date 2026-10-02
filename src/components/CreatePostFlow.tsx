@@ -12,6 +12,56 @@ type FlowStep = 'choice' | 'camera' | 'preview' | 'compose' | 'published';
 type PostType = 'business' | 'day';
 type CameraRatio = '16:9' | '1:1' | '9:16';
 const createCorners = new CornerKit();
+const MAX_UPLOAD_IMAGE_BYTES = 2.8 * 1024 * 1024;
+const MAX_SOURCE_IMAGE_BYTES = 20 * 1024 * 1024;
+const supportedUploadTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif']);
+
+function readBlobAsDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('No se pudo leer la imagen. Inténtalo de nuevo.'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function prepareUploadImage(source: Blob, fileName: string) {
+  if (source.size > MAX_SOURCE_IMAGE_BYTES) throw new Error('La imagen debe pesar 20 MB o menos.');
+  if (source.size <= MAX_UPLOAD_IMAGE_BYTES && supportedUploadTypes.has(source.type)) {
+    return { dataUrl: await readBlobAsDataUrl(source), fileName };
+  }
+  if (typeof createImageBitmap !== 'function') throw new Error('Este navegador no puede preparar la imagen. Elige una foto JPEG, PNG o WebP de menos de 2.8 MB.');
+
+  let bitmap: ImageBitmap;
+  try { bitmap = await createImageBitmap(source); }
+  catch { throw new Error('No se pudo abrir esta imagen. Prueba con una foto JPEG, PNG o WebP.'); }
+  try {
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('No se pudo preparar la imagen. Inténtalo de nuevo.');
+    let result: Blob | null = null;
+    for (const maxDimension of [2048, 1720, 1440, 1200]) {
+      const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      for (const quality of [0.82, 0.72, 0.62]) {
+        const encoded = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
+        if (encoded?.type === 'image/webp' && encoded.size <= MAX_UPLOAD_IMAGE_BYTES) {
+          result = encoded;
+          break;
+        }
+      }
+      if (result) break;
+    }
+    if (!result) throw new Error('No se pudo reducir la imagen al tamaño necesario. Elige otra foto.');
+    const baseName = fileName.replace(/\.[^.]+$/, '') || 'foto';
+    return { dataUrl: await readBlobAsDataUrl(result), fileName: `${baseName}.webp` };
+  } finally {
+    bitmap.close();
+  }
+}
 
 export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => void; onPromoteBusiness: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -116,35 +166,34 @@ export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => 
     if (!context) { setCapturing(false); return; }
     if (facing === 'user') { context.translate(outputWidth, 0); context.scale(-1, 1); }
     context.drawImage(video, sx, sy, cropWidth, cropHeight, 0, 0, outputWidth, outputHeight);
-    window.setTimeout(() => {
-      acceptPhoto(canvas.toDataURL('image/jpeg', 0.82), 'captured-photo.jpg');
-      setCapturing(false);
-    }, 140);
+    canvas.toBlob((blob) => {
+      if (!blob) { setPublishError('No se pudo preparar la foto. Inténtalo de nuevo.'); setCapturing(false); return; }
+      void prepareUploadImage(blob, 'captured-photo.webp').then(({ dataUrl, fileName }) => acceptPhoto(dataUrl, fileName))
+        .catch((error) => setPublishError(error instanceof Error ? error.message : 'No se pudo preparar la foto.'))
+        .finally(() => setCapturing(false));
+    }, 'image/webp', 0.82);
   };
 
-  const onFile = (event: ChangeEvent<HTMLInputElement>, isCover = false) => {
+  const onFile = async (event: ChangeEvent<HTMLInputElement>, isCover = false) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    event.target.value = '';
     if (!file.type.startsWith('image/')) {
       setPublishError('Elige un archivo de imagen válido.');
-      event.target.value = '';
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setPublishError('Cada imagen debe pesar 5 MB o menos.');
-      event.target.value = '';
+    if (file.size > MAX_SOURCE_IMAGE_BYTES) {
+      setPublishError('La imagen debe pesar 20 MB o menos.');
       return;
     }
     setPublishError('');
-    const reader = new FileReader();
-    reader.onload = () => {
-      const data = String(reader.result || '');
-      if (isCover) { setCover(data); setCoverName(file.name); }
-      else acceptPhoto(data, file.name);
-    };
-    reader.onerror = () => setPublishError('No se pudo leer la imagen. Inténtalo de nuevo.');
-    reader.readAsDataURL(file);
-    event.target.value = '';
+    try {
+      const { dataUrl, fileName } = await prepareUploadImage(file, file.name);
+      if (isCover) { setCover(dataUrl); setCoverName(fileName); }
+      else acceptPhoto(dataUrl, fileName);
+    } catch (error) {
+      setPublishError(error instanceof Error ? error.message : 'No se pudo preparar la imagen. Inténtalo de nuevo.');
+    }
   };
 
   const uploadImage = async (id: string, kind: 'photo' | 'cover', dataUrl: string, fileName: string) => {
@@ -157,6 +206,7 @@ export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => 
     });
     if (!response.ok) {
       const result = await response.json().catch(() => ({}));
+      if (response.status === 413) throw new Error('La foto es demasiado pesada para subir. Inténtalo con otra imagen más pequeña.');
       throw new Error(result.error || 'No se pudo subir la imagen.');
     }
   };
