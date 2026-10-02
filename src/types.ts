@@ -6,6 +6,7 @@ export interface Place {
   location: string;
   address?: string;
   mapUrl?: string;
+  websiteUrl?: string;
   images: string[];
   logo?: string;
   rating: number;

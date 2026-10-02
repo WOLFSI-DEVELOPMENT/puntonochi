@@ -265,7 +265,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
               </button>
               {(() => {
                 const name = place.name.toLowerCase();
-                const hasWebsite = name.includes('aurrera') || name.includes('guadalajara') || name.includes('banorte') || name.includes('bbva') || name.includes('hotel nochistlán') || name.includes('hotel nochistlan');
+                const hasWebsite = Boolean(place.websiteUrl) || name.includes('aurrera') || name.includes('guadalajara') || name.includes('banorte') || name.includes('bbva') || name.includes('hotel nochistlán') || name.includes('hotel nochistlan');
                 return <button type="button" onClick={() => setShowWebsiteWarning(true)} disabled={!hasWebsite} className="flex min-w-[62px] flex-1 snap-start flex-col items-center gap-2 text-white disabled:opacity-40" aria-label="Abrir sitio web del negocio">
                   <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#292a2d]"><Globe className="h-5 w-5" strokeWidth={1.8}/></span>
                   <span className="whitespace-nowrap text-[11px] font-semibold">Sitio</span>
@@ -564,16 +564,16 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
                   onClick={() => {
                     setShowWebsiteWarning(false);
                     // Determine website URL
-                    let url = `https://www.google.com/search?q=${encodeURIComponent(place.name)}`;
-                    if (place.name.toLowerCase().includes('aurrera')) {
+                    let url = place.websiteUrl || `https://www.google.com/search?q=${encodeURIComponent(place.name)}`;
+                    if (!place.websiteUrl && place.name.toLowerCase().includes('aurrera')) {
                       url = 'https://www.bodegaaurrera.com.mx/';
-                    } else if (place.name.toLowerCase().includes('guadalajara')) {
+                    } else if (!place.websiteUrl && place.name.toLowerCase().includes('guadalajara')) {
                       url = 'https://www.farmaciasguadalajara.com/';
-                    } else if (place.name.toLowerCase().includes('banorte')) {
+                    } else if (!place.websiteUrl && place.name.toLowerCase().includes('banorte')) {
                       url = 'https://www.banorte.com/';
-                    } else if (place.name.toLowerCase().includes('bbva')) {
+                    } else if (!place.websiteUrl && place.name.toLowerCase().includes('bbva')) {
                       url = 'https://www.bbva.mx/';
-                    } else if (place.name.toLowerCase().includes('hotel nochistlán') || place.name.toLowerCase().includes('hotel nochistlan')) {
+                    } else if (!place.websiteUrl && (place.name.toLowerCase().includes('hotel nochistlán') || place.name.toLowerCase().includes('hotel nochistlan'))) {
                       url = 'https://hotelnochistlan.com/';
                     }
                     window.open(url, '_blank');

@@ -710,6 +710,7 @@ const ensureDirectorySchema = () => {
       sort_order INTEGER NOT NULL DEFAULT 0
     )`;
     await sql`ALTER TABLE places ADD COLUMN IF NOT EXISTS weekly_hours JSONB`;
+    await sql`ALTER TABLE places ADD COLUMN IF NOT EXISTS website_url TEXT`;
     await sql`ALTER TABLE places ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ`;
     await sql`CREATE INDEX IF NOT EXISTS places_created_at_idx ON places (created_at DESC)`;
     for (const [id, name, emoji, gradient] of requestedCategories) {
@@ -2179,7 +2180,7 @@ app.get('/api/places', requireNeon, async (req, res) => {
     const places = await sql`SELECT id, name, category, subtitle, location, address,
       map_url AS "mapUrl", images, logo, rating, review_count AS "reviewCount",
       is_open AS "isOpen", cost, distance, good_to_know AS "goodToKnow", hours, weekly_hours AS "weeklyHours",
-      lat, lng, phone, created_at AS "createdAt" FROM places ORDER BY sort_order`;
+      website_url AS "websiteUrl", lat, lng, phone, created_at AS "createdAt" FROM places ORDER BY sort_order`;
     const publishedPosts = await sql`SELECT post.id, post.place_id, post.caption, post.created_at AS "createdAt",
       post.author_google_sub AS "profileId", account.display_name AS "authorName", account.picture_url AS "authorPicture"
       FROM community_posts AS post LEFT JOIN user_accounts AS account ON account.google_sub = post.author_google_sub
