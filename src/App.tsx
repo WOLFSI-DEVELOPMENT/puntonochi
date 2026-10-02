@@ -942,7 +942,7 @@ export default function App() {
 
       {/* Bottom Navigation & Search */}
       {activeTab !== 'ask-nochi' && !showAdminPage && !showStreakPage && !(activeTab === 'videos' && marketplaceDetailOpen) && (
-        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => setShowSearch(false)} onOpenProfile={() => { if (signedInAccount) setPublicProfileId(signedInAccount.id); else setShowProfileSheet(true); }} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} />
+        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => setShowSearch(false)} onOpenProfile={() => { if (signedInAccount) setPublicProfileId(signedInAccount.id); else setShowProfileSheet(true); }} onSelectBusiness={(place) => { setActiveTab('inicio'); setSelectedBusiness(place); }} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} />
       )}
 
       {/* Pages & Overlays */}

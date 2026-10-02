@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { cn } from '../utils';
 import { getNavDesign, type NavDesign } from '../profileStorage';
+import { VoiceModeSheet } from './VoiceModeSheet';
+import type { Place } from '../types';
 
 type Tab = { id: string; label: string; icon: string };
 const extraTabs: Tab[] = [
@@ -13,9 +15,10 @@ const extraTabs: Tab[] = [
 const askTab: Tab = { id: 'ask-nochi', label: 'Pregúntale a Nochi', icon: 'sparkle_filled' };
 const askNochiIconUrl = 'https://images.icon-icons.com/3250/PNG/512/sparkle_filled_icon_201872.png';
 
-export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch, onOpenProfile, profilePicture, profileName }: { activeTab: string; onChangeTab: (tab: string) => void; onOpenSearch: () => void; onCloseSearch: () => void; onOpenProfile: () => void; profilePicture?: string | null; profileName?: string }) {
+export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch, onOpenProfile, onSelectBusiness, profilePicture, profileName }: { activeTab: string; onChangeTab: (tab: string) => void; onOpenSearch: () => void; onCloseSearch: () => void; onOpenProfile: () => void; onSelectBusiness: (place: Place) => void; profilePicture?: string | null; profileName?: string }) {
   const [isSearching, setIsSearching] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const [design, setDesign] = useState<NavDesign>(getNavDesign);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -68,7 +71,19 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
           <button type="button" aria-label="Inicio" aria-pressed={activeTab === 'inicio'} title="Inicio" onClick={() => handleTabClick('inicio')} className={cn(buttonClass, 'text-white/20')}><span className={cn('material-symbols-rounded text-[23px] font-bold', activeTab === 'inicio' ? 'text-white' : 'text-white/35')}>home</span></button>
           <button type="button" aria-label="Explorar" aria-pressed={activeTab === 'explorar'} title="Explorar" onClick={() => handleTabClick('explorar')} className={cn(buttonClass, 'text-white/20')}><span className={cn('material-symbols-rounded text-[23px] font-bold', activeTab === 'explorar' ? 'text-white' : 'text-white/35')}>explore</span></button>
 
-          <button type="button" aria-label="Buscar" onClick={() => { setMenuOpen(false); setIsSearching(true); onOpenSearch(); }} className={cn('flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-full px-4 text-left text-white/65 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70', design === 'dynamic' ? 'liquid-glass' : 'bg-white/[0.10] shadow-[0_8px_28px_rgba(0,0,0,0.24)] backdrop-blur-[36px] backdrop-saturate-150')}><span className="material-symbols-rounded shrink-0 text-[20px] font-bold">search</span><span className="truncate text-xs font-medium">Buscar</span></button>
+          <AnimatePresence mode="wait" initial={false}>
+          {voiceOpen ? <motion.div key="voice-nav-controls" initial={{ opacity: 0, scale: .94 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .94 }} transition={{ duration: .18 }} className={cn('flex h-11 min-w-0 flex-1 items-center justify-center rounded-full px-3', design === 'dynamic' ? 'liquid-glass' : 'bg-white/[0.10] shadow-[0_8px_28px_rgba(0,0,0,0.24)] backdrop-blur-[36px] backdrop-saturate-150')}>
+            <div aria-label="Controles de voz" className="flex items-center gap-4">
+              <button type="button" aria-label="Silenciar micrófono" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/80"><span className="material-symbols-rounded text-[20px]">mic_off</span></button>
+              <div aria-hidden="true" className="flex h-7 items-center justify-center gap-[2px]">
+                {[17, 27, 24, 19].map((height, index) => <motion.span key={index} className="w-[8px] rounded-full bg-gradient-to-b from-white via-[#e9f5ff] to-[#73afff] shadow-[0_1px_5px_rgba(89,157,255,.4)]" animate={{ height: [height * .78, height, height * .84] }} transition={{ duration: .62 + index * .09, repeat: Infinity, repeatType: 'mirror', ease: 'easeInOut', delay: index * .08 }} />)}
+              </div>
+              <button type="button" aria-label="Seleccionar objeto" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/80"><span className="material-symbols-rounded text-[20px]">center_focus_strong</span></button>
+            </div>
+          </motion.div> : <motion.button key="search-button" type="button" aria-label="Buscar" onClick={() => { setMenuOpen(false); setIsSearching(true); onOpenSearch(); }} className={cn('flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-full px-4 text-left text-white/65 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70', design === 'dynamic' ? 'liquid-glass' : 'bg-white/[0.10] shadow-[0_8px_28px_rgba(0,0,0,0.24)] backdrop-blur-[36px] backdrop-saturate-150')} initial={{ opacity: 0, scale: .94 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .94 }} transition={{ duration: .18 }}><span className="material-symbols-rounded shrink-0 text-[20px] font-bold">search</span><span className="truncate text-xs font-medium">Buscar</span></motion.button>}
+          </AnimatePresence>
+
+          <button type="button" aria-label="Abrir modo de voz" title="Modo de voz" onClick={() => { setMenuOpen(false); setIsSearching(false); onCloseSearch(); setVoiceOpen(true); }} className={cn(buttonClass, 'text-white/20')}><span className="material-symbols-rounded text-[23px] font-bold text-white/75">graphic_eq</span></button>
 
           <button type="button" aria-label="Más secciones" aria-expanded={menuOpen} title="Más secciones" onClick={() => setMenuOpen((open) => !open)} className={cn(buttonClass, 'text-white/20')}><span className={cn('material-symbols-rounded text-[23px] font-bold', menuOpen || ['videos', 'noticias', 'crear', 'guias'].includes(activeTab) ? 'text-white' : 'text-white/35')}>grid_view</span></button>
           <button type="button" aria-label="Perfil" title="Perfil" onClick={() => { setMenuOpen(false); onOpenProfile(); }} className={cn(buttonClass, 'overflow-hidden p-0')}>
@@ -80,6 +95,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
           <button type="button" aria-label="Cancelar búsqueda" onClick={closeSearch} className="ml-2 shrink-0 rounded-full px-2 py-2 text-xs font-semibold text-white/75 hover:bg-white/10">Cancelar</button>
         </motion.div>}
       </div>
+      <VoiceModeSheet open={voiceOpen} onClose={() => setVoiceOpen(false)} onSelectBusiness={onSelectBusiness} />
     </div>
   );
 }
