@@ -650,6 +650,12 @@ export default function App() {
               Descubre<br/>
               <span className="text-[#1a73e8]">Nochistlán</span>
             </h1>
+            <div aria-hidden="true" className="relative -mx-5 mt-2 h-[112px] w-[calc(100%+2.5rem)] overflow-hidden">
+              <svg viewBox="0 0 100 32" preserveAspectRatio="none" className="absolute inset-x-0 top-0 h-8 w-full"><path d="M0 3 Q52 7 100 25" fill="none" stroke="#626b76" strokeWidth="1.5" vectorEffect="non-scaling-stroke" /></svg>
+              <div className="absolute left-1/2 top-2 flex w-max -translate-x-1/2 items-start">
+                {['#3185e8', '#35a6a0', '#f2a544', '#d96d9b', '#766bd0'].map((color, index) => <div key={color} className="shrink-0" style={{ width: 'max(20vw, 64px)', height: 'clamp(72px, 16vw, 100px)', marginTop: `${[0, 4, 8, 12, 16][index]}px`, backgroundColor: color, transform: `rotate(${[-4, -2, 0, 2, 4][index]}deg)`, transformOrigin: 'top center', maskImage: 'url(/papel-picado.svg)', WebkitMaskImage: 'url(/papel-picado.svg)', maskSize: '100% 100%', WebkitMaskSize: '100% 100%', maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat' }} />)}
+              </div>
+            </div>
           </section>
           <>
           {/* Personalized suggestions */}
@@ -942,7 +948,7 @@ export default function App() {
 
       {/* Bottom Navigation & Search */}
       {activeTab !== 'ask-nochi' && !showAdminPage && !showStreakPage && !(activeTab === 'videos' && marketplaceDetailOpen) && (
-        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => setShowSearch(false)} onOpenProfile={() => { if (signedInAccount) setPublicProfileId(signedInAccount.id); else setShowProfileSheet(true); }} onSelectBusiness={(place) => { setActiveTab('inicio'); setSelectedBusiness(place); }} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} />
+        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => setShowSearch(false)} onOpenProfile={() => { if (signedInAccount) setPublicProfileId(signedInAccount.id); else setShowProfileSheet(true); }} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} />
       )}
 
       {/* Pages & Overlays */}

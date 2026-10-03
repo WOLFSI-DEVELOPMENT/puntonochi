@@ -2308,42 +2308,21 @@ app.post('/api/ask-nochi', requireNeon, async (req, res) => {
   if (!apiKey) return res.status(503).json({ error: 'Ask Nochi todavía no está configurado. Agrega GEMINI_API_KEY en las variables del servidor.' });
     const query = typeof req.body?.query === 'string' ? req.body.query.trim().slice(0, 700) : '';
   if (!query) return res.status(400).json({ error: 'Escribe qué tipo de lugar estás buscando.' });
-  const imageData = typeof req.body?.imageData === 'string' ? req.body.imageData : '';
-  const imageMimeType = ['image/jpeg', 'image/png', 'image/webp'].includes(req.body?.imageMimeType) ? req.body.imageMimeType : 'image/jpeg';
-  if (imageData.length > 5_500_000) return res.status(413).json({ error: 'La imagen es demasiado grande. Inténtalo de nuevo.' });
-  const userLocation = req.body?.location && Number.isFinite(Number(req.body.location.latitude)) && Number.isFinite(Number(req.body.location.longitude))
-    ? { latitude: Number(req.body.location.latitude), longitude: Number(req.body.location.longitude) } : null;
-
   try {
     await ensureDirectorySchema();
     const rows = await sql`SELECT id, name, category, subtitle, location, address,
       map_url AS "mapUrl", images, logo, rating, review_count AS "reviewCount",
       is_open AS "isOpen", cost, distance, good_to_know AS "goodToKnow", hours,
       weekly_hours AS "weeklyHours", lat, lng, phone FROM places ORDER BY sort_order`;
-    const terms = imageData ? [] : (query.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '').match(/[\p{L}\p{N}]{3,}/gu) || []);
+    const terms = query.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '').match(/[\p{L}\p{N}]{3,}/gu) || [];
     const ranked = rows.map((place) => {
       const searchable = [place.name, place.category, place.subtitle, place.location, place.address, ...(Array.isArray(place.goodToKnow) ? place.goodToKnow : [])]
         .filter(Boolean).join(' ').toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const score = terms.reduce((sum, term) => sum + (searchable.includes(term) ? (String(place.name).toLocaleLowerCase('es').includes(term) ? 5 : 2) : 0), 0);
       return { place, score };
-    }).sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      if (userLocation) {
-        const distance = (place) => {
-          if (place.lat == null || place.lng == null) return Number.POSITIVE_INFINITY;
-          const toRad = (degrees) => degrees * Math.PI / 180;
-          const dLat = toRad(Number(place.lat) - userLocation.latitude);
-          const dLng = toRad(Number(place.lng) - userLocation.longitude);
-          const value = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(userLocation.latitude)) * Math.cos(toRad(Number(place.lat))) * Math.sin(dLng / 2) ** 2;
-          return 6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
-        };
-        const byDistance = distance(a.place) - distance(b.place);
-        if (byDistance !== 0) return byDistance;
-      }
-      return Number(b.place.rating || 0) - Number(a.place.rating || 0) || Number(b.place.reviewCount || 0) - Number(a.place.reviewCount || 0);
-    });
+    }).sort((a, b) => b.score - a.score || Number(b.place.rating || 0) - Number(a.place.rating || 0) || Number(b.place.reviewCount || 0) - Number(a.place.reviewCount || 0));
     const topMatches = ranked.filter(({ score }) => score > 0).slice(0, 4);
-    const selected = (imageData ? ranked.slice(0, 30) : (topMatches.length ? topMatches : ranked.slice(0, 3))).map(({ place }) => ({
+    const selected = (topMatches.length ? topMatches : ranked.slice(0, 3)).map(({ place }) => ({
       id: place.id, name: place.name, category: place.category, subtitle: place.subtitle, location: place.location,
       address: place.address, mapUrl: place.mapUrl, images: Array.isArray(place.images) ? place.images : [], logo: place.logo,
       rating: Number(place.rating || 0), reviewCount: Number(place.reviewCount || 0), isOpen: Boolean(place.isOpen),
@@ -2360,22 +2339,18 @@ app.post('/api/ask-nochi', requireNeon, async (req, res) => {
         COALESCE(json_agg(json_build_object('url', ${`${req.protocol}://${req.get('host')}`} || '/api/marketplace/listings/' || listing.id || '/images/' || photo.id)
           ORDER BY photo.sort_order) FILTER (WHERE photo.id IS NOT NULL), '[]'::json) AS images
         FROM marketplace_listings AS listing LEFT JOIN marketplace_listing_images AS photo ON photo.listing_id = listing.id
-      WHERE listing.status = 'published' GROUP BY listing.id ORDER BY listing.published_at DESC LIMIT 60`,
+        WHERE listing.status = 'published' GROUP BY listing.id ORDER BY listing.published_at DESC LIMIT 60`,
     ]);
-    const communityReviewRows = await Promise.all(selected.map(async (place) => ({
-      placeName: place.name,
-      reviews: await sql`SELECT rating, review_text AS text FROM community_reviews WHERE place_id = ${place.id} ORDER BY created_at DESC LIMIT 3`,
-    })));
     const historyText = history.map((item) => `${item.role === 'user' ? 'Usuario' : 'Nochi'}: ${item.content}`).join('\n');
     const source = JSON.stringify(selected);
-    const locationText = userLocation ? `Ubicación aproximada compartida por el usuario: latitud ${userLocation.latitude}, longitud ${userLocation.longitude}. Usa esto solo para priorizar cercanía; no inventes distancias exactas.\n` : '';
     const client = new GoogleGenAI({ apiKey });
-    const prompt = `Eres Ask Nochi, un asistente local de Nochistlán, Zacatecas, y un asistente general útil. Entiende la intención aunque el usuario escriba con errores, en español o inglés. Responde en el idioma del usuario, con tono cálido y claro. Puedes ayudar con preguntas generales, pero para afirmaciones locales usa exclusivamente los datos incluidos; no inventes negocios, eventos, horarios, servicios, precios ni calificaciones. Si una petición necesita datos locales que no aparecen aquí, dilo con claridad. Usa Markdown ligero. No reveles razonamiento interno. Cuando haya imagen, busca pistas visuales como letreros y compáralas con los negocios candidatos; no afirmes una coincidencia si no puedes verificarla. Para preguntas de reseñas o platillos usa solo los datos y reseñas comunitarias incluidas, sin inventar opiniones.
+    const response = await client.models.generateContent({
+      model: 'gemini-3.1-flash-lite',
+      contents: `Eres Ask Nochi, un asistente local de Nochistlán, Zacatecas, y un asistente general útil. Entiende la intención aunque el usuario escriba con errores, en español o inglés. Responde en el idioma del usuario, con tono cálido y claro. Puedes ayudar con preguntas generales, pero para afirmaciones locales usa exclusivamente los datos incluidos; no inventes negocios, eventos, horarios, servicios, precios ni calificaciones. Si una petición necesita datos locales que no aparecen aquí, dilo con claridad. Usa Markdown ligero. No reveles razonamiento interno.
 
 Conversación completa disponible (de la más antigua a la más reciente):
 ${historyText || '(conversación nueva)'}
 
-${locationText}
 Mensaje actual:
 ${query}
 
@@ -2386,16 +2361,7 @@ Eventos publicados:
 ${JSON.stringify(eventRows)}
 
 Anuncios publicados del mercado:
-${JSON.stringify(listingRows)}
-
-Reseñas recientes de la comunidad para negocios candidatos:
-${JSON.stringify(communityReviewRows)}`;
-    const contents = imageData
-      ? [{ role: 'user', parts: [{ text: prompt }, { inlineData: { mimeType: imageMimeType, data: imageData.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '') } }] }]
-      : prompt;
-    const response = await client.models.generateContent({
-      model: 'gemini-3.1-flash-lite',
-      contents,
+${JSON.stringify(listingRows)}`,
       config: { maxOutputTokens: 420, thinkingConfig: { thinkingLevel: 'low', includeThoughts: false } },
     });
     const answer = response.text?.trim();
