@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { CalendarDays, Check, Clock3, Filter, Heart, House, Images, MapPin, Menu, MessageCircle, Plus, Search, Star, Store, UserRound, X } from 'lucide-react';
 import { CreatePostFlow } from './CreatePostFlow';
@@ -35,6 +35,7 @@ type CommunityEvent = {
   authorPicture?: string | null;
 };
 type FeedItem = { kind: 'post'; key: string; createdAt: string; post: CommunityPost } | { kind: 'event'; key: string; createdAt: string; event: CommunityEvent };
+type DiscoveryCard = { kind: 'business'; key: string; place: Place } | { kind: 'post'; key: string; post: CommunityPost } | { kind: 'event'; key: string; event: CommunityEvent };
 type AccountSummary = { id: string; name: string; picture: string | null };
 type BusinessPreferenceProfile = { searches: string[]; categories: Record<string, number>; viewed: string[] };
 
@@ -147,6 +148,13 @@ function BusinessDiscoveryCard({ place, onOpen }: { place: Place; onOpen: () => 
   </button>;
 }
 
+function renderDiscoveryCard(item: DiscoveryCard, onSelectBusiness: (place: Place) => void, savePreferences: (update: (current: BusinessPreferenceProfile) => BusinessPreferenceProfile) => void, onOpenImage: (url: string, alt: string) => void, onOpenEvent: (id: string) => void, onOpenProfile: (id: string) => void, onCreate: () => void) {
+  if (item.kind === 'business') return <div className="flex h-full flex-col justify-end p-0"><div className="min-h-0 flex-1 overflow-hidden">{item.place.images?.[0] || item.place.logo ? <img src={item.place.images?.[0] || item.place.logo} alt="" className="h-full w-full object-cover"/> : <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#30343b] to-[#1b1c1f]"><Store className="h-12 w-12 text-white/25"/></div>}</div><div className="bg-gradient-to-t from-[#1a1b1e] via-[#1a1b1e] to-[#1a1b1e]/95 px-5 pb-5 pt-4"><span className="rounded-full bg-white/[.08] px-2.5 py-1 text-[10px] font-semibold text-white/70">{item.place.category}</span><h2 className="mt-3 text-xl font-bold"><VerifiedBusinessName name={item.place.name}/></h2><p className="mt-1.5 flex items-center gap-1.5 text-xs text-white/60"><MapPin className="h-3.5 w-3.5"/>{item.place.location}</p><p className="mt-2 flex items-center gap-1.5 text-xs text-white/70"><Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300"/>{item.place.rating?.toFixed(1) || 'Nuevo'} · {item.place.isOpen ? 'Abierto' : 'Cerrado'}</p><button type="button" onClick={() => { const category = item.place.category.toLocaleLowerCase('es-MX').normalize('NFD').replace(/[\u0300-\u036f]/g, ''); savePreferences((current) => ({ ...current, viewed: [item.place.id, ...current.viewed.filter((id) => id !== item.place.id)].slice(0, 30), categories: { ...current.categories, [category]: (current.categories[category] || 0) + 1 } })); onSelectBusiness(item.place); }} className="mt-4 w-full rounded-full bg-white py-3 text-sm font-bold text-black">Ver negocio</button></div></div>;
+  if (item.kind === 'event') return <div className="flex h-full flex-col"><div className="relative min-h-0 flex-1 bg-[#24262a]">{item.event.imageUrl ? <img src={item.event.imageUrl} alt="" className="h-full w-full object-cover"/> : <div className="flex h-full items-center justify-center"><CalendarDays className="h-12 w-12 text-white/25"/></div>}<div className="absolute inset-0 bg-gradient-to-t from-[#1a1b1e] via-transparent to-black/10"/><span className="absolute left-4 top-4 rounded-full bg-black/50 px-3 py-1.5 text-[10px] font-semibold text-white backdrop-blur">{formatEventDate(item.event)}</span></div><div className="px-5 pb-5 pt-3"><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-orange-300">Evento local</p><h2 className="mt-1.5 text-xl font-bold leading-tight">{item.event.title}</h2><p className="mt-2 flex items-center gap-1.5 text-xs text-white/60"><MapPin className="h-3.5 w-3.5"/>{item.event.location}{item.event.time ? ` · ${item.event.time}` : ''}</p>{item.event.description && <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-white/65">{item.event.description}</p>}<button type="button" onClick={() => onOpenEvent(item.event.id)} className="mt-4 w-full rounded-full bg-white py-3 text-sm font-bold text-black">Ver evento</button></div></div>;
+  const post = item.post;
+  return <div className="flex h-full flex-col"><div className="flex items-center gap-2.5 px-4 py-3.5">{post.profileId ? <button type="button" onClick={() => onOpenProfile(post.profileId!)}><AuthorAvatar picture={post.authorPicture} name={post.authorName} size="h-10 w-10"/></button> : <AuthorAvatar picture={post.authorPicture} name={post.authorName} size="h-10 w-10"/>}<div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{post.authorName || 'Comunidad de Nochistlán'}</p><p className="mt-0.5 text-[10px] text-white/45">{post.postType === 'business' ? post.placeName || 'Negocio local' : 'Momento de la comunidad'}{formatFeedDate(post.createdAt) ? ` · ${formatFeedDate(post.createdAt)}` : ''}</p></div><span className="rounded-full bg-white/[.07] px-2.5 py-1 text-[9px] text-white/60">{post.postType === 'business' ? 'Negocio' : 'Comunidad'}</span></div><button type="button" onClick={() => onOpenImage(post.imageUrl, post.caption || 'Publicación de la comunidad')} className="min-h-0 flex-1 overflow-hidden"><img src={post.coverUrl || post.imageUrl} alt={post.caption || ''} className="h-full w-full object-cover"/></button><div className="px-5 pb-5 pt-3">{post.caption && <p className="line-clamp-3 text-sm leading-relaxed text-white/85">{post.caption}</p>}<div className="mt-3 flex items-center gap-2 border-t border-white/[.07] pt-3 text-xs text-white/55"><Heart className="h-4 w-4"/>Me gusta <MessageCircle className="ml-3 h-4 w-4"/>Comentar</div></div></div>;
+}
+
 export function DiscoverPage({ onSelectBusiness, account }: {
   onSelectBusiness: (place: Place) => void;
   account: AccountSummary | null;
@@ -163,6 +171,7 @@ export function DiscoverPage({ onSelectBusiness, account }: {
   const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [openedImage, setOpenedImage] = useState<{ url: string; alt: string } | null>(null);
   const [businessQuery, setBusinessQuery] = useState('');
+  const [activeCardIndex, setActiveCardIndex] = useState(0);
   const preferenceKey = preferenceStorageKey(account);
   const [preferenceProfile, setPreferenceProfile] = useState(() => readBusinessPreferences(preferenceStorageKey(account)));
   const openEvent = (id: string) => {
@@ -250,11 +259,15 @@ export function DiscoverPage({ onSelectBusiness, account }: {
     return true;
   }), [feedFilter, feedItems]);
 
-  const handleScroll = (event: UIEvent<HTMLElement>) => {
-    const nextTop = event.currentTarget.scrollTop;
-    if (nextTop > lastScrollTop.current + 2) setMenuOpen(false);
-    lastScrollTop.current = nextTop;
-  };
+  const discoveryCards = useMemo<DiscoveryCard[]>(() => {
+    const businesses: DiscoveryCard[] = matchingBusinesses.slice(0, 12).map((place) => ({ kind: 'business', key: `business-${place.id}`, place }));
+    const community: DiscoveryCard[] = visibleFeedItems.map((item) => item.kind === 'post' ? ({ kind: 'post', key: item.key, post: item.post }) : ({ kind: 'event', key: item.key, event: item.event }));
+    return feedFilter === 'business' ? businesses : feedFilter === 'all' ? [...community, ...businesses] : community;
+  }, [feedFilter, matchingBusinesses, visibleFeedItems]);
+  useEffect(() => { setActiveCardIndex(0); }, [feedFilter, businessQuery]);
+  useEffect(() => { if (discoveryCards.length) setActiveCardIndex((index) => Math.min(index, discoveryCards.length - 1)); }, [discoveryCards.length]);
+  const moveCard = (direction: number) => { if (discoveryCards.length > 1) setActiveCardIndex((index) => (index + direction + discoveryCards.length) % discoveryCards.length); };
+  const handleDragEnd = (_event: MouseEvent | TouchEvent | PointerEvent, info: { offset: { x: number }; velocity: { x: number } }) => { if (Math.abs(info.offset.x) > 40 || Math.abs(info.velocity.x) > 350) moveCard(info.offset.x < 0 ? 1 : -1); };
 
   const filterOptions = [
     { id: 'all', label: 'Todo', icon: <Filter className="h-4 w-4"/> },
@@ -263,7 +276,7 @@ export function DiscoverPage({ onSelectBusiness, account }: {
     { id: 'events', label: 'Eventos', icon: <CalendarDays className="h-4 w-4"/> },
   ] as const;
 
-  return <motion.main onScroll={handleScroll} style={{ height: 'calc(100dvh - env(safe-area-inset-top, 0px))', scrollPaddingTop: 68 }} className="relative snap-y overflow-y-auto overscroll-y-contain bg-[#111214] px-4 pb-28 pt-2 text-white">
+  return <motion.main style={{ height: 'calc(100dvh - env(safe-area-inset-top, 0px))' }} className="relative overflow-y-auto overscroll-y-contain bg-[#111214] px-4 pb-28 pt-2 text-white">
     <header className="explore-top-header sticky top-0 z-30 -mx-4 mb-3 flex h-[58px] items-center px-4">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[#111214]/75 backdrop-blur-xl" />
       <div className="explore-top-left relative z-10">
@@ -285,22 +298,16 @@ export function DiscoverPage({ onSelectBusiness, account }: {
     </header>
 
     <div className="mx-auto max-w-xl">
-      {(feedFilter === 'all' || feedFilter === 'posts') && <StoriesRow posts={dayPosts} account={account} onCreate={() => setShowCreateFlow(true)} />}
-      {feedFilter === 'all' && <section aria-label="Negocios recomendados" className="mb-4">
-        <div className="mb-2 flex items-end justify-between px-1"><div><h2 className="text-sm font-bold text-white">Negocios para descubrir</h2><p className="mt-0.5 text-[10px] text-white/45">Lugares de Nochistlán que te pueden gustar</p></div><button type="button" onClick={() => setFeedFilter('business')} className="text-[10px] font-semibold text-white/60">Ver todos</button></div>
-        <div className="grid grid-cols-2 gap-2.5">{matchingBusinesses.slice(0, 4).map((place) => <BusinessDiscoveryCard key={place.id} place={place} onOpen={() => { const category = place.category.toLocaleLowerCase('es-MX').normalize('NFD').replace(/[\u0300-\u036f]/g, ''); savePreferences((current) => ({ ...current, viewed: [place.id, ...current.viewed.filter((id) => id !== place.id)].slice(0, 30), categories: { ...current.categories, [category]: (current.categories[category] || 0) + 1 } })); onSelectBusiness(place); }}/>)}</div>
-      </section>}
-      {feedFilter === 'business' && <section aria-label="Negocios recomendados" className="mb-1"><label className="flex h-11 items-center gap-2 rounded-full bg-[#202124] px-4 text-white/45"><Search className="h-4 w-4 shrink-0"/><input value={businessQuery} onChange={(event) => setBusinessQuery(event.target.value)} aria-label="Buscar negocios" placeholder="Busca negocios, categorías o servicios" className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-white/40"/>{businessQuery && <button type="button" onClick={() => setBusinessQuery('')} aria-label="Limpiar búsqueda" className="text-xs text-white/50">Limpiar</button>}</label><p className="mt-2 px-1 text-[10px] text-white/40">Recomendaciones según tus búsquedas, favoritos y negocios visitados.</p></section>}
-      {feedFilter === 'business' ? <section aria-label="Negocios recomendados" className="grid grid-cols-2 gap-2.5">{matchingBusinesses.length ? matchingBusinesses.map((place) => <BusinessDiscoveryCard key={place.id} place={place} onOpen={() => { const category = place.category.toLocaleLowerCase('es-MX').normalize('NFD').replace(/[\u0300-\u036f]/g, ''); savePreferences((current) => ({ ...current, viewed: [place.id, ...current.viewed.filter((id) => id !== place.id)].slice(0, 30), categories: { ...current.categories, [category]: (current.categories[category] || 0) + 1 } })); onSelectBusiness(place); }}/>) : <div className="col-span-2 rounded-[22px] bg-[#1a1b1e] px-5 py-8 text-center"><Store className="mx-auto h-6 w-6 text-white/35"/><p className="mt-3 text-sm font-semibold text-white/85">No encontramos negocios</p><p className="mt-1 text-xs text-white/45">Prueba con otro nombre, categoría o servicio.</p></div>}</section> : <section aria-label="Publicaciones y eventos de la comunidad" className="flex flex-col gap-4">
-        {feedLoading && <div role="status" className="py-8 text-center text-xs text-white/45">Cargando lo que comparte la comunidad…</div>}
-        {!feedLoading && !visibleFeedItems.length && <div className="rounded-[26px] bg-[#1a1b1e] px-5 py-8 text-center"><p className="text-sm font-semibold text-white/85">{feedItems.length ? 'No hay contenido en esta categoría' : 'Aquí aparecerá la comunidad'}</p><p className="mx-auto mt-1.5 max-w-xs text-xs leading-relaxed text-white/45">{feedItems.length ? 'Prueba otra categoría para ver más contenido.' : 'Comparte un momento o publica un evento para empezar el feed.'}</p><button type="button" onClick={() => setShowCreateFlow(true)} className="mt-4 rounded-full bg-white px-4 py-2.5 text-xs font-bold text-black">Crear publicación</button></div>}
-        {visibleFeedItems.map((item, index) => <div key={item.key} className="contents">
-          {item.kind === 'post'
-            ? <CommunityPostCard post={item.post} onOpenProfile={(id) => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: id }))} onOpenImage={(url, alt) => setOpenedImage({ url, alt })}/>
-            : <CommunityEventCard event={item.event} onOpenProfile={(id) => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: id }))} onOpenEvent={openEvent}/>}
-          {feedFilter === 'all' && (index === 1 || (index === 5 && visibleFeedItems.length > 6)) && <AdSenseFeedCard slot={`explore-feed-${index}`} />}
-        </div>)}
-      </section>}
+      {feedFilter === 'business' && <section aria-label="Buscar negocios" className="mb-4"><label className="flex h-11 items-center gap-2 rounded-full bg-[#202124] px-4 text-white/45"><Search className="h-4 w-4 shrink-0"/><input value={businessQuery} onChange={(event) => setBusinessQuery(event.target.value)} aria-label="Buscar negocios" placeholder="Busca negocios, categorías o servicios" className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-white/40"/>{businessQuery && <button type="button" onClick={() => setBusinessQuery('')} aria-label="Limpiar búsqueda" className="text-xs text-white/50">Limpiar</button>}</label></section>}
+      <section aria-label="Descubre la comunidad" className="pt-1">
+        <div className="mb-3 flex items-end justify-between px-1"><div><p className="text-[10px] font-semibold uppercase tracking-[.2em] text-white/40">PuntoNochi · Nochistlán</p><h1 className="mt-1 text-[21px] font-bold tracking-tight">{feedFilter === 'business' ? 'Negocios para descubrir' : feedFilter === 'events' ? 'Eventos cerca de ti' : feedFilter === 'posts' ? 'Lo que comparte la gente' : 'Descubre lo que pasa'}</h1></div><span className="text-[10px] font-medium text-white/45">{discoveryCards.length ? `${activeCardIndex + 1} / ${discoveryCards.length}` : ''}</span></div>
+        {feedLoading && !discoveryCards.length ? <div role="status" aria-label="Cargando contenido" className="explore-card-skeleton relative mx-auto h-[min(67vh,590px)] min-h-[420px] max-w-[410px] overflow-hidden rounded-[28px] bg-[#1a1b1e]"><div className="explore-skeleton-shimmer absolute inset-0"/><div className="absolute inset-x-0 bottom-0 space-y-3 p-5"><div className="h-3 w-24 rounded-full bg-white/[.08]"/><div className="h-6 w-3/4 rounded-full bg-white/[.09]"/><div className="h-3 w-1/2 rounded-full bg-white/[.07]"/><div className="h-11 w-full rounded-full bg-white/[.09]"/></div></div>
+        : discoveryCards.length ? <div className="relative mx-auto h-[min(67vh,590px)] min-h-[420px] max-w-[410px] touch-pan-y select-none">
+          <AnimatePresence initial={false} mode="popLayout"><motion.div key={discoveryCards[activeCardIndex]?.key} drag="x" dragDirectionLock dragConstraints={{ left: 0, right: 0 }} dragElastic={.12} onDragEnd={handleDragEnd} initial={{ opacity: .7, scale: .96 }} animate={{ opacity: 1, x: 0, scale: 1, rotate: 0 }} exit={{ opacity: .35, scale: .88 }} transition={{ type: 'spring', stiffness: 260, damping: 28, mass: .8 }} className="absolute inset-x-0 top-0 z-10 h-[calc(100%-8px)] touch-pan-y cursor-grab overflow-hidden rounded-[28px] bg-[#1a1b1e] shadow-[0_22px_70px_rgba(0,0,0,.48)] active:cursor-grabbing">{discoveryCards[activeCardIndex] && renderDiscoveryCard(discoveryCards[activeCardIndex], onSelectBusiness, savePreferences, onOpenImage, openEvent, (id) => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: id })), () => setShowCreateFlow(true))}</motion.div></AnimatePresence>
+        </div>
+        : <div className="flex min-h-[360px] flex-col items-center justify-center rounded-[28px] bg-[#1a1b1e] px-6 text-center"><p className="text-sm font-semibold text-white/85">{feedFilter === 'business' ? 'No encontramos negocios' : feedItems.length ? 'No hay contenido en esta categoría' : 'Aquí aparecerá la comunidad'}</p><p className="mt-2 max-w-xs text-xs leading-relaxed text-white/45">{feedFilter === 'business' ? 'Prueba con otro nombre o categoría.' : 'Comparte un momento o publica un evento para empezar.'}</p><button type="button" onClick={() => setShowCreateFlow(true)} className="mt-4 rounded-full bg-white px-4 py-2.5 text-xs font-bold text-black">Crear publicación</button></div>}
+        {discoveryCards.length > 1 && <div className="mt-3 flex items-center justify-center gap-5"><button type="button" aria-label="Anterior" onClick={() => moveCard(-1)} className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[.07] text-xl text-white/75">‹</button><div className="flex items-center gap-1.5">{discoveryCards.slice(Math.max(0, activeCardIndex - 2), Math.min(discoveryCards.length, activeCardIndex + 3)).map((item) => <span key={item.key} className={`h-1.5 rounded-full transition-all ${item.key === discoveryCards[activeCardIndex]?.key ? 'w-5 bg-white' : 'w-1.5 bg-white/25'}`} />)}</div><button type="button" aria-label="Siguiente" onClick={() => moveCard(1)} className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[.07] text-xl text-white/75">›</button></div>}
+      </section>
     </div>
 
     <AnimatePresence>{openedImage && <motion.div role="dialog" aria-modal="true" aria-label={openedImage.alt} className="fixed inset-0 z-[100] flex cursor-zoom-out items-center justify-center bg-black/95 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setOpenedImage(null)} onKeyDown={(event) => { if (event.key === 'Escape') setOpenedImage(null); }}><button type="button" aria-label="Cerrar imagen" className="absolute right-4 top-[calc(env(safe-area-inset-top,0px)+16px)] z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white" onClick={() => setOpenedImage(null)}><X className="h-5 w-5"/></button><img src={openedImage.url} alt={openedImage.alt} className="max-h-full max-w-full cursor-default object-contain" onClick={(event) => event.stopPropagation()}/></motion.div>}</AnimatePresence>

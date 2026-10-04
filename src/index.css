@@ -581,6 +581,23 @@
   filter: blur(16px);
   pointer-events: none;
 }
+.explore-card-skeleton::before {
+  position: absolute;
+  inset: 0 0 34% 0;
+  content: "";
+  background: linear-gradient(145deg, #25272c 0%, #1e2024 55%, #292b30 100%);
+}
+.explore-skeleton-shimmer {
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 25%, rgba(255,255,255,.035) 42%, rgba(255,255,255,.07) 50%, rgba(255,255,255,.035) 58%, transparent 75%);
+  background-size: 220% 100%;
+  animation: explore-skeleton-shimmer 1.7s ease-in-out infinite;
+}
+@keyframes explore-skeleton-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -120% 0; }
+}
 .explore-top-create {
   color: #17181a;
   background: #f5f6f8;
