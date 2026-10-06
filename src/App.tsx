@@ -10,6 +10,7 @@ import { DestacadosPage } from './components/DestacadosPage';
 import { ColoniaDetailPage } from './components/ColoniaDetailPage';
 import { BusinessDetailSheet } from './components/BusinessDetailSheet';
 import { HomeVideosSection } from './components/HomeVideosSection';
+import { FlipText } from './components/FlipText';
 import { VerifiedBusinessName } from './components/VerifiedBusinessName';
 import { GuideComposerOverlay, HomeGuidesSection, LocalGuidesPage } from './components/LocalGuidesPage';
 import { AutoLayoutRoot } from './layout/AutoLayout';
@@ -187,6 +188,7 @@ export default function App() {
   const [welcomeTransitionDone, setWelcomeTransitionDone] = useState(true);
   const [publicProfileId, setPublicProfileId] = useState<string | null>(null);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
+  const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [showStreakPage, setShowStreakPage] = useState(false);
   const [streakBadgeCelebration, setStreakBadgeCelebration] = useState<{ days: number; name: string } | null>(null);
   const [marketplaceDetailOpen, setMarketplaceDetailOpen] = useState(false);
@@ -282,8 +284,10 @@ export default function App() {
       const id = (event as CustomEvent<string>).detail;
       if (typeof id === 'string' && id) setPublicProfileId(id);
     };
+    const openSettings = () => setShowProfileSettings(true);
     window.addEventListener('open-public-profile', openProfile);
-    return () => window.removeEventListener('open-public-profile', openProfile);
+    window.addEventListener('open-profile-settings', openSettings);
+    return () => { window.removeEventListener('open-public-profile', openProfile); window.removeEventListener('open-profile-settings', openSettings); };
   }, []);
 
   const finishWelcome = () => {
@@ -647,8 +651,8 @@ export default function App() {
             </button>}
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-neutral-900">
-              Descubre<br/>
-              <span className="text-[#1a73e8]">Nochistlán</span>
+              <FlipText>Descubre</FlipText><br/>
+              <FlipText className="text-[#1a73e8]">Nochistlán</FlipText>
             </h1>
             <div aria-hidden="true" className="relative -mx-5 mt-2 h-[112px] w-[calc(100%+2.5rem)] overflow-hidden">
               <svg viewBox="0 0 100 32" preserveAspectRatio="none" className="absolute inset-x-0 top-0 h-8 w-full"><path d="M0 3 Q52 7 100 25" fill="none" stroke="#626b76" strokeWidth="1.5" vectorEffect="non-scaling-stroke" /></svg>
@@ -924,6 +928,8 @@ export default function App() {
             <DiscoverPage 
               key="discover" 
               onSelectBusiness={(place) => setSelectedBusiness(place)} 
+              onPromoteBusiness={() => setShowBusinessPromotion(true)}
+              onOpenOwnProfile={signedInAccount ? () => setPublicProfileId(signedInAccount.id) : undefined}
               account={signedInAccount}
             />
           </React.Suspense>
@@ -1030,6 +1036,7 @@ export default function App() {
         {showWelcome && !showAdminPage && <WelcomePage onContinue={finishWelcome} />}
         {publicProfileId && <PublicProfileSheet profileId={publicProfileId} onClose={() => setPublicProfileId(null)} />}
         {showProfileSheet && <ProfileSheet onClose={() => setShowProfileSheet(false)} onSelectBusiness={(place) => setSelectedBusiness(place)} />}
+        {showProfileSettings && <ProfileSheet settingsOnly onClose={() => setShowProfileSettings(false)} onSelectBusiness={(place) => setSelectedBusiness(place)} />}
       </AnimatePresence>
       <Analytics />
     </AutoLayoutRoot>

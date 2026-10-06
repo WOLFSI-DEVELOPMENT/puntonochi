@@ -41,7 +41,7 @@ function recentDays() {
   });
 }
 
-export function ProfileSheet({ onClose, onSelectBusiness }: { onClose: () => void; onSelectBusiness: (place: Place) => void }) {
+export function ProfileSheet({ onClose, onSelectBusiness, settingsOnly = false }: { onClose: () => void; onSelectBusiness: (place: Place) => void; settingsOnly?: boolean }) {
   const [daily, setDaily] = useState(readDailyUse);
   const [activity, setActivity] = useState<ProfileActivity>(getProfileActivity);
   const [bookmarkIds, setBookmarkIds] = useState<string[]>(getBookmarkedPlaceIds);
@@ -77,7 +77,7 @@ export function ProfileSheet({ onClose, onSelectBusiness }: { onClose: () => voi
   }, []);
 
   useEffect(() => {
-    if (!account) { setAccountContent(null); return; }
+    if (settingsOnly || !account) { setAccountContent(null); return; }
     let active = true;
     setContentLoading(true);
     fetch('/api/account/content', { cache: 'no-store', credentials: 'same-origin' })
@@ -86,9 +86,10 @@ export function ProfileSheet({ onClose, onSelectBusiness }: { onClose: () => voi
       .catch(() => { if (active) setAccountContent({ reviews: [], posts: [], events: [] }); })
       .finally(() => { if (active) setContentLoading(false); });
     return () => { active = false; };
-  }, [account?.id]);
+  }, [account?.id, settingsOnly]);
 
   useEffect(() => {
+    if (settingsOnly) { setAccountLoading(false); return; }
     let active = true;
     fetch('/api/account/session', { cache: 'no-store', credentials: 'same-origin' })
       .then(async (response) => {
@@ -100,7 +101,7 @@ export function ProfileSheet({ onClose, onSelectBusiness }: { onClose: () => voi
       .catch(() => { if (active) setAccount(null); })
       .finally(() => { if (active) setAccountLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [settingsOnly]);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -143,17 +144,18 @@ export function ProfileSheet({ onClose, onSelectBusiness }: { onClose: () => voi
   };
 
   return <>
-    <motion.button aria-label="Cerrar perfil" onClick={onClose} className="fixed inset-0 z-[84] bg-black/60 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
-    <motion.section {...sheetDrag} role="dialog" aria-modal="true" aria-label="Perfil" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360, mass: 0.82 }} className="fixed inset-x-0 bottom-0 z-[85] mx-auto flex max-h-[92dvh] w-full max-w-[640px] flex-col overflow-hidden rounded-t-[32px] bg-[#202124] text-white shadow-2xl">
-      <div className="relative shrink-0 border-b border-white/[0.08] px-5 pb-4 pt-1"><SheetDragHandle controls={sheetDrag.dragControls}/><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">PUNTONOCHI · TU ESPACIO</p><h2 className="mt-1 text-2xl font-bold">Perfil</h2><button type="button" onClick={onClose} aria-label="Cerrar" className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.08]"><X className="h-5 w-5"/></button></div>
+    <motion.button aria-label="Cerrar" onClick={onClose} className={`fixed inset-0 ${settingsOnly ? 'z-[129]' : 'z-[84]'} bg-black/60 backdrop-blur-sm`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+    <motion.section {...sheetDrag} role="dialog" aria-modal="true" aria-label={settingsOnly ? 'Ajustes' : 'Perfil'} initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360, mass: 0.82 }} className={`fixed inset-x-0 bottom-0 ${settingsOnly ? 'z-[130]' : 'z-[85]'} mx-auto flex max-h-[92dvh] w-full max-w-[640px] flex-col overflow-hidden rounded-t-[32px] bg-[#202124] text-white shadow-2xl`}>
+      <div className="relative shrink-0 border-b border-white/[0.08] px-5 pb-4 pt-1"><SheetDragHandle controls={sheetDrag.dragControls}/><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">PUNTONOCHI · {settingsOnly ? 'PREFERENCIAS' : 'TU ESPACIO'}</p><h2 className="mt-1 text-2xl font-bold">{settingsOnly ? 'Ajustes' : 'Perfil'}</h2><button type="button" onClick={onClose} aria-label="Cerrar" className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.08]"><X className="h-5 w-5"/></button></div>
       <div className="min-h-0 flex-1 touch-pan-y space-y-4 overflow-y-auto overscroll-contain px-5 py-5 pb-[calc(env(safe-area-inset-bottom)+32px)]">
+        {settingsOnly ? <section data-profile-squircle className="rounded-[24px] bg-[#292a2d] p-4"><div className="mb-1 flex items-center gap-2 text-sm font-semibold"><span className="material-symbols-rounded text-[18px] text-blue-200">dock_to_bottom</span>Diseño de navegación</div><p className="mb-3 text-xs leading-relaxed text-white/50">Elige cómo quieres ver la barra inferior.</p><div className="grid grid-cols-2 gap-2.5">{([{ id: 'dynamic' as const, title: 'Dynamic', description: 'Brillo y movimiento', glass: false }, { id: 'simple' as const, title: 'Simple', description: 'Cristal esmerilado', glass: true }]).map((option) => <button key={option.id} type="button" aria-pressed={navDesign === option.id} onClick={() => chooseNavDesign(option.id)} className={`rounded-[20px] p-2.5 text-left transition-colors ${navDesign === option.id ? 'bg-blue-500/15 ring-1 ring-blue-300/70' : 'bg-[#202124] ring-1 ring-white/[0.06]'}`}><span className="relative mb-2 flex h-[58px] items-center justify-center overflow-hidden rounded-[17px] bg-[#111214]"><span className={`flex h-[34px] w-[90%] items-center justify-around rounded-full ${option.glass ? 'bg-[#292a2d]/80 backdrop-blur-xl' : 'bg-white/[0.12] shadow-[0_4px_12px_rgba(0,0,0,0.45)]'}`}>{['home', 'explore', 'smart_display', 'newspaper', 'search'].map((icon, index) => <span key={icon} className={`material-symbols-rounded flex h-[26px] w-[26px] items-center justify-center rounded-full text-[12px] ${index === 0 ? option.glass ? 'bg-[#414246] text-white' : 'bg-white/15 text-white' : 'text-white/55'}`}>{icon}</span>)}</span></span><span className="block text-[13px] font-bold">{option.title}</span><span className="mt-0.5 block text-[10px] text-white/45">{option.description}</span></button>)}</div></section> : account ? <>
         <section data-profile-squircle className="rounded-[24px] bg-[#292a2d] p-4">
           <div className="mb-3 flex items-center justify-between"><div className="flex items-center gap-2 text-sm font-semibold"><UserRound className="h-4 w-4 text-blue-300"/>Tu cuenta</div><span className="rounded-md bg-blue-500 px-2 py-1 text-[9px] font-extrabold tracking-wide text-white">BETA · PERFILES</span></div>
           {accountLoading ? <div className="flex items-center gap-3"><div className="h-12 w-12 animate-pulse rounded-full bg-white/10"/><div className="flex-1"><div className="h-3 w-2/5 animate-pulse rounded-full bg-white/10"/><div className="mt-2 h-3 w-3/5 animate-pulse rounded-full bg-white/[0.06]"/></div></div> : account ? <div className="flex items-center gap-3">
             {account.picture ? <img src={account.picture} alt="" referrerPolicy="no-referrer" className="h-12 w-12 shrink-0 rounded-full object-cover"/> : <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-blue-200"><UserRound className="h-6 w-6"/></div>}
             <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{account.name}</p><p className="mt-0.5 truncate text-xs text-white/50">{account.email || 'Cuenta de Facebook'}</p></div>
             <button type="button" aria-label="Cerrar sesión" onClick={async () => { setAccountError(''); try { const response = await fetch('/api/account/logout', { method: 'POST', credentials: 'same-origin' }); if (!response.ok) throw new Error(); setAccount(null); window.dispatchEvent(new Event('account-session-updated')); } catch { setAccountError('No se pudo cerrar sesión. Intenta otra vez.'); } }} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#202124] text-white/60"><LogOut className="h-4 w-4"/></button>
-          </div> : <button type="button" onClick={() => { setAccountError(''); setShowAccountAuth(true); }} className="flex w-full items-center gap-3 rounded-[18px] bg-[#202124] p-3 text-left transition-colors hover:bg-[#24262a]"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500 text-white"><UserRound className="h-5 w-5"/></span><span className="min-w-0 flex-1"><span className="block text-sm font-bold">Crear una cuenta</span><span className="mt-0.5 block text-xs text-white/50">Guarda tu perfil en PuntoNochi</span></span><ArrowRight className="h-4 w-4 text-white/45"/></button>}
+          </div> : <div className="rounded-[20px] bg-[#202124] p-4"><div className="flex items-center gap-3"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-200"><UserRound className="h-5 w-5"/></span><div><p className="text-sm font-bold">Inicia sesión para acceder a tu perfil</p><p className="mt-1 text-xs leading-relaxed text-white/50">Consulta tus publicaciones, reseñas y eventos, y participa en la comunidad.</p></div></div><button type="button" onClick={() => { setAccountError(''); setShowAccountAuth(true); }} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-blue-500 text-sm font-bold text-white transition-colors hover:bg-blue-400">Iniciar sesión o crear cuenta<ArrowRight className="h-4 w-4"/></button></div>}
           {accountError && <p role="alert" className="mt-2 text-xs text-red-300">{accountError}</p>}
         </section>
 
@@ -197,6 +199,7 @@ export function ProfileSheet({ onClose, onSelectBusiness }: { onClose: () => voi
         </section>
 
         <section className="pt-1"><div className="mb-3 flex items-center justify-between"><div><h3 className="text-lg font-bold">Guardados</h3><p className="mt-1 text-xs text-white/45">Tus negocios favoritos</p></div><Bookmark className="h-5 w-5 text-blue-300"/></div>{bookmarks.length ? <div className="space-y-2">{bookmarks.map((place) => <div data-profile-squircle key={place.id} className="flex items-center gap-2 rounded-[22px] bg-[#292a2d] p-2.5"><button type="button" onClick={() => { onSelectBusiness(place); onClose(); }} className="flex min-w-0 flex-1 items-center gap-3 text-left"><img src={place.images[0]} alt="" className="h-14 w-14 shrink-0 rounded-2xl object-cover"/><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{place.name}</span><span className="mt-1 block truncate text-xs text-white/45">{place.category} · {place.location}</span></span><ArrowRight className="mr-1 h-4 w-4 shrink-0 text-white/35"/></button><button type="button" onClick={(event) => removeBookmark(event, place.id)} aria-label={`Quitar ${place.name} de guardados`} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-500 text-white"><Bookmark className="h-4 w-4 fill-current"/></button></div>)}</div> : <div data-profile-squircle className="rounded-[22px] bg-[#292a2d] p-4 text-sm text-white/50">Aún no guardas negocios. Toca el marcador azul en una tarjeta para agregarla aquí.</div>}</section>
+        </> : <section data-profile-squircle className="rounded-[24px] bg-[#292a2d] p-5"><div className="mx-auto flex max-w-sm flex-col items-center py-8 text-center"><span className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-500/15 text-blue-200"><UserRound className="h-8 w-8"/></span><h3 className="mt-5 text-xl font-bold">Inicia sesión para acceder a tu perfil</h3><p className="mt-2 text-sm leading-relaxed text-white/55">Consulta tus publicaciones, reseñas y eventos, y participa en la comunidad.</p><button type="button" onClick={() => { setAccountError(''); setShowAccountAuth(true); }} className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-blue-500 text-sm font-bold text-white transition-colors hover:bg-blue-400">Iniciar sesión o crear cuenta<ArrowRight className="h-4 w-4"/></button>{accountError && <p role="alert" className="mt-3 text-xs text-red-300">{accountError}</p>}</div></section>}
       </div>
     </motion.section>
     <AnimatePresence>{showAccountAuth && <AccountAuthSheet onClose={() => setShowAccountAuth(false)}/>}</AnimatePresence>
