@@ -34,6 +34,8 @@ import { getStreakMilestone, StreakBadgeCelebration, StreakPage } from './compon
 import { PublicMenuPage } from './components/PublicMenuPage';
 import { PageLoadingSkeleton } from './components/PageLoadingSkeleton';
 import { Analytics } from '@vercel/analytics/react';
+import { getTotalHypes, HYPES_UPDATED_EVENT } from './hypes';
+import { getDailyDropQuestion } from './dailyDrop';
 
 const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
 const WELCOME_SEEN_KEY = 'puntonochi-welcome-seen-v1';
@@ -99,6 +101,16 @@ export default function App() {
   const reduceMotion = useReducedMotion();
   useEffect(() => {
     document.documentElement.classList.add('dark');
+  }, []);
+
+  useEffect(() => {
+    const refreshHypes = () => setSuggestionVersion((version) => version + 1);
+    window.addEventListener(HYPES_UPDATED_EVENT, refreshHypes);
+    window.addEventListener('storage', refreshHypes);
+    return () => {
+      window.removeEventListener(HYPES_UPDATED_EVENT, refreshHypes);
+      window.removeEventListener('storage', refreshHypes);
+    };
   }, []);
 
   useEffect(() => {
@@ -426,16 +438,10 @@ export default function App() {
 
   
   const destacadosPlaces = React.useMemo(() => {
-    const seen = new Set();
-    const results = [];
-    for (const place of mockPlaces) {
-      if (place.images && place.images.length > 0 && !seen.has(place.category)) {
-        seen.add(place.category);
-        results.push(place);
-      }
-    }
-    return results;
-  }, [mockPlaces, directoryVersion]);
+    return [...mockPlaces]
+      .filter((place) => place.images?.length)
+      .sort((a, b) => getTotalHypes(b.id) - getTotalHypes(a.id) || (b.rating || 0) - (a.rating || 0));
+  }, [directoryVersion, suggestionVersion]);
 
   const paginateDestacados = (newDirection: number) => {
     if (destacadosPlaces.length === 0) return;
@@ -654,12 +660,10 @@ export default function App() {
               <FlipText>Descubre</FlipText><br/>
               <FlipText className="text-[#1a73e8]">Nochistlán</FlipText>
             </h1>
-            <div aria-hidden="true" className="relative -mx-5 mt-2 h-[112px] w-[calc(100%+2.5rem)] overflow-hidden">
-              <svg viewBox="0 0 100 32" preserveAspectRatio="none" className="absolute inset-x-0 top-0 h-8 w-full"><path d="M0 3 Q52 7 100 25" fill="none" stroke="#626b76" strokeWidth="1.5" vectorEffect="non-scaling-stroke" /></svg>
-              <div className="absolute left-1/2 top-2 flex w-max -translate-x-1/2 items-start">
-                {['#3185e8', '#35a6a0', '#f2a544', '#d96d9b', '#766bd0'].map((color, index) => <div key={color} className="shrink-0" style={{ width: 'max(20vw, 64px)', height: 'clamp(72px, 16vw, 100px)', marginTop: `${[0, 4, 8, 12, 16][index]}px`, backgroundColor: color, transform: `rotate(${[-4, -2, 0, 2, 4][index]}deg)`, transformOrigin: 'top center', maskImage: 'url(/papel-picado.svg)', WebkitMaskImage: 'url(/papel-picado.svg)', maskSize: '100% 100%', WebkitMaskSize: '100% 100%', maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat' }} />)}
-              </div>
-            </div>
+            <article aria-label="Daily Drop: pregunta del día" className="mt-4 rounded-[24px] bg-[#292a2d] px-6 py-5 text-white">
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Daily Drop · pregunta del día</p>
+              <p className="mt-2 text-[17px] font-semibold leading-snug">{getDailyDropQuestion()}</p>
+            </article>
           </section>
           <>
           {/* Personalized suggestions */}

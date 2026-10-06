@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { ArrowRight, Bookmark, Image as ImageIcon, MapPin, MessageCircle, Plus, Search, Star, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Place } from '../types';
@@ -309,6 +309,9 @@ export function SearchPage({ query, onClose, onSelectBusiness, onOpenEvents, onO
   const [events, setEvents] = useState<{ id: string; title: string; date: string; time?: string | null; location: string; description: string; imageUrl?: string }[]>([]);
   const [listings, setListings] = useState<{ id: string; title: string; category: string; price: string; location: string; description: string; images?: { url: string }[] }[]>([]);
   const touchStartY = useRef<number | null>(null);
+  const deferredQuery = useDeferredValue(query);
+  const normalized = normalizeSearchText(deferredQuery);
+  const words = useMemo(() => normalized.split(/\s+/).filter(Boolean), [normalized]);
   useEffect(() => {
     let active = true;
     void Promise.allSettled([
@@ -321,14 +324,16 @@ export function SearchPage({ query, onClose, onSelectBusiness, onOpenEvents, onO
     });
     return () => { active = false; };
   }, []);
+  const indexedPlaces = useMemo(() => places.map((place) => ({
+    place,
+    name: normalizeSearchText(place.name),
+    category: normalizeSearchText(place.category),
+    searchable: normalizeSearchText([place.name, place.category, place.subtitle, place.location, place.address].filter(Boolean).join(' ')),
+  })), [places]);
+
   const results = useMemo(() => {
-    const normalized = normalizeSearchText(query);
     if (!normalized) return [];
-    const words = normalized.split(/\s+/);
-    return places.map((place) => {
-      const name = normalizeSearchText(place.name);
-      const category = normalizeSearchText(place.category);
-      const searchable = normalizeSearchText([place.name, place.category, place.subtitle, place.location, place.address].filter(Boolean).join(' '));
+    return indexedPlaces.map(({ place, name, category, searchable }) => {
       if (!words.every((word) => searchable.includes(word))) return null;
       const score = (name === normalized ? 100 : name.startsWith(normalized) ? 60 : name.includes(normalized) ? 35 : 0)
         + (category === normalized ? 45 : category.includes(normalized) ? 25 : 0)
@@ -339,12 +344,10 @@ export function SearchPage({ query, onClose, onSelectBusiness, onOpenEvents, onO
     }).filter((match): match is { place: Place; score: number } => Boolean(match))
       .sort((a, b) => b.score - a.score)
       .map(({ place }) => place);
-  }, [places, query]);
+  }, [indexedPlaces, normalized, words]);
 
-  const normalized = normalizeSearchText(query);
-  const words = normalized.split(/\s+/).filter(Boolean);
-  const matchingEvents = categoryScoped ? [] : events.filter((item) => words.length > 0 && words.every((word) => normalizeSearchText([item.title, item.location, item.description].join(' ')).includes(word)));
-  const matchingListings = categoryScoped ? [] : listings.filter((item) => words.length > 0 && words.every((word) => normalizeSearchText([item.title, item.category, item.location, item.description].join(' ')).includes(word)));
+  const matchingEvents = useMemo(() => categoryScoped ? [] : events.filter((item) => words.length > 0 && words.every((word) => normalizeSearchText([item.title, item.location, item.description].join(' ')).includes(word))), [categoryScoped, events, words]);
+  const matchingListings = useMemo(() => categoryScoped ? [] : listings.filter((item) => words.length > 0 && words.every((word) => normalizeSearchText([item.title, item.category, item.location, item.description].join(' ')).includes(word))), [categoryScoped, listings, words]);
   const totalResults = results.length + matchingEvents.length + matchingListings.length;
 
   useEffect(() => {

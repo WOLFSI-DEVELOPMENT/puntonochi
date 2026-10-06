@@ -4,12 +4,22 @@ import { Place } from '../types';
 import { mockPlaces } from '../data';
 import React, { useEffect } from 'react';
 import CornerKit from '@cornerkit/core';
+import { getTotalHypes, HYPES_UPDATED_EVENT } from '../hypes';
 
 export function DestacadosPage({ onClose, onSelectBusiness }: { onClose: () => void, onSelectBusiness: (place: Place) => void }) {
-  // Use a nice randomized or highlight logic, for now we just show places with images
-  const places = React.useMemo(() => {
-    return mockPlaces.filter(p => p.images && p.images.length > 0);
+  const [hypeVersion, setHypeVersion] = React.useState(0);
+  React.useEffect(() => {
+    const refresh = () => setHypeVersion((version) => version + 1);
+    window.addEventListener(HYPES_UPDATED_EVENT, refresh);
+    window.addEventListener('storage', refresh);
+    return () => {
+      window.removeEventListener(HYPES_UPDATED_EVENT, refresh);
+      window.removeEventListener('storage', refresh);
+    };
   }, []);
+  const places = React.useMemo(() => mockPlaces
+    .filter((place) => place.images?.length)
+    .sort((a, b) => getTotalHypes(b.id) - getTotalHypes(a.id) || (b.rating || 0) - (a.rating || 0)), [hypeVersion]);
   useEffect(() => {
     const timer = setTimeout(() => {
       const ck = new CornerKit();

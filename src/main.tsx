@@ -5,6 +5,7 @@ import './index.css';
 import { registerHyperellipse } from 'hyperellipse';
 
 registerHyperellipse();
+document.documentElement.classList.add('dark');
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

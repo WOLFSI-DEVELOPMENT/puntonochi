@@ -1,12 +1,13 @@
 import { lazy, Suspense, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Share, Phone, Globe, ShoppingBag, MoreHorizontal, Navigation, BookOpen, Link, MapPin, Map as MapIcon, MessageCircle, Twitter, Facebook, QrCode, Star, Instagram } from 'lucide-react';
+import { X, Share, Phone, Globe, ShoppingBag, MoreHorizontal, Navigation, BookOpen, Link, MapPin, Map as MapIcon, MessageCircle, Twitter, Facebook, QrCode, Star, Instagram, Sparkles, HeartHandshake } from 'lucide-react';
 import { Place, Review } from '../types';
 import { mockPlaces } from '../data';
 import CornerKit from '@cornerkit/core';
 import { CommunityActionsSheet } from './CommunityActionsSheet';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 import { VerifiedBusinessName } from './VerifiedBusinessName';
+import { canHypePlaceToday, getTotalHypes, HYPES_UPDATED_EVENT, hypePlace } from '../hypes';
 
 const BusinessLocationMap = lazy(() => import('./BusinessLocationMap').then((module) => ({ default: module.BusinessLocationMap })));
 const BusinessMapOverlay = lazy(() => import('./BusinessLocationMap').then((module) => ({ default: module.BusinessMapOverlay })));
@@ -23,6 +24,9 @@ type GooglePlaceDetails = { weekdayDescriptions: string[]; reviews: GoogleReview
 
 export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { place: Place, onClose: () => void, onSelectBusiness: (place: Place) => void }) {
   const [communityReviews, setCommunityReviews] = useState<Review[]>([]);
+  const [hypeCount, setHypeCount] = useState(() => getTotalHypes(place.id));
+  const [canHypeToday, setCanHypeToday] = useState(() => canHypePlaceToday(place.id));
+  const [showHypeSheet, setShowHypeSheet] = useState(false);
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const [googleDetails, setGoogleDetails] = useState<GooglePlaceDetails | null>(null);
   const [showMapSelector, setShowMapSelector] = useState(false);
@@ -61,6 +65,19 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
       return response.json() as Promise<GooglePlaceDetails>;
     }).then((details) => { if (active) setGoogleDetails(details); }).catch(() => undefined);
     return () => { active = false; };
+  }, [place.id]);
+
+  useEffect(() => {
+    const updateHypes = () => {
+      setHypeCount(getTotalHypes(place.id));
+      setCanHypeToday(canHypePlaceToday(place.id));
+    };
+    window.addEventListener(HYPES_UPDATED_EVENT, updateHypes);
+    window.addEventListener('storage', updateHypes);
+    return () => {
+      window.removeEventListener(HYPES_UPDATED_EVENT, updateHypes);
+      window.removeEventListener('storage', updateHypes);
+    };
   }, [place.id]);
 
   useEffect(() => {
@@ -132,7 +149,6 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
     window.open(url, '_blank', 'noopener,noreferrer');
     setShareFeedback('Se abrió la opción para compartir.');
   };
-
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -211,7 +227,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
         className="fixed inset-x-0 bottom-0 z-[61] h-[min(92dvh,900px)] max-h-[calc(100dvh-env(safe-area-inset-top))] overflow-hidden rounded-t-[32px] bg-[#171717] flex flex-col"
       >
         <SheetDragHandle controls={detailDrag.dragControls} tone="dark" className="absolute inset-x-0 top-0 z-20" />
-        
+
         <div data-no-tab-swipe className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-8">
           {/* Hero Section */}
           <div className="relative w-full h-[240px]">
@@ -231,7 +247,11 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
                 <X className="w-5 h-5" strokeWidth={1.5} />
               </button>
             </div>
-            
+            <button type="button" disabled={!canHypeToday} onClick={() => setShowHypeSheet(true)} className="absolute left-4 top-4 inline-flex min-h-9 items-center gap-1.5 rounded-full !bg-white px-3 text-[13px] font-bold !text-neutral-950 shadow-none transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-55" aria-label={canHypeToday ? `Echar porras a ${place.name}` : `Ya echaste porras a ${place.name} hoy`}>
+              <HeartHandshake aria-hidden="true" className="h-4 w-4" />
+              Apoyar
+            </button>
+
             {/* Logo */}
             <div className="absolute -bottom-10 left-5 w-20 h-20 rounded-full border-4 border-[#171717] bg-[#292a2d] overflow-hidden">
               <img src={place.logo} alt={place.name} className="w-full h-full object-cover" />
@@ -349,7 +369,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
                 </div>
               </div>
             </div>
-            
+
             <Suspense fallback={<section className="mb-6"><h3 className="mb-3 text-[18px] font-bold text-white">Mapa</h3><div className="h-[210px] animate-pulse rounded-[24px] bg-[#292a2d]"/></section>}>
               <BusinessLocationMap place={place} />
             </Suspense>
@@ -489,7 +509,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
               className="fixed inset-x-0 bottom-0 z-[73] rounded-t-[24px] bg-[#202124] p-5 pb-8 text-white shadow-[0_-10px_40px_rgba(0,0,0,0.35)]"
             >
               <SheetDragHandle controls={mapDrag.dragControls} className="-mx-5 -mt-5 mb-2" />
-              
+
               <div className="flex justify-between items-center mt-3 mb-6">
                 <h3 className="font-bold text-lg text-white">Abrir en...</h3>
                 <button 
@@ -558,7 +578,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
               <p className="text-neutral-500 text-[15px] leading-snug mb-6 px-2">
                 Estás a punto de salir de la aplicación para visitar un sitio web de terceros (<span className="font-semibold text-neutral-700">{place.name}</span>). ¿Estás seguro de que deseas continuar?
               </p>
-              
+
               <div className="flex gap-3 w-full">
                 <button 
                   onClick={() => setShowWebsiteWarning(false)}
@@ -613,7 +633,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
               className="fixed inset-x-0 bottom-0 z-[73] bg-white rounded-t-[24px] overflow-hidden flex flex-col p-5 pb-8 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]"
             >
               <SheetDragHandle controls={phoneDrag.dragControls} tone="dark" className="-mx-5 -mt-5 mb-2" />
-              
+
               <div className="mt-6 mb-2 flex flex-col gap-3">
                 {place.phone && <a href={`tel:${place.phone.replace(/[^\d+]/g, '')}`} className="w-full bg-[#f1f3f4] text-neutral-900 font-bold text-[16px] py-4 rounded-full flex items-center justify-center active:bg-[#e8eaed] transition-colors"><Phone className="w-5 h-5 mr-2" strokeWidth={2} /><span><span className="mr-2 text-[12px] font-medium text-neutral-500">Celular</span>{place.phone}</span></a>}
                 {place.alternatePhone && <a href={`tel:${place.alternatePhone.replace(/[^\d+]/g, '')}`} className="w-full bg-[#f1f3f4] text-neutral-900 font-bold text-[16px] py-4 rounded-full flex items-center justify-center active:bg-[#e8eaed] transition-colors"><Phone className="w-5 h-5 mr-2" strokeWidth={2} /><span><span className="mr-2 text-[12px] font-medium text-neutral-500">Teléfono</span>{place.alternatePhone}</span></a>}
@@ -648,7 +668,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
               className="fixed inset-x-0 bottom-0 z-[73] h-[85vh] bg-white rounded-t-[32px] overflow-hidden flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.1)]"
             >
               <SheetDragHandle controls={menuDrag.dragControls} tone="dark" className="absolute inset-x-0 top-0 z-20" />
-              
+
               <div className="flex items-center justify-between px-5 pt-8 pb-4 border-b border-black/5 shrink-0">
                 <h2 className="text-xl font-bold text-neutral-900">Menú</h2>
                 <button 
@@ -713,7 +733,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
               <button type="button" onClick={() => { void copyBusinessLink(); }} className="mb-5 flex min-w-0 items-center gap-2 rounded-full bg-neutral-100 px-4 py-3 text-left text-sm font-medium text-neutral-700">
                 <Link className="h-4 w-4 shrink-0"/><span className="truncate">{businessUrl}</span>
               </button>
-              
+
               <div className="flex justify-around mb-8 px-2">
                 <button type="button" onClick={() => { void copyBusinessLink(); }} className="flex flex-col items-center gap-2 group">
                   <div className="w-14 h-14 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-700 group-hover:bg-neutral-200 transition-colors">
@@ -754,6 +774,40 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
       </AnimatePresence>
       <AnimatePresence>
         {showCommunityActions && <CommunityActionsSheet place={place} initialMode={communityReviewMode} onReviewCreated={(review) => setCommunityReviews((current) => [review, ...current])} onClose={() => setShowCommunityActions(false)} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showHypeSheet && <>
+          <motion.button type="button" aria-label="Cerrar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowHypeSheet(false)} className="fixed inset-0 z-[120] cursor-default bg-black/65 backdrop-blur-sm" />
+          <motion.section role="dialog" aria-modal="true" aria-labelledby="hype-sheet-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 330 }} className="fixed inset-x-0 bottom-0 z-[121] mx-auto w-full max-w-lg rounded-t-[30px] bg-[#111214] px-5 pb-[max(24px,env(safe-area-inset-bottom))] pt-3 text-white shadow-2xl">
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/30" />
+            <button type="button" onClick={() => setShowHypeSheet(false)} aria-label="Cerrar hoja" className="absolute right-4 top-3 flex h-9 w-9 items-center justify-center rounded-full text-white/55 hover:bg-white/10 hover:text-white"><X className="h-5 w-5"/></button>
+            <div className="mx-auto flex min-h-36 max-w-xs flex-col items-center justify-center text-center">
+              <svg aria-hidden="true" viewBox="0 0 180 140" className="mb-2 h-32 w-40 overflow-visible">
+                <defs>
+                  <linearGradient id="hype-tail" x1="0" y1="1" x2="1" y2="0"><stop stopColor="#8B35FF"/><stop offset=".48" stopColor="#E447FF"/><stop offset="1" stopColor="#FFC84A"/></linearGradient>
+                  <linearGradient id="hype-star" x1=".25" y1="1" x2=".8" y2="0"><stop stopColor="#FFC43D"/><stop offset="1" stopColor="#FFF6A5"/></linearGradient>
+                  <filter id="hype-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                </defs>
+                <path d="M24 117 C40 88 70 56 105 45 C89 66 77 88 65 119 C54 130 38 129 24 117Z" fill="url(#hype-tail)" opacity=".94"/>
+                <path d="M31 119 C52 91 75 73 100 58 C79 82 69 101 61 121 C51 130 40 128 31 119Z" fill="#F178FF" opacity=".8"/>
+                <path d="M38 119 C57 97 72 87 91 76 C75 96 69 111 61 124 C52 130 44 127 38 119Z" fill="#9D55FF" opacity=".92"/>
+                <path d="M112 18 L124 43 L151 47 L132 66 L137 94 L112 81 L88 94 L93 66 L73 47 L100 43Z" fill="url(#hype-star)" stroke="#FFF6B4" strokeWidth="4" strokeLinejoin="round" filter="url(#hype-glow)"/>
+                <path d="M151 24 L154 34 L164 37 L154 40 L151 50 L148 40 L138 37 L148 34Z" fill="#FFE98A"/>
+                <circle cx="72" cy="39" r="3" fill="#E9A7FF"/><circle cx="52" cy="64" r="2" fill="#B986FF"/>
+              </svg>
+              <h2 id="hype-sheet-title" className="text-xl font-extrabold leading-tight">¡Ayuda a que {place.name} destaque!</h2>
+              <p className="mt-2 text-sm leading-relaxed text-white/60">Una porra ayuda a que más personas descubran este negocio.</p>
+            </div>
+            <div className="my-5 rounded-2xl bg-white/[0.06] px-4 py-3 text-center">
+              <p className="text-sm font-semibold">{hypeCount} {hypeCount === 1 ? 'porra' : 'porras'}</p>
+              <p className="mt-1 text-xs text-white/45">Conteo guardado en este dispositivo</p>
+            </div>
+            <button type="button" disabled={!canHypeToday} onClick={() => { if (hypePlace(place.id)) setShowHypeSheet(false); }} className="min-h-12 w-full rounded-full !bg-white px-5 text-sm font-bold !text-neutral-950 transition active:scale-[.99] disabled:cursor-not-allowed disabled:opacity-55">
+              {canHypeToday ? 'Apoyar' : 'Ya apoyaste hoy'}
+            </button>
+            <p className="mt-3 text-center text-[11px] text-white/40">Puedes echar porras a cada negocio una vez al día.</p>
+          </motion.section>
+        </>}
       </AnimatePresence>
     </>
   );

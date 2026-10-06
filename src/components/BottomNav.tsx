@@ -18,12 +18,27 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
   const [menuOpen, setMenuOpen] = useState(false);
   const [design, setDesign] = useState<NavDesign>(getNavDesign);
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchUpdateTimer = useRef<number | null>(null);
+
+  const publishSearchQuery = (value: string) => {
+    if (searchUpdateTimer.current !== null) window.clearTimeout(searchUpdateTimer.current);
+    searchUpdateTimer.current = window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('appSearchQuery', { detail: value }));
+      searchUpdateTimer.current = null;
+    }, 90);
+  };
 
   const closeSearch = () => {
+    if (searchUpdateTimer.current !== null) window.clearTimeout(searchUpdateTimer.current);
+    searchUpdateTimer.current = null;
     setIsSearching(false);
     window.dispatchEvent(new CustomEvent('appSearchQuery', { detail: '' }));
     onCloseSearch();
   };
+
+  useEffect(() => () => {
+    if (searchUpdateTimer.current !== null) window.clearTimeout(searchUpdateTimer.current);
+  }, []);
 
   useEffect(() => {
     if (isSearching) inputRef.current?.focus();
@@ -76,7 +91,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
           </button>
         </> : <motion.div key="search" initial={{ opacity: 0, scale: .97 }} animate={{ opacity: 1, scale: 1 }} className={cn('flex h-[52px] w-full items-center rounded-full px-4 text-white', design === 'dynamic' ? 'liquid-glass' : 'bg-[#202124]/90 shadow-2xl backdrop-blur-2xl')}>
           <span className="material-symbols-rounded mr-3 shrink-0 text-[21px] font-bold text-white/50">search</span>
-          <input ref={inputRef} type="text" aria-label="Buscar en México" placeholder={activeTab === 'inicio' || activeTab === 'explorar' ? 'Buscar en México…' : 'Buscar en esta sección…'} className="search-input-fix w-full bg-transparent text-sm font-medium text-white outline-none placeholder:text-white/40" onChange={(event) => window.dispatchEvent(new CustomEvent('appSearchQuery', { detail: event.target.value }))} onKeyDown={(event) => { if (event.key === 'Escape') closeSearch(); }} />
+          <input ref={inputRef} type="text" aria-label="Buscar en México" placeholder={activeTab === 'inicio' || activeTab === 'explorar' ? 'Buscar en México…' : 'Buscar en esta sección…'} className="search-input-fix w-full bg-transparent text-sm font-medium text-white outline-none placeholder:text-white/40" onChange={(event) => publishSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') closeSearch(); }} />
           <button type="button" aria-label="Cancelar búsqueda" onClick={closeSearch} className="ml-2 shrink-0 rounded-full px-2 py-2 text-xs font-semibold text-white/75 hover:bg-white/10">Cancelar</button>
         </motion.div>}
       </div>
