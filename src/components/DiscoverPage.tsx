@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, Filter, Heart, House, Images, MapPin, Menu, MessageCircle, Plus, Search, Star, Store, UserRound, X } from 'lucide-react';
 import { CreatePostFlow } from './CreatePostFlow';
@@ -40,6 +40,11 @@ type DiscoveryCard = { kind: 'business'; key: string; place: Place } | { kind: '
 type AccountSummary = { id: string; name: string; picture: string | null };
 type BusinessPreferenceProfile = { searches: string[]; categories: Record<string, number>; viewed: string[] };
 const exploreCorners = new CornerKit();
+const discoveryCardVariants = {
+  enter: (direction: number) => ({ opacity: 0, x: direction * 44, scale: 0.985 }),
+  center: { opacity: 1, x: 0, scale: 1 },
+  exit: (direction: number) => ({ opacity: 0, x: direction * -32, scale: 0.99 }),
+};
 
 function AdSenseFeedCard({ slot }: { slot: string }) {
   const publisher = 'ca-pub-7029279570287128';
@@ -171,6 +176,7 @@ export function DiscoverPage({ onSelectBusiness, onPromoteBusiness, onOpenOwnPro
   });
   const [menuOpen, setMenuOpen] = useState(false);
   const [feedFilter, setFeedFilter] = useState<'all' | 'posts' | 'business' | 'events'>('all');
+  const [cardDirection, setCardDirection] = useState(1);
   const [feedLoading, setFeedLoading] = useState(true);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [events, setEvents] = useState<CommunityEvent[]>([]);
@@ -281,12 +287,16 @@ export function DiscoverPage({ onSelectBusiness, onPromoteBusiness, onOpenOwnPro
   }, [feedFilter, matchingBusinesses, visibleFeedItems]);
   useEffect(() => { setActiveCardIndex(0); }, [feedFilter, businessQuery]);
   useEffect(() => { if (discoveryCards.length) setActiveCardIndex((index) => Math.min(index, discoveryCards.length - 1)); }, [discoveryCards.length]);
-  useEffect(() => {
-    const timer = window.setTimeout(() => exploreCorners.applyAll('[data-explore-corner]', { radius: 55, smoothing: 1 }), 40);
-    return () => window.clearTimeout(timer);
+  useLayoutEffect(() => {
+    exploreCorners.applyAll('[data-explore-corner]', { radius: 55, smoothing: 1 });
   }, [activeCardIndex, discoveryCards.length, feedLoading]);
-  const moveCard = (direction: number) => { if (discoveryCards.length > 1) setActiveCardIndex((index) => (index + direction + discoveryCards.length) % discoveryCards.length); };
+  const moveCard = (direction: number) => { if (discoveryCards.length > 1) { setCardDirection(direction); setActiveCardIndex((index) => (index + direction + discoveryCards.length) % discoveryCards.length); } };
   const handleDragEnd = (_event: MouseEvent | TouchEvent | PointerEvent, info: { offset: { x: number }; velocity: { x: number } }) => { if (Math.abs(info.offset.x) > 40 || Math.abs(info.velocity.x) > 350) moveCard(info.offset.x < 0 ? 1 : -1); };
+  const activeCard = discoveryCards[activeCardIndex];
+  const ambientImage = activeCard?.kind === 'business' ? activeCard.place.images?.[0] || activeCard.place.logo
+    : activeCard?.kind === 'post' ? activeCard.post.coverUrl || activeCard.post.imageUrl
+    : activeCard?.kind === 'event' ? activeCard.event.imageUrl
+    : undefined;
 
   const filterOptions = [
     { id: 'all', label: 'Todo', icon: <Filter className="h-4 w-4"/> },
@@ -320,11 +330,12 @@ export function DiscoverPage({ onSelectBusiness, onPromoteBusiness, onOpenOwnPro
       {feedFilter === 'business' && <section aria-label="Buscar negocios" className="mb-4"><label className="flex h-11 items-center gap-2 rounded-full bg-[#202124] px-4 text-white/45"><Search className="h-4 w-4 shrink-0"/><input value={businessQuery} onChange={(event) => setBusinessQuery(event.target.value)} aria-label="Buscar negocios" placeholder="Busca negocios, categorías o servicios" className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-white/40"/>{businessQuery && <button type="button" onClick={() => setBusinessQuery('')} aria-label="Limpiar búsqueda" className="text-xs text-white/50">Limpiar</button>}</label></section>}
       <section aria-label="Descubre la comunidad" className="pt-1">
         <div className="mb-3 flex items-end justify-between px-1"><div><p className="text-[10px] font-semibold uppercase tracking-[.2em] text-white/40">PuntoNochi · Nochistlán</p><h1 className="mt-1 text-[21px] font-bold tracking-tight">{feedFilter === 'business' ? 'Negocios para descubrir' : feedFilter === 'events' ? 'Eventos cerca de ti' : feedFilter === 'posts' ? 'Lo que comparte la gente' : 'Descubre lo que pasa'}</h1></div><span className="text-[10px] font-medium text-white/45">{discoveryCards.length ? `${activeCardIndex + 1} / ${discoveryCards.length}` : ''}</span></div>
-        {feedLoading && !discoveryCards.length ? <div data-explore-corner role="status" aria-label="Cargando contenido" className="explore-card-skeleton relative mx-auto h-[min(67vh,590px)] min-h-[420px] max-w-[410px] overflow-hidden rounded-[28px] bg-[#1a1b1e]"><div className="explore-skeleton-shimmer absolute inset-0"/><div className="absolute inset-x-0 bottom-0 space-y-3 p-5"><div className="h-3 w-24 rounded-full bg-white/[.08]"/><div className="h-6 w-3/4 rounded-full bg-white/[.09]"/><div className="h-3 w-1/2 rounded-full bg-white/[.07]"/><div className="h-11 w-full rounded-full bg-white/[.09]"/></div></div>
-        : discoveryCards.length ? <div data-no-tab-swipe className="relative mx-auto h-[min(67vh,590px)] min-h-[420px] max-w-[410px] touch-pan-y select-none">
-          <AnimatePresence initial={false} mode="popLayout"><motion.div data-explore-corner key={discoveryCards[activeCardIndex]?.key} drag="x" dragDirectionLock dragConstraints={{ left: 0, right: 0 }} dragElastic={.12} onDragEnd={handleDragEnd} initial={{ opacity: .7, scale: .96 }} animate={{ opacity: 1, x: 0, scale: 1, rotate: 0 }} exit={{ opacity: .35, scale: .88 }} transition={{ type: 'spring', stiffness: 260, damping: 28, mass: .8 }} className="absolute inset-x-0 top-0 z-10 h-[calc(100%-8px)] touch-pan-y cursor-grab overflow-hidden rounded-[28px] bg-[#1a1b1e] shadow-[0_22px_70px_rgba(0,0,0,.48)] active:cursor-grabbing">{discoveryCards[activeCardIndex] && renderDiscoveryCard(discoveryCards[activeCardIndex], onSelectBusiness, savePreferences, (url, alt) => setOpenedImage({ url, alt }), openEvent, (id) => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: id })), onPromoteBusiness)}</motion.div></AnimatePresence>
+        {feedLoading && !discoveryCards.length ? <div data-explore-corner role="status" aria-label="Cargando contenido" className="explore-card-skeleton relative mx-auto h-[min(67vh,590px)] min-h-[420px] max-w-[410px] overflow-hidden rounded-[55px] bg-[#1a1b1e]"><div className="explore-skeleton-shimmer absolute inset-0"/><div className="absolute inset-x-0 bottom-0 space-y-3 p-5"><div className="h-3 w-24 rounded-full bg-white/[.08]"/><div className="h-6 w-3/4 rounded-full bg-white/[.09]"/><div className="h-3 w-1/2 rounded-full bg-white/[.07]"/><div className="h-11 w-full rounded-full bg-white/[.09]"/></div></div>
+        : discoveryCards.length ? <div data-no-tab-swipe className="relative isolate mx-auto h-[min(67vh,590px)] min-h-[420px] max-w-[410px] touch-pan-y select-none">
+          {ambientImage ? <img aria-hidden="true" src={ambientImage} alt="" className="pointer-events-none absolute -inset-x-2 top-3 z-0 h-[calc(100%-8px)] w-[calc(100%+1rem)] scale-[.94] rounded-[55px] object-cover opacity-55 blur-[38px]" /> : <div aria-hidden="true" className="pointer-events-none absolute inset-x-2 top-5 z-0 h-[calc(100%-24px)] rounded-[55px] bg-[radial-gradient(ellipse_at_25%_20%,rgba(59,130,246,.34),transparent_45%),radial-gradient(ellipse_at_80%_80%,rgba(168,85,247,.32),transparent_48%)] blur-[38px]" />}
+          <AnimatePresence initial={false} mode="popLayout" custom={cardDirection}><motion.div data-explore-corner key={discoveryCards[activeCardIndex]?.key} custom={cardDirection} variants={discoveryCardVariants} drag="x" dragDirectionLock dragConstraints={{ left: 0, right: 0 }} dragElastic={.12} onDragEnd={handleDragEnd} initial="enter" animate="center" exit="exit" transition={{ type: 'spring', stiffness: 190, damping: 27, mass: .9 }} className="absolute inset-x-0 top-0 z-10 h-[calc(100%-8px)] touch-pan-y cursor-grab overflow-hidden rounded-[55px] bg-[#1a1b1e] shadow-[0_22px_70px_rgba(0,0,0,.48)] active:cursor-grabbing">{discoveryCards[activeCardIndex] && renderDiscoveryCard(discoveryCards[activeCardIndex], onSelectBusiness, savePreferences, (url, alt) => setOpenedImage({ url, alt }), openEvent, (id) => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: id })), onPromoteBusiness)}</motion.div></AnimatePresence>
         </div>
-        : <div data-explore-corner className="flex min-h-[360px] flex-col items-center justify-center rounded-[28px] bg-[#1a1b1e] px-6 text-center"><p className="text-sm font-semibold text-white/85">{feedFilter === 'business' ? 'No encontramos negocios' : feedItems.length ? 'No hay contenido en esta categoría' : 'Aquí aparecerá la comunidad'}</p><p className="mt-2 max-w-xs text-xs leading-relaxed text-white/45">{feedFilter === 'business' ? 'Prueba con otro nombre o categoría.' : 'Comparte un momento o publica un evento para empezar.'}</p><button type="button" onClick={() => setShowCreateFlow(true)} className="mt-4 rounded-full bg-white px-4 py-2.5 text-xs font-bold text-black">Crear publicación</button></div>}
+        : <div data-explore-corner className="flex min-h-[360px] flex-col items-center justify-center rounded-[55px] bg-[#1a1b1e] px-6 text-center"><p className="text-sm font-semibold text-white/85">{feedFilter === 'business' ? 'No encontramos negocios' : feedItems.length ? 'No hay contenido en esta categoría' : 'Aquí aparecerá la comunidad'}</p><p className="mt-2 max-w-xs text-xs leading-relaxed text-white/45">{feedFilter === 'business' ? 'Prueba con otro nombre o categoría.' : 'Comparte un momento o publica un evento para empezar.'}</p><button type="button" onClick={() => setShowCreateFlow(true)} className="mt-4 rounded-full bg-white px-4 py-2.5 text-xs font-bold text-black">Crear publicación</button></div>}
         {discoveryCards.length > 1 && <div className="mt-4 flex items-center justify-center gap-6"><button type="button" aria-label="Anterior" onClick={() => moveCard(-1)} className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[.08] text-white/85 transition-colors hover:bg-white/[.14]"><ChevronLeft aria-hidden="true" className="h-6 w-6" strokeWidth={2}/></button><div className="flex min-h-12 items-center gap-2">{discoveryCards.slice(Math.max(0, activeCardIndex - 2), Math.min(discoveryCards.length, activeCardIndex + 3)).map((item) => <span key={item.key} className={`h-2 rounded-full transition-all ${item.key === discoveryCards[activeCardIndex]?.key ? 'w-6 bg-white' : 'w-2 bg-white/30'}`} />)}</div><button type="button" aria-label="Siguiente" onClick={() => moveCard(1)} className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[.08] text-white/85 transition-colors hover:bg-white/[.14]"><ChevronRight aria-hidden="true" className="h-6 w-6" strokeWidth={2}/></button></div>}
       </section>
     </div>

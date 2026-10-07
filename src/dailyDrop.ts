@@ -109,3 +109,11 @@ export function getDailyDropQuestion(date = new Date()) {
   const index = ((daysSinceFirstDrop % dailyQuestions.length) + dailyQuestions.length) % dailyQuestions.length;
   return dailyQuestions[index];
 }
+
+export function getDailyDropChoices(question: string) {
+  const colonIndex = question.lastIndexOf(':');
+  const preferenceMatch = question.match(/(?:más de|prefieres)\s+(.+?)[?.!]?$/i);
+  const source = colonIndex >= 0 ? question.slice(colonIndex + 1) : preferenceMatch?.[1] || '';
+  const choices = source.replace(/[¿?!.]/g, '').split(/\s*,\s*|\s+o\s+|\s+y\s+/i).map((choice) => choice.trim()).filter(Boolean);
+  return choices.length > 1 ? choices.slice(0, 3) : [];
+}

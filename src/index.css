@@ -392,6 +392,11 @@
   color: #111111 !important;
 }
 
+html.dark #app-root .home-footer {
+  background-color: #ffffff !important;
+  color: #202124 !important;
+}
+
 /* Explicit light controls inside the menu-camera and public menu screens. */
 .dark .menu-qr-flow { color: #171717 !important; color-scheme: light; background-color: #f4f4f2 !important; }
 .dark .menu-qr-flow [class~="bg-white"] { background-color: #ffffff !important; }

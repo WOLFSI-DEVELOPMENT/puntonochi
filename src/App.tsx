@@ -12,10 +12,12 @@ import { BusinessDetailSheet } from './components/BusinessDetailSheet';
 import { HomeVideosSection } from './components/HomeVideosSection';
 import { FlipText } from './components/FlipText';
 import { VerifiedBusinessName } from './components/VerifiedBusinessName';
-import { GuideComposerOverlay, HomeGuidesSection, LocalGuidesPage } from './components/LocalGuidesPage';
+import { HomeArticlesSection } from './components/HomeArticlesSection';
+import { articleCatalog } from './data/articles-index';
 import { AutoLayoutRoot } from './layout/AutoLayout';
 const VideosPage = React.lazy(() => import('./components/VideosPage').then((module) => ({ default: module.VideosPage })));
 const NewsPage = React.lazy(() => import('./components/NewsPage').then((module) => ({ default: module.NewsPage })));
+const ArticlesPage = React.lazy(() => import('./components/ArticlesPage').then((module) => ({ default: module.ArticlesPage })));
 const CreatePage = React.lazy(() => import('./components/CreatePage').then((module) => ({ default: module.CreatePage })));
 import { SearchPage, AskNochiPage } from './components/SearchPage';
 import { BusinessPromotionSheet } from './components/BusinessPromotionSheet';
@@ -35,7 +37,7 @@ import { PublicMenuPage } from './components/PublicMenuPage';
 import { PageLoadingSkeleton } from './components/PageLoadingSkeleton';
 import { Analytics } from '@vercel/analytics/react';
 import { getTotalHypes, HYPES_UPDATED_EVENT } from './hypes';
-import { getDailyDropQuestion } from './dailyDrop';
+import { getDailyDropChoices, getDailyDropQuestion } from './dailyDrop';
 
 const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
 const WELCOME_SEEN_KEY = 'puntonochi-welcome-seen-v1';
@@ -58,6 +60,7 @@ const appCornerTargets: [string, { radius: number; smoothing: number }][] = [
   ['.ck-home-category-card', { radius: 24, smoothing: 1 }],
   ['.ck-home-suggested-card', { radius: 30, smoothing: 1 }],
   ['.ck-home-favorite-card', { radius: 24, smoothing: 1 }],
+  ['.ck-home-daily-drop-card', { radius: 24, smoothing: 1 }],
 ];
 
 function readLocalList(key: string): string[] {
@@ -148,8 +151,8 @@ export default function App() {
         initialTab = 'noticias';
       } else if (parts[0] === 'ask-nochi') {
         initialTab = 'ask-nochi';
-      } else if (parts[0] === 'explorar' || parts[0] === 'guardados' || parts[0] === 'videos' || parts[0] === 'mercado' || parts[0] === 'noticias' || parts[0] === 'mapa' || parts[0] === 'crear' || parts[0] === 'guias') {
-        initialTab = parts[0] === 'mapa' || parts[0] === 'mercado' ? 'videos' : parts[0];
+      } else if (parts[0] === 'explorar' || parts[0] === 'guardados' || parts[0] === 'videos' || parts[0] === 'mercado' || parts[0] === 'noticias' || parts[0] === 'mapa' || parts[0] === 'crear' || parts[0] === 'guias' || parts[0] === 'articulos') {
+        initialTab = parts[0] === 'mapa' || parts[0] === 'mercado' ? 'videos' : parts[0] === 'articulos' ? 'guias' : parts[0];
       } else {
         // It might be a category name
         const cat = categories.find(c => c.name.toLowerCase() === parts[0].toLowerCase());
@@ -183,7 +186,6 @@ export default function App() {
   const [showDestacados, setShowDestacados] = useState(false);
   const [showBusinessPromotion, setShowBusinessPromotion] = useState(false);
   const [showBusinessSubmission, setShowBusinessSubmission] = useState(false);
-  const [showGuideComposer, setShowGuideComposer] = useState(false);
   const [selectedColonia, setSelectedColonia] = useState<Colonia | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(init.initialCategory);
   const [selectedBusiness, setSelectedBusiness] = useState<Place | null>(init.initialBusiness);
@@ -191,6 +193,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(init.initialTab);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [dailyDropFlipped, setDailyDropFlipped] = useState(false);
+  const dailyDropQuestion = getDailyDropQuestion();
+  const dailyDropChoices = getDailyDropChoices(dailyDropQuestion);
   const loading = false;
   const [showWelcome, setShowWelcome] = useState(() => {
     if (!init.initShowWelcome) return false;
@@ -257,7 +262,7 @@ export default function App() {
   useEffect(() => {
     const handleTabNavigation = (event: Event) => {
       const tab = (event as CustomEvent<string>).detail;
-      if (tab === 'noticias') setActiveTab('noticias');
+      if (tab === 'noticias' || tab === 'inicio' || tab === 'guias') setActiveTab(tab);
     };
     window.addEventListener('navigate-tab', handleTabNavigation);
     return () => window.removeEventListener('navigate-tab', handleTabNavigation);
@@ -503,19 +508,21 @@ export default function App() {
       path = `/categories`;
     } else if (showColonias) {
       path = `/colonias`;
-    } else if (activeTab === 'noticias' && /^\/eventos\/[^/]+\/?$/.test(window.location.pathname)) {
+    } else if ((activeTab === 'noticias' && /^\/eventos\/[^/]+\/?$/.test(window.location.pathname)) || (activeTab === 'guias' && /^\/articulos\/[^/]+\/?$/.test(window.location.pathname))) {
       path = window.location.pathname;
     } else if (activeTab !== 'inicio') {
-      path = activeTab === 'videos' ? '/mercado' : `/${activeTab}`;
+      path = activeTab === 'videos' ? '/mercado' : activeTab === 'guias' ? '/articulos' : `/${activeTab}`;
     }
     
-    window.history.pushState({}, '', path);
+    if (window.location.pathname !== path) window.history.pushState({}, '', path);
   }, [selectedBusiness, selectedCategory, showAllCategories, showColonias, activeTab, showSearch, showAdminPage, publicMenuId]);
 
   useEffect(() => {
     let title = 'PuntoNochi | Lugares, negocios y noticias de Nochistlán';
     let description = 'Descubre restaurantes, cafeterías, hoteles, servicios, videos y noticias de Nochistlán de Mejía, Zacatecas.';
     let noIndex = false;
+    const articleSlug = activeTab === 'guias' ? window.location.pathname.match(/^\/articulos\/([^/]+)\/?$/)?.[1] : undefined;
+    const routeArticle = articleSlug ? articleCatalog.find((article) => article.slug === decodeURIComponent(articleSlug)) : undefined;
 
     if (publicMenuId) {
       title = 'Menú digital | PuntoNochi';
@@ -547,8 +554,8 @@ export default function App() {
       title = 'Videos de Nochistlán | PuntoNochi';
       description = 'Mira videos cortos y largos sobre lugares y novedades de Nochistlán.';
     } else if (activeTab === 'guias') {
-      title = 'Guías locales de Nochistlán | PuntoNochi';
-      description = 'Explora y comparte guías locales con recomendaciones de la comunidad de Nochistlán.';
+      title = routeArticle ? `${routeArticle.title} | Artículos de Nochistlán | PuntoNochi` : 'Artículos de Nochistlán | PuntoNochi';
+      description = routeArticle?.summary || 'Historias, cultura y lugares para conocer mejor Nochistlán de Mejía.';
     } else if (activeTab === 'noticias') {
       title = 'Noticias de México y Nochistlán | PuntoNochi';
       description = 'Consulta noticias y videos informativos de México y Nochistlán en PuntoNochi.';
@@ -579,7 +586,15 @@ export default function App() {
     if (canonical) canonical.href = `${SEO_SITE_ORIGIN}${window.location.pathname}`;
 
     const pageUrl = `${SEO_SITE_ORIGIN}${window.location.pathname}`;
-    const pageSchema: Record<string, unknown> = selectedBusiness ? {
+    const pageSchema: Record<string, unknown> = routeArticle ? {
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: routeArticle.title,
+      description: routeArticle.summary,
+      articleSection: routeArticle.category,
+      mainEntityOfPage: pageUrl,
+      publisher: { '@type': 'Organization', name: 'PuntoNochi', url: SEO_SITE_ORIGIN },
+    } : selectedBusiness ? {
       '@context': 'https://schema.org',
       '@type': 'LocalBusiness',
       '@id': `${pageUrl}#business`,
@@ -640,7 +655,7 @@ export default function App() {
   if (publicMenuId) return <PublicMenuPage id={publicMenuId}/>;
 
   return (
-    <AutoLayoutRoot id="app-root" className={`auto-layout-root relative min-h-screen bg-[#f8f9fa] ${activeTab === 'explorar' ? 'pb-0' : 'pb-36'} font-sans text-neutral-900 selection:bg-blue-100`} style={{ fontFamily: "'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif" }}>
+    <AutoLayoutRoot id="app-root" className={`auto-layout-root relative min-h-screen bg-[#f8f9fa] ${activeTab === 'explorar' || activeTab === 'inicio' ? 'pb-0' : 'pb-36'} font-sans text-neutral-900 selection:bg-blue-100`} style={{ fontFamily: "'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif" }}>
       {/* Dynamic Main Content based on activeTab */}
       <AnimatePresence mode="wait" initial={false}>
       {activeTab === 'inicio' && (
@@ -660,10 +675,22 @@ export default function App() {
               <FlipText>Descubre</FlipText><br/>
               <FlipText className="text-[#1a73e8]">Nochistlán</FlipText>
             </h1>
-            <article aria-label="Daily Drop: pregunta del día" className="mt-4 rounded-[24px] bg-[#292a2d] px-6 py-5 text-white">
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Daily Drop · pregunta del día</p>
-              <p className="mt-2 text-[17px] font-semibold leading-snug">{getDailyDropQuestion()}</p>
-            </article>
+            <div className="mt-4 [perspective:1200px]">
+              <motion.div role="group" aria-label="Pregunta del día" className="ck-home-daily-drop-card relative min-h-[156px] rounded-[24px] bg-[#292a2d] text-white">
+                <AnimatePresence mode="wait" initial={false}>
+                  {!dailyDropFlipped ? <motion.button key="daily-drop-question" type="button" onClick={() => setDailyDropFlipped(true)} aria-label="Voltear para ver la respuesta del día" initial={{ opacity: 0, scaleX: 0.94 }} animate={{ opacity: 1, scaleX: 1 }} exit={{ opacity: 0, scaleX: 0.94 }} transition={reduceMotion ? { duration: 0.01 } : { duration: 0.18, ease: 'easeInOut' }} className="absolute inset-0 flex w-full flex-col items-start justify-center rounded-[24px] px-6 py-5 text-left">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Pregunta del día</span>
+                    <span className="mt-2 text-[18px] font-semibold leading-snug">{dailyDropQuestion}</span>
+                    <span className="mt-3 text-[11px] font-medium text-white/40">Toca para ver la respuesta</span>
+                  </motion.button> : <motion.button key="daily-drop-answer" type="button" onClick={() => setDailyDropFlipped(false)} aria-label="Volver a la pregunta del día" initial={{ opacity: 0, scaleX: 0.94 }} animate={{ opacity: 1, scaleX: 1 }} exit={{ opacity: 0, scaleX: 0.94 }} transition={reduceMotion ? { duration: 0.01 } : { duration: 0.18, ease: 'easeInOut' }} className="absolute inset-0 flex w-full flex-col items-start justify-center rounded-[24px] px-6 py-5 text-left">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Respuesta del día</span>
+                    <span className="mt-2 text-sm font-semibold leading-snug">{dailyDropChoices.length ? 'Hoy se antoja:' : 'Nuestra recomendación de hoy:'}</span>
+                    <span aria-live="polite" className="mt-2 text-base font-semibold leading-snug text-white">{dailyDropChoices.length ? dailyDropChoices.join(' · ') : 'Algo rico, recién preparado y de un negocio local.'}</span>
+                    <span className="mt-3 text-[11px] font-medium text-white/40">Toca para volver</span>
+                  </motion.button>}
+                </AnimatePresence>
+              </motion.div>
+            </div>
           </section>
           <>
           {/* Personalized suggestions */}
@@ -783,7 +810,7 @@ export default function App() {
             </div>
           </section>}
 
-          <HomeGuidesSection onViewAll={() => setActiveTab('guias')} onCreateGuide={() => setShowGuideComposer(true)} />
+          <HomeArticlesSection onViewAll={() => setActiveTab('guias')} onOpenArticle={(slug) => { window.history.pushState({}, '', `/articulos/${encodeURIComponent(slug)}`); setActiveTab('guias'); }} />
           <HomeVideosSection onViewAll={() => setActiveTab('noticias')} />
 
           <section className="mb-10">
@@ -922,6 +949,21 @@ export default function App() {
             </div>
             <button type="button" onClick={() => setShowBusinessSubmission(true)} style={{ backgroundColor: '#ffffff', color: '#111111' }} className="w-full rounded-full !bg-white px-6 py-3.5 text-sm font-bold !text-black transition-transform active:scale-[0.99]">Agrega tu negocio</button>
           </section>
+          <footer aria-label="Información y navegación de PuntoNochi" className="home-footer relative left-1/2 mt-12 min-h-[250px] w-screen -translate-x-1/2 overflow-hidden rounded-t-[48px] bg-white px-6 pb-[calc(env(safe-area-inset-bottom,0px)+92px)] pt-9 text-[#202124]">
+            <div aria-hidden="true" className="pointer-events-none absolute left-1/2 top-12 h-20 w-[min(84%,520px)] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(96,115,255,.18),rgba(194,104,223,.12)_45%,rgba(255,170,92,.08)_68%,transparent_100%)] blur-2xl" />
+            <div className="relative z-10 mx-auto flex w-full max-w-md items-center justify-center gap-5">
+              <img src="https://crisats.site/nochistlangobmx/wp-content/uploads/2017/02/ESCUDO_bco-1.png" alt="Escudo de Nochistlán" loading="lazy" decoding="async" className="h-[62px] min-w-0 flex-1 object-contain brightness-0" />
+              <img src="https://www.isto.international/wp-content/uploads/2020/01/TURISMO_vertical_TURISMO_vertical1.png" alt="Turismo" loading="lazy" decoding="async" className="h-[62px] min-w-0 flex-1 object-contain" />
+              <img src="https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9e/PueblosM%C3%A1gicos.svg/1280px-PueblosM%C3%A1gicos.svg.png?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=thumbnail" alt="Pueblos Mágicos" loading="lazy" decoding="async" className="h-[62px] min-w-0 flex-1 object-contain" />
+            </div>
+            <nav aria-label="Enlaces del pie de página" className="relative z-10 mx-auto mt-8 flex max-w-md flex-wrap items-center justify-center gap-x-6 gap-y-3 border-t border-[#202124]/10 pt-5 text-[13px] font-semibold text-[#202124]/70">
+              <button type="button" onClick={() => setActiveTab('inicio')} className="transition-colors hover:text-[#202124]">Inicio</button>
+              <button type="button" onClick={() => setActiveTab('explorar')} className="transition-colors hover:text-[#202124]">Explorar</button>
+              <button type="button" onClick={() => setActiveTab('guias')} className="transition-colors hover:text-[#202124]">Artículos</button>
+              <button type="button" onClick={() => setActiveTab('noticias')} className="transition-colors hover:text-[#202124]">Noticias</button>
+            </nav>
+            <p className="relative z-10 mt-6 text-center text-[11px] text-[#202124]/45">© {new Date().getFullYear()} PuntoNochi · Nochistlán, Zacatecas</p>
+          </footer>
           </>
         </motion.main>
       )}
@@ -948,7 +990,7 @@ export default function App() {
         {activeTab === 'noticias' && (
           <motion.div key="news-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<PageLoadingSkeleton page="news"/>}><NewsPage key="noticias" /></React.Suspense></motion.div>
         )}
-        {activeTab === 'guias' && <motion.div key="local-guides-page" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .18 }}><LocalGuidesPage onCreateGuide={() => setShowGuideComposer(true)}/></motion.div>}
+        {activeTab === 'guias' && <motion.div key="articles-page" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .18 }}><React.Suspense fallback={<div className="min-h-screen bg-[#111214]"/>}><ArticlesPage /></React.Suspense></motion.div>}
       </AnimatePresence>
 
       <AnimatePresence>
@@ -967,7 +1009,6 @@ export default function App() {
         {showAdminPage && <AdminPage key="admin-page" onClose={() => setShowAdminPage(false)} />}
         {showBusinessPromotion && <BusinessPromotionSheet key="business-promotion" onClose={() => setShowBusinessPromotion(false)} />}
         {showBusinessSubmission && <BusinessSubmissionSheet key="business-submission" onClose={() => setShowBusinessSubmission(false)} />}
-        {showGuideComposer && <GuideComposerOverlay key="guide-composer-overlay" onClose={() => setShowGuideComposer(false)}/>}
         {showSearch && (
           <SearchPage
             key="search-page"
