@@ -671,10 +671,13 @@ export default function App() {
               {signedInAccount.picture ? <img src={signedInAccount.picture} alt="" referrerPolicy="no-referrer" className="h-full w-full rounded-full object-cover"/> : <span className="flex h-full w-full items-center justify-center rounded-full bg-blue-500 text-sm font-bold">{signedInAccount.name.slice(0, 1).toUpperCase()}</span>}
             </button>}
             </div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-neutral-900">
-              <FlipText>Descubre</FlipText><br/>
-              <FlipText className="text-[#1a73e8]">Nochistlán</FlipText>
-            </h1>
+            <div className="relative mt-2 max-w-[560px]">
+              <h1 className="text-[clamp(42px,11vw,64px)] font-extrabold leading-[.91] tracking-[-.055em] text-white">
+                <FlipText>Descubre</FlipText><br/>
+                <FlipText className="text-[#d8e7ff]">Nochistlán</FlipText>
+              </h1>
+            </div>
+            <p className="mt-2 max-w-[430px] pl-1 text-[17px] font-medium leading-[1.22] tracking-[-.02em] text-[#d8e7ff] sm:text-[19px]">Negocios, lugares, eventos y más...<br/>todo en un solo lugar.</p>
             <div className="mt-4 [perspective:1200px]">
               <motion.div role="group" aria-label="Pregunta del día" className="ck-home-daily-drop-card relative min-h-[156px] rounded-[24px] bg-[#292a2d] text-white">
                 <AnimatePresence mode="wait" initial={false}>
@@ -1087,3 +1090,4 @@ export default function App() {
     </AutoLayoutRoot>
   );
 }
+
