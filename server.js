@@ -2,8 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import dotenv from 'dotenv';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
 import { neon } from '@neondatabase/serverless';
+import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse } from '@simplewebauthn/server';
 import { OAuth2Client } from 'google-auth-library';
 import { GoogleGenAI } from '@google/genai';
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
@@ -62,6 +64,8 @@ const ACCOUNT_COOKIE = 'puntonochi_account';
 const ACCOUNT_OAUTH_STATE_COOKIE = 'puntonochi_account_oauth_state';
 const ACCOUNT_FACEBOOK_OAUTH_STATE_COOKIE = 'puntonochi_account_facebook_oauth_state';
 const ACCOUNT_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
+const scrypt = promisify(scryptCallback);
+const PASSKEY_CHALLENGE_COOKIE = 'puntonochi_passkey_challenge';
 const ADMIN_EMAIL_ALLOWLIST = new Set([
   'survivalcreativeminecraftadven@gmail.com',
   'rocioramire1976@gmail.com',
@@ -106,6 +110,25 @@ const ensureAccountSchema = () => {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
     await sql`CREATE INDEX IF NOT EXISTS user_account_sessions_expiry_idx ON user_account_sessions (expires_at)`;
+    await sql`CREATE TABLE IF NOT EXISTS account_phone_credentials (
+      phone_number TEXT PRIMARY KEY,
+      google_sub TEXT NOT NULL UNIQUE REFERENCES user_accounts(google_sub) ON DELETE CASCADE,
+      password_salt TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+    await sql`CREATE TABLE IF NOT EXISTS account_passkeys (
+      credential_id TEXT PRIMARY KEY,
+      google_sub TEXT NOT NULL REFERENCES user_accounts(google_sub) ON DELETE CASCADE,
+      public_key TEXT NOT NULL,
+      counter BIGINT NOT NULL DEFAULT 0,
+      transports TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+      device_type TEXT NOT NULL DEFAULT 'singleDevice',
+      backed_up BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+    await sql`CREATE INDEX IF NOT EXISTS account_passkeys_user_idx ON account_passkeys (google_sub)`;
     await sql`CREATE TABLE IF NOT EXISTS account_follows (
       follower_google_sub TEXT NOT NULL REFERENCES user_accounts(google_sub) ON DELETE CASCADE,
       followed_google_sub TEXT NOT NULL REFERENCES user_accounts(google_sub) ON DELETE CASCADE,
@@ -122,15 +145,16 @@ const getAccountSession = async (req) => {
   await ensureAccountSchema();
   const token = getCookieValue(req, ACCOUNT_COOKIE);
   if (!token) return null;
-  const [account] = await sql`SELECT account.google_sub AS id, account.display_name AS name, account.email, account.picture_url AS picture
+  const [account] = await sql`SELECT account.google_sub AS id, account.display_name AS name, account.email, account.picture_url AS picture, phone.phone_number AS phone
     FROM user_account_sessions AS session
     JOIN user_accounts AS account ON account.google_sub = session.google_sub
+    LEFT JOIN account_phone_credentials AS phone ON phone.google_sub = account.google_sub
     WHERE session.token_hash = ${hashAdminSessionToken(token)} AND session.expires_at > NOW()`;
   return account || null;
 };
 const requireAccount = async (req, res, next) => {
   try {
-    if (!sql || !isAccountOAuthConfigured()) return res.status(503).json({ error: 'Configura el inicio de sesión con Google o Facebook en el servidor.' });
+    if (!sql) return res.status(503).json({ error: 'Configura DATABASE_URL en el servidor.' });
     const account = await getAccountSession(req);
     if (!account) return res.status(401).json({ code: 'ACCOUNT_REQUIRED', error: 'Inicia sesión para continuar.' });
     req.account = account;
@@ -140,6 +164,138 @@ const requireAccount = async (req, res, next) => {
     res.status(503).json({ error: 'No se pudo comprobar tu cuenta.' });
   }
 };
+app.post('/api/account/phone/signup', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!ensureSameOrigin(req, res)) return;
+  if (!sql) return res.status(503).json({ error: 'El registro no está disponible en este momento.' });
+  if (!allowPhoneAuthAttempt(req)) return res.status(429).json({ error: 'Demasiados intentos. Espera 15 minutos e inténtalo de nuevo.' });
+  const phone = normalizeAccountPhone(req.body?.phone);
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  if (!phone) return res.status(400).json({ error: 'Escribe un número válido, por ejemplo +52 951 123 4567.' });
+  if (password.length < 10 || password.length > 128) return res.status(400).json({ error: 'La contraseña debe tener entre 10 y 128 caracteres.' });
+  try {
+    await ensureAccountSchema();
+    const [existing] = await sql`SELECT phone_number FROM account_phone_credentials WHERE phone_number = ${phone}`;
+    if (existing) return res.status(409).json({ error: 'Ese teléfono ya tiene una cuenta. Inicia sesión.' });
+    const accountId = `phone:${randomUUID()}`;
+    const salt = randomBytes(16).toString('base64url');
+    const passwordHash = await accountPasswordHash(password, salt);
+    const displayName = `Usuario ${phone.slice(-4)}`;
+    await sql`INSERT INTO user_accounts (google_sub, email, display_name) VALUES (${accountId}, '', ${displayName})`;
+    await sql`INSERT INTO account_phone_credentials (phone_number, google_sub, password_salt, password_hash) VALUES (${phone}, ${accountId}, ${salt}, ${passwordHash})`;
+    await createAccountSessionCookie(res, req, accountId);
+    return res.status(201).json({ account: { id: accountId, name: displayName, email: '', phone, picture: null } });
+  } catch (error) {
+    console.error('Phone account signup failed:', error);
+    return res.status(500).json({ error: 'No se pudo crear la cuenta. Inténtalo de nuevo.' });
+  }
+});
+
+app.post('/api/account/phone/login', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!ensureSameOrigin(req, res)) return;
+  if (!sql) return res.status(503).json({ error: 'El inicio de sesión no está disponible en este momento.' });
+  if (!allowPhoneAuthAttempt(req)) return res.status(429).json({ error: 'Demasiados intentos. Espera 15 minutos e inténtalo de nuevo.' });
+  const phone = normalizeAccountPhone(req.body?.phone);
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  if (!phone || !password || password.length > 128) return res.status(400).json({ error: 'Escribe tu teléfono y contraseña.' });
+  try {
+    await ensureAccountSchema();
+    const [credential] = await sql`SELECT phone.password_salt, phone.password_hash, account.google_sub AS id, account.display_name AS name, account.email, account.picture_url AS picture
+      FROM account_phone_credentials AS phone JOIN user_accounts AS account ON account.google_sub = phone.google_sub WHERE phone.phone_number = ${phone}`;
+    const actual = Buffer.from(await accountPasswordHash(password, credential?.password_salt || 'invalid-account-salt'), 'base64url');
+    const expected = Buffer.from(credential?.password_hash || Buffer.alloc(64).toString('base64url'), 'base64url');
+    if (!credential || actual.length !== expected.length || !timingSafeEqual(actual, expected)) return res.status(401).json({ error: 'El teléfono o la contraseña no son correctos.' });
+    await createAccountSessionCookie(res, req, credential.id);
+    return res.json({ account: { id: credential.id, name: credential.name, email: credential.email, phone, picture: credential.picture } });
+  } catch (error) {
+    console.error('Phone account login failed:', error);
+    return res.status(500).json({ error: 'No se pudo iniciar sesión. Inténtalo de nuevo.' });
+  }
+});
+
+app.get('/api/account/passkey/authentication-options', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!ensureSameOrigin(req, res)) return;
+  if (!sql) return res.status(503).json({ error: 'El inicio con passkey no está disponible.' });
+  try {
+    await ensureAccountSchema();
+    const { rpID } = getWebAuthnRelyingParty(req);
+    const options = await generateAuthenticationOptions({ rpID, userVerification: 'required' });
+    savePasskeyChallenge(res, req, options.challenge);
+    return res.json(options);
+  } catch (error) {
+    console.error('Could not create passkey authentication options:', error);
+    return res.status(500).json({ error: 'No se pudo iniciar el acceso con passkey.' });
+  }
+});
+
+app.post('/api/account/passkey/authenticate', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!ensureSameOrigin(req, res)) return;
+  if (!sql) return res.status(503).json({ error: 'El inicio con passkey no está disponible.' });
+  const expectedChallenge = getCookieValue(req, PASSKEY_CHALLENGE_COOKIE);
+  clearPasskeyChallenge(res, req);
+  if (!expectedChallenge) return res.status(400).json({ error: 'La solicitud de passkey venció. Inténtalo otra vez.' });
+  try {
+    await ensureAccountSchema();
+    const [credential] = await sql`SELECT passkey.credential_id, passkey.public_key, passkey.counter, passkey.transports, account.google_sub AS id, account.display_name AS name, account.email, account.picture_url AS picture, phone.phone_number AS phone
+      FROM account_passkeys AS passkey JOIN user_accounts AS account ON account.google_sub = passkey.google_sub
+      LEFT JOIN account_phone_credentials AS phone ON phone.google_sub = account.google_sub WHERE passkey.credential_id = ${String(req.body?.id || '')}`;
+    if (!credential) return res.status(401).json({ error: 'No encontramos esa passkey. Usa otro método para iniciar sesión.' });
+    const { origin, rpID } = getWebAuthnRelyingParty(req);
+    const verification = await verifyAuthenticationResponse({ response: req.body, expectedChallenge, expectedOrigin: origin, expectedRPID: rpID,
+      credential: { id: credential.credential_id, publicKey: new Uint8Array(Buffer.from(credential.public_key, 'base64url')), counter: Number(credential.counter), transports: credential.transports || [] }, requireUserVerification: true });
+    if (!verification.verified) return res.status(401).json({ error: 'No se pudo verificar la passkey.' });
+    await sql`UPDATE account_passkeys SET counter = ${verification.authenticationInfo.newCounter}, device_type = ${verification.authenticationInfo.credentialDeviceType}, backed_up = ${verification.authenticationInfo.credentialBackedUp} WHERE credential_id = ${credential.credential_id}`;
+    await createAccountSessionCookie(res, req, credential.id);
+    return res.json({ account: { id: credential.id, name: credential.name, email: credential.email, phone: credential.phone, picture: credential.picture } });
+  } catch (error) {
+    console.error('Passkey authentication failed:', error);
+    return res.status(400).json({ error: 'No se pudo verificar la passkey. Inténtalo de nuevo.' });
+  }
+});
+
+app.get('/api/account/passkey/registration-options', requireAccount, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    await ensureAccountSchema();
+    const [account] = await sql`SELECT google_sub AS id, display_name AS name, email FROM user_accounts WHERE google_sub = ${req.account.id}`;
+    const [phone] = await sql`SELECT phone_number FROM account_phone_credentials WHERE google_sub = ${req.account.id}`;
+    const existing = await sql`SELECT credential_id AS id, transports FROM account_passkeys WHERE google_sub = ${req.account.id}`;
+    const { rpID } = getWebAuthnRelyingParty(req);
+    const options = await generateRegistrationOptions({ rpName: 'PuntoNochi', rpID, userID: new TextEncoder().encode(account.id), userName: phone?.phone_number || account.email || account.id, userDisplayName: account.name, attestationType: 'none', excludeCredentials: existing.map((item) => ({ id: item.id, transports: item.transports || [] })), authenticatorSelection: { residentKey: 'required', userVerification: 'required', authenticatorAttachment: 'platform' } });
+    savePasskeyChallenge(res, req, options.challenge);
+    return res.json(options);
+  } catch (error) {
+    console.error('Could not create passkey registration options:', error);
+    return res.status(500).json({ error: 'No se pudo preparar la passkey.' });
+  }
+});
+
+app.post('/api/account/passkey/register', requireAccount, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!ensureSameOrigin(req, res)) return;
+  const expectedChallenge = getCookieValue(req, PASSKEY_CHALLENGE_COOKIE);
+  clearPasskeyChallenge(res, req);
+  if (!expectedChallenge) return res.status(400).json({ error: 'La solicitud de passkey venció. Inténtalo otra vez.' });
+  try {
+    const { origin, rpID } = getWebAuthnRelyingParty(req);
+    const verification = await verifyRegistrationResponse({ response: req.body, expectedChallenge, expectedOrigin: origin, expectedRPID: rpID, requireUserVerification: true });
+    if (!verification.verified || !verification.registrationInfo) return res.status(400).json({ error: 'No se pudo verificar la passkey.' });
+    const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
+    const transports = Array.isArray(req.body?.response?.transports) ? req.body.response.transports : [];
+    await ensureAccountSchema();
+    await sql`INSERT INTO account_passkeys (credential_id, google_sub, public_key, counter, transports, device_type, backed_up)
+      VALUES (${credential.id}, ${req.account.id}, ${Buffer.from(credential.publicKey).toString('base64url')}, ${credential.counter}, ${transports}, ${credentialDeviceType}, ${credentialBackedUp}) ON CONFLICT (credential_id) DO NOTHING`;
+    return res.json({ verified: true });
+  } catch (error) {
+    console.error('Passkey registration failed:', error);
+    return res.status(400).json({ error: 'No se pudo guardar la passkey. Inténtalo de nuevo.' });
+  }
+});
+
 let adminSessionSchemaReady;
 const ensureAdminSessionSchema = () => {
   if (!sql) throw new Error('DATABASE_URL is not configured.');
@@ -159,6 +315,47 @@ const hashAdminSessionToken = (token) => createHash('sha256').update(token).dige
 const getCookieValue = (req, name) => {
   const entry = (req.headers.cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
   return entry ? entry.slice(name.length + 1) : '';
+};
+const phoneAuthLimits = new Map();
+const allowPhoneAuthAttempt = (req) => {
+  const now = Date.now();
+  const key = String(req.ip || req.socket.remoteAddress || 'unknown');
+  const current = phoneAuthLimits.get(key);
+  if (!current || current.expiresAt <= now) {
+    phoneAuthLimits.set(key, { count: 1, expiresAt: now + 15 * 60 * 1000 });
+    return true;
+  }
+  if (current.count >= 12) return false;
+  current.count += 1;
+  return true;
+};
+const normalizeAccountPhone = (value) => {
+  if (typeof value !== 'string') return '';
+  let phone = value.trim().replace(/[\s().-]/g, '');
+  if (/^\d{10}$/.test(phone)) phone = `+52${phone}`;
+  else if (/^52\d{10}$/.test(phone)) phone = `+${phone}`;
+  else if (/^\d{8,15}$/.test(phone)) phone = `+${phone}`;
+  return /^\+[1-9]\d{7,14}$/.test(phone) ? phone : '';
+};
+const accountPasswordHash = async (password, salt) => Buffer.from(await scrypt(password, salt, 64)).toString('base64url');
+const createAccountSessionCookie = async (res, req, accountId) => {
+  const token = randomBytes(32).toString('base64url');
+  const secure = process.env.NODE_ENV === 'production' || req.secure;
+  await sql`INSERT INTO user_account_sessions (token_hash, google_sub, expires_at)
+    VALUES (${hashAdminSessionToken(token)}, ${accountId}, NOW() + (${ACCOUNT_SESSION_TTL_SECONDS} * INTERVAL '1 second'))`;
+  res.cookie(ACCOUNT_COOKIE, token, { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: ACCOUNT_SESSION_TTL_SECONDS * 1000 });
+};
+const getWebAuthnRelyingParty = (req) => {
+  const origin = `${req.protocol}://${req.get('host')}`;
+  return { origin, rpID: process.env.WEBAUTHN_RP_ID || new URL(origin).hostname };
+};
+const savePasskeyChallenge = (res, req, challenge) => {
+  const secure = process.env.NODE_ENV === 'production' || req.secure;
+  res.cookie(PASSKEY_CHALLENGE_COOKIE, challenge, { httpOnly: true, secure, sameSite: 'strict', path: '/api/account/passkey', maxAge: 5 * 60 * 1000 });
+};
+const clearPasskeyChallenge = (res, req) => {
+  const secure = process.env.NODE_ENV === 'production' || req.secure;
+  res.setHeader('Set-Cookie', `${PASSKEY_CHALLENGE_COOKIE}=; HttpOnly; Path=/api/account/passkey; SameSite=Strict; Max-Age=0${secure ? '; Secure' : ''}`);
 };
 const getAdminSession = async (req) => {
   if (!sql) return null;

@@ -32,6 +32,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { DAILY_USE_KEY, getBookmarkedPlaceIds, recordProfileActiveSeconds } from './profileStorage';
 import { PublicProfileSheet } from './components/PublicProfileSheet';
 import { ProfileSheet } from './components/ProfileSheet';
+import { AccountAuthSheet } from './components/AccountSheets';
 import { getStreakMilestone, StreakBadgeCelebration, StreakPage } from './components/StreakPage';
 import { PublicMenuPage } from './components/PublicMenuPage';
 import { PageLoadingSkeleton } from './components/PageLoadingSkeleton';
@@ -42,7 +43,7 @@ import { getDailyDropChoices, getDailyDropQuestion } from './dailyDrop';
 const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
 const WELCOME_SEEN_KEY = 'puntonochi-welcome-seen-v1';
 type DailyUse = { lastOpened: string; totalDays: number; currentStreak: number };
-type SignedInAccount = { id: string; name: string; email: string; picture: string | null };
+type SignedInAccount = { id: string; name: string; email: string; picture: string | null; phone?: string };
 function distanceFromDevice(place: Place, location: DeviceLocation | null) {
   if (!location || typeof place.lat !== 'number' || typeof place.lng !== 'number') return null;
   const radians = (degrees: number) => degrees * Math.PI / 180;
@@ -194,6 +195,8 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [dailyDropFlipped, setDailyDropFlipped] = useState(false);
+  const [customizingHome, setCustomizingHome] = useState(false);
+  const homeSectionOrderRef = useRef<string[]>([]);
   const dailyDropQuestion = getDailyDropQuestion();
   const dailyDropChoices = getDailyDropChoices(dailyDropQuestion);
   const loading = false;
@@ -204,7 +207,7 @@ export default function App() {
   });
   const [welcomeTransitionDone, setWelcomeTransitionDone] = useState(true);
   const [publicProfileId, setPublicProfileId] = useState<string | null>(null);
-  const [showProfileSheet, setShowProfileSheet] = useState(false);
+  const [showAccountAuth, setShowAccountAuth] = useState(() => new URLSearchParams(window.location.search).has('accountAuthError'));
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [showStreakPage, setShowStreakPage] = useState(false);
   const [streakBadgeCelebration, setStreakBadgeCelebration] = useState<{ days: number; name: string } | null>(null);
@@ -234,6 +237,61 @@ export default function App() {
   const previousPrimaryTab = useRef(activeTab);
   const [tabDirection, setTabDirection] = useState(1);
   const primaryTabs = ['inicio', 'explorar', 'videos', 'noticias', 'crear'] as const;
+
+  useEffect(() => {
+    if (activeTab !== 'inicio') return;
+    const container = document.querySelector<HTMLElement>('[data-home-sections]');
+    if (!container) return;
+    const sections = Array.from(container.querySelectorAll<HTMLElement>('[data-home-section]'));
+    const defaults = sections.map((section) => section.dataset.homeSection || '').filter(Boolean);
+    let saved: string[] = [];
+    try { saved = JSON.parse(localStorage.getItem('puntonochi-home-section-order-v1') || '[]'); } catch { /* use defaults */ }
+    const order = [...saved.filter((id) => defaults.includes(id)), ...defaults.filter((id) => !saved.includes(id))];
+    homeSectionOrderRef.current = order;
+    order.forEach((id, index) => {
+      const section = sections.find((item) => item.dataset.homeSection === id);
+      if (section) section.style.order = String(index);
+    });
+  }, [activeTab]);
+
+  const persistHomeSectionOrder = () => {
+    const container = document.querySelector<HTMLElement>('[data-home-sections]');
+    if (!container) return;
+    const order = Array.from(container.querySelectorAll<HTMLElement>('[data-home-section]'))
+      .sort((a, b) => Number(a.style.order || 0) - Number(b.style.order || 0))
+      .map((section) => section.dataset.homeSection || '').filter(Boolean);
+    homeSectionOrderRef.current = order;
+    try { localStorage.setItem('puntonochi-home-section-order-v1', JSON.stringify(order)); } catch { /* ordering still works for this session */ }
+  };
+
+  const resetHomeSectionOrder = () => {
+    const container = document.querySelector<HTMLElement>('[data-home-sections]');
+    if (!container) return;
+    const sections = Array.from(container.querySelectorAll<HTMLElement>('[data-home-section]'));
+    sections.forEach((section, index) => { section.style.order = String(index); });
+    homeSectionOrderRef.current = sections.map((section) => section.dataset.homeSection || '').filter(Boolean);
+    try { localStorage.removeItem('puntonochi-home-section-order-v1'); } catch { /* reset for this session */ }
+  };
+
+  const onHomeSectionDrop = (event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    const target = (event.target as HTMLElement).closest<HTMLElement>('[data-home-section]');
+    const draggedId = event.dataTransfer.getData('text/plain');
+    const container = document.querySelector<HTMLElement>('[data-home-sections]');
+    const dragged = container?.querySelector<HTMLElement>(`[data-home-section="${draggedId}"]`);
+    if (!target || !dragged || target === dragged) return;
+    const order = homeSectionOrderRef.current;
+    const from = order.indexOf(draggedId);
+    const to = order.indexOf(target.dataset.homeSection || '');
+    if (from < 0 || to < 0) return;
+    order.splice(from, 1);
+    order.splice(to, 0, draggedId);
+    order.forEach((id, index) => {
+      const section = container?.querySelector<HTMLElement>(`[data-home-section="${id}"]`);
+      if (section) section.style.order = String(index);
+    });
+    persistHomeSectionOrder();
+  };
 
   useEffect(() => {
     const from = primaryTabs.indexOf(previousPrimaryTab.current as typeof primaryTabs[number]);
@@ -678,6 +736,11 @@ export default function App() {
               </h1>
             </div>
             <p className="mt-2 max-w-[430px] pl-1 text-[17px] font-medium leading-[1.22] tracking-[-.02em] text-[#d8e7ff] sm:text-[19px]">Negocios, lugares, eventos y más...<br/>todo en un solo lugar.</p>
+            <div className="mt-3 flex gap-2">
+              <button type="button" onClick={() => setCustomizingHome((value) => !value)} aria-pressed={customizingHome} className="rounded-full bg-white/15 px-4 py-2 text-xs font-semibold text-white backdrop-blur-sm">{customizingHome ? 'Listo' : 'Personalizar inicio'}</button>
+              {customizingHome && <button type="button" onClick={resetHomeSectionOrder} className="rounded-full bg-white/15 px-4 py-2 text-xs font-semibold text-white backdrop-blur-sm">Restablecer</button>}
+            </div>
+            {customizingHome && <p className="mt-3 max-w-[430px] rounded-2xl bg-white/10 px-4 py-3 text-xs font-medium text-white/85">Mantén presionada una sección y arrástrala para cambiarla de lugar. Tu orden queda guardado en este dispositivo.</p>}
             <div className="mt-4 [perspective:1200px]">
               <motion.div role="group" aria-label="Pregunta del día" className="ck-home-daily-drop-card relative min-h-[156px] rounded-[24px] bg-[#292a2d] text-white">
                 <AnimatePresence mode="wait" initial={false}>
@@ -695,9 +758,9 @@ export default function App() {
               </motion.div>
             </div>
           </section>
-          <>
+          <div data-home-sections="" className={`flex flex-col ${customizingHome ? 'home-customizing' : ''}`} onDragOver={customizingHome ? (event) => event.preventDefault() : undefined} onDrop={customizingHome ? onHomeSectionDrop : undefined}>
           {/* Personalized suggestions */}
-          <section className="mb-10">
+          <section data-home-section="suggested" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'suggested'); event.dataTransfer.effectAllowed = 'move'; } : undefined} className="mb-10">
             <div className="px-5 mb-4">
               <h2 className="text-2xl font-bold flex items-center gap-2"><Sparkles className="h-5 w-5 text-[#1a73e8]"/>{deviceLocation ? 'Cerca de ti' : 'Sugeridos'}</h2>
               <p className="text-[15px] text-neutral-500 font-medium mt-0.5">{deviceLocation ? 'Negocios ordenados por distancia a tu ubicación' : 'Negocios para ti, según lo que buscas y guardas'}</p>
@@ -723,7 +786,7 @@ export default function App() {
           </section>
 
           {/* By Category Section */}
-          <section className="mb-10">
+          <section data-home-section="categories" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'categories'); event.dataTransfer.effectAllowed = 'move'; } : undefined} className="mb-10">
             <div 
               className="px-5 mb-4 cursor-pointer active:opacity-70 transition-opacity"
               onClick={() => !loading && setShowAllCategories(true)}
@@ -782,7 +845,7 @@ export default function App() {
           </section>
 
           {/* Recently viewed businesses */}
-          <section className="mb-10">
+          <section data-home-section="recently-viewed" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'recently-viewed'); event.dataTransfer.effectAllowed = 'move'; } : undefined} className="mb-10">
             <div className="mb-4 px-5">
               <h2 className="text-2xl font-bold tracking-tight">Vistos recientemente</h2>
               <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Vuelve rápido a los negocios que visitaste</p>
@@ -798,7 +861,7 @@ export default function App() {
           </section>
 
           {/* Popular this week */}
-          {popularPlaces.length > 0 && <section className="mb-10">
+          {popularPlaces.length > 0 && <section data-home-section="popular" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'popular'); event.dataTransfer.effectAllowed = 'move'; } : undefined} className="mb-10">
             <div className="mb-4 px-5">
               <h2 className="text-2xl font-bold tracking-tight">Popular esta semana</h2>
               <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Lo que la comunidad está buscando y visitando</p>
@@ -813,10 +876,10 @@ export default function App() {
             </div>
           </section>}
 
-          <HomeArticlesSection onViewAll={() => setActiveTab('guias')} onOpenArticle={(slug) => { window.history.pushState({}, '', `/articulos/${encodeURIComponent(slug)}`); setActiveTab('guias'); }} />
-          <HomeVideosSection onViewAll={() => setActiveTab('noticias')} />
+          <div data-home-section="articles" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'articles'); event.dataTransfer.effectAllowed = 'move'; } : undefined}><HomeArticlesSection onViewAll={() => setActiveTab('guias')} onOpenArticle={(slug) => { window.history.pushState({}, '', `/articulos/${encodeURIComponent(slug)}`); setActiveTab('guias'); }} /></div>
+          <div data-home-section="videos" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'videos'); event.dataTransfer.effectAllowed = 'move'; } : undefined}><HomeVideosSection onViewAll={() => setActiveTab('noticias')} /></div>
 
-          <section className="mb-10">
+          <section data-home-section="new" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'new'); event.dataTransfer.effectAllowed = 'move'; } : undefined} className="mb-10">
             <div className="mb-4 px-5">
               <h2 className="text-2xl font-bold tracking-tight">Nuevo en Nochistlán</h2>
               <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Negocios agregados recientemente</p>
@@ -832,7 +895,7 @@ export default function App() {
           </section>
 
           {/* All saved businesses */}
-          <section className="mb-10">
+          <section data-home-section="favorites" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'favorites'); event.dataTransfer.effectAllowed = 'move'; } : undefined} className="mb-10">
             <div className="mb-4 px-5">
               <h2 className="flex items-center gap-2 text-2xl font-bold"><Bookmark className="h-5 w-5 fill-[#1a73e8] text-[#1a73e8]"/>Favoritos</h2>
               <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Tus negocios guardados</p>
@@ -848,7 +911,7 @@ export default function App() {
           </section>
 
           {/* All Visits Section */}
-          <section className="px-5">
+          <section data-home-section="featured" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'featured'); event.dataTransfer.effectAllowed = 'move'; } : undefined} className="px-5">
             <div 
               className="mb-4 cursor-pointer active:opacity-70 transition-opacity"
               onClick={() => setShowDestacados(true)}
@@ -945,13 +1008,14 @@ export default function App() {
             </div>
           </section>
 
-          <section className="mb-10 mt-10 px-5">
+          <section data-home-section="add-business" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'add-business'); event.dataTransfer.effectAllowed = 'move'; } : undefined} className="mb-10 mt-10 px-5">
             <div className="mb-4">
               <h2 className="text-2xl font-bold tracking-tight">Agrega tu negocio</h2>
               <p className="mt-1 text-[15px] font-medium text-neutral-500">Comparte tu negocio con la comunidad de Nochistlán.</p>
             </div>
             <button type="button" onClick={() => setShowBusinessSubmission(true)} style={{ backgroundColor: '#ffffff', color: '#111111' }} className="w-full rounded-full !bg-white px-6 py-3.5 text-sm font-bold !text-black transition-transform active:scale-[0.99]">Agrega tu negocio</button>
           </section>
+          </div>
           <footer aria-label="Información y navegación de PuntoNochi" className="home-footer relative left-1/2 mt-12 min-h-[250px] w-screen -translate-x-1/2 overflow-hidden rounded-t-[48px] bg-white px-6 pb-[calc(env(safe-area-inset-bottom,0px)+92px)] pt-9 text-[#202124]">
             <div aria-hidden="true" className="pointer-events-none absolute left-1/2 top-12 h-20 w-[min(84%,520px)] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(96,115,255,.18),rgba(194,104,223,.12)_45%,rgba(255,170,92,.08)_68%,transparent_100%)] blur-2xl" />
             <div className="relative z-10 mx-auto flex w-full max-w-md items-center justify-center gap-5">
@@ -967,7 +1031,6 @@ export default function App() {
             </nav>
             <p className="relative z-10 mt-6 text-center text-[11px] text-[#202124]/45">© {new Date().getFullYear()} PuntoNochi · Nochistlán, Zacatecas</p>
           </footer>
-          </>
         </motion.main>
       )}
 
@@ -1003,7 +1066,7 @@ export default function App() {
 
       {/* Bottom Navigation & Search */}
       {activeTab !== 'ask-nochi' && !showAdminPage && !showStreakPage && !(activeTab === 'videos' && marketplaceDetailOpen) && (
-        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => setShowSearch(false)} onOpenProfile={() => { if (signedInAccount) setPublicProfileId(signedInAccount.id); else setShowProfileSheet(true); }} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} />
+        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => setShowSearch(false)} onOpenProfile={() => { if (signedInAccount) setPublicProfileId(signedInAccount.id); else setShowAccountAuth(true); }} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} />
       )}
 
       {/* Pages & Overlays */}
@@ -1083,7 +1146,7 @@ export default function App() {
         <SmartOnboarding enabled={!loading && !showWelcome && welcomeTransitionDone && !showAdminPage} onLocation={setDeviceLocation} />
         {showWelcome && !showAdminPage && <WelcomePage onContinue={finishWelcome} />}
         {publicProfileId && <PublicProfileSheet profileId={publicProfileId} onClose={() => setPublicProfileId(null)} />}
-        {showProfileSheet && <ProfileSheet onClose={() => setShowProfileSheet(false)} onSelectBusiness={(place) => setSelectedBusiness(place)} />}
+        {showAccountAuth && <AccountAuthSheet onClose={() => setShowAccountAuth(false)}/>}
         {showProfileSettings && <ProfileSheet settingsOnly onClose={() => setShowProfileSettings(false)} onSelectBusiness={(place) => setSelectedBusiness(place)} />}
       </AnimatePresence>
       <Analytics />

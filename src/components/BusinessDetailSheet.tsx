@@ -1,6 +1,7 @@
-import { lazy, Suspense, useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Share, Phone, Globe, ShoppingBag, MoreHorizontal, Navigation, BookOpen, Link, MapPin, Map as MapIcon, MessageCircle, Twitter, Facebook, QrCode, Star, Instagram, Sparkles, HeartHandshake } from 'lucide-react';
+import { X, Share, Phone, Globe, ShoppingBag, MoreHorizontal, Navigation, BookOpen, Link, MapPin, Map as MapIcon, MessageCircle, Twitter, Facebook, QrCode, Star, Instagram, Sparkles, HeartHandshake, CreditCard, Download, RotateCw } from 'lucide-react';
+import QRCode from 'qrcode';
 import { Place, Review } from '../types';
 import { mockPlaces } from '../data';
 import CornerKit from '@cornerkit/core';
@@ -32,6 +33,11 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
   const [showMapSelector, setShowMapSelector] = useState(false);
   const [showMapOverlay, setShowMapOverlay] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showDigitalCard, setShowDigitalCard] = useState(false);
+  const [cardLandscape, setCardLandscape] = useState(false);
+  const [cardColor, setCardColor] = useState('#facc15');
+  const [cardFeedback, setCardFeedback] = useState('');
+  const cardQrRef = useRef<HTMLCanvasElement>(null);
   const [viewerState, setViewerState] = useState<{ index: number; direction: number } | null>(null);
   const [showWebsiteWarning, setShowWebsiteWarning] = useState(false);
   const [showPhoneModal, setShowPhoneModal] = useState(false);
@@ -47,6 +53,85 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
   const phoneDrag = useSheetDrag(() => setShowPhoneModal(false));
   const menuDrag = useSheetDrag(() => setShowMenuModal(false));
   const shareDrag = useSheetDrag(() => setShowShareModal(false));
+  const digitalCardDrag = useSheetDrag(() => setShowDigitalCard(false));
+
+  useEffect(() => {
+    if (!showDigitalCard || !cardQrRef.current) return;
+    void QRCode.toCanvas(cardQrRef.current, businessUrl, { width: 240, margin: 1, errorCorrectionLevel: 'H', color: { dark: '#111214', light: '#ffffff' } });
+  }, [showDigitalCard, businessUrl]);
+
+  const downloadBusinessCard = async () => {
+    const width = cardLandscape ? 1920 : 1080;
+    const height = cardLandscape ? 1080 : 1920;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    const palettes = [
+      { main: '#facc15', ink: '#171717', muted: '#17171799' },
+      { main: '#60a5fa', ink: '#0b1830', muted: '#0b183099' },
+      { main: '#34d399', ink: '#06251b', muted: '#06251b99' },
+      { main: '#c4b5fd', ink: '#21143c', muted: '#21143c99' },
+      { main: '#f9a8d4', ink: '#351127', muted: '#35112799' },
+    ];
+    const palette = palettes.find((item) => item.main === cardColor) || palettes[0];
+    const pad = Math.round(width * 0.085);
+    const roundRect = (x: number, y: number, w: number, h: number, r: number) => {
+      context.beginPath(); context.roundRect(x, y, w, h, r); context.fill();
+    };
+    context.fillStyle = palette.main;
+    roundRect(0, 0, width, height, Math.round(width * 0.045));
+    context.fillStyle = 'rgba(255,255,255,.2)';
+    context.beginPath(); context.arc(width - pad, pad, width * 0.16, 0, Math.PI * 2); context.fill();
+    context.fillStyle = palette.ink;
+    context.textBaseline = 'top';
+    const titleSize = Math.round(width * (cardLandscape ? .064 : .068));
+    context.font = `700 ${titleSize}px system-ui, sans-serif`;
+    const words = place.name.split(/\s+/);
+    const lines: string[] = [];
+    let line = '';
+    for (const word of words) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (context.measureText(candidate).width > width - pad * 2 && line) { lines.push(line); line = word; } else line = candidate;
+    }
+    if (line) lines.push(line);
+    const top = cardLandscape ? Math.round(height * .22) : Math.round(height * .17);
+    lines.slice(0, cardLandscape ? 2 : 3).forEach((text, i) => context.fillText(text, pad, top + i * titleSize * 1.13));
+    let infoY = top + Math.min(lines.length, cardLandscape ? 2 : 3) * titleSize * 1.25 + pad * .35;
+    context.fillStyle = palette.muted;
+    context.font = `500 ${Math.round(width * .027)}px system-ui, sans-serif`;
+    [place.category, place.subtitle, place.address || place.location, place.phone, place.websiteUrl, place.rating > 0 ? `★ ${place.rating.toFixed(1)} · ${place.reviewCount || 0} reseñas` : '', place.hours].filter(Boolean).slice(0, cardLandscape ? 4 : 6).forEach((detail) => {
+      context.fillText(String(detail), pad, infoY);
+      infoY += Math.round(width * .042);
+    });
+    const qrSize = Math.round(width * (cardLandscape ? .28 : .34));
+    const qrCanvas = document.createElement('canvas');
+    await QRCode.toCanvas(qrCanvas, businessUrl, { width: qrSize, margin: 1, errorCorrectionLevel: 'H', color: { dark: '#111214', light: '#ffffff' } });
+    const qrX = Math.round((width - qrSize) / 2);
+    const qrY = cardLandscape ? height - qrSize - pad : height - qrSize - pad * 1.35;
+    context.fillStyle = '#fff';
+    roundRect(qrX - pad * .2, qrY - pad * .2, qrSize + pad * .4, qrSize + pad * .4, Math.round(pad * .25));
+    context.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
+    context.fillStyle = palette.ink;
+    context.textAlign = 'center';
+    context.font = `600 ${Math.round(width * .022)}px system-ui, sans-serif`;
+    context.fillText('Escanea para ver el negocio', width / 2, qrY + qrSize + pad * .35);
+    const link = document.createElement('a');
+    link.download = `${place.name.trim().replace(/[^\p{L}\p{N}-]+/gu, '-').replace(/^-|-$/g, '') || 'tarjeta-digital'}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    setCardFeedback('Tarjeta descargada como PNG.');
+  };
+
+  const shareBusinessCard = async () => {
+    try {
+      if (navigator.share) await navigator.share({ title: place.name, text: `${shareText} · ${place.category}`, url: businessUrl });
+      else { await copyBusinessLink(); }
+    } catch (error) {
+      if (error instanceof Error && error.name !== 'AbortError') setCardFeedback('No se pudo abrir la opción para compartir.');
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -242,6 +327,9 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
             <div className="absolute top-4 right-4 flex gap-2">
               <button onClick={(e) => { e.stopPropagation(); setShowShareModal(true); }} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/50 transition-colors">
                 <Share className="w-5 h-5" strokeWidth={1.5} />
+              </button>
+              <button type="button" aria-label="Crear tarjeta digital del negocio" title="Tarjeta digital" onClick={(e) => { e.stopPropagation(); setCardFeedback(''); setShowDigitalCard(true); }} className="flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition-colors hover:bg-black/50">
+                <CreditCard className="h-5 w-5" strokeWidth={1.6}/>
               </button>
               <button onClick={onClose} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/50 transition-colors">
                 <X className="w-5 h-5" strokeWidth={1.5} />
@@ -771,6 +859,50 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
             </motion.div>
           </>
         )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showDigitalCard && <>
+          <motion.button type="button" aria-label="Cerrar tarjeta digital" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowDigitalCard(false)} className="fixed inset-0 z-[88] cursor-default bg-black/55 backdrop-blur-sm" />
+          <motion.section role="dialog" aria-modal="true" aria-labelledby="digital-card-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360, mass: .82 }} {...digitalCardDrag} className="fixed inset-x-0 bottom-0 z-[89] mx-auto flex max-h-[94dvh] w-full max-w-[520px] flex-col overflow-y-auto rounded-t-[30px] bg-[#202124] px-6 pb-[max(24px,env(safe-area-inset-bottom))] pt-3 text-white shadow-2xl">
+            <SheetDragHandle controls={digitalCardDrag.dragControls} tone="dark" className="-mt-5 mb-3" />
+            <div className="mb-4 flex items-center justify-between px-1">
+              <div><h3 id="digital-card-title" className="text-center text-xl font-bold">Tarjeta digital</h3><p className="mt-1 text-center text-xs text-white/45">Comparte los datos de este negocio</p></div>
+              <button type="button" aria-label="Cerrar tarjeta digital" onClick={() => setShowDigitalCard(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[.08] text-white/70"><X className="h-4 w-4"/></button>
+            </div>
+
+            <div className="flex min-h-0 flex-1 items-center justify-center py-2">
+              <article className={`relative isolate flex overflow-hidden text-center text-[#171717] shadow-[0_18px_45px_rgba(0,0,0,.3)] transition-[width,height] duration-300 ${cardLandscape ? 'aspect-video w-full max-h-[32dvh] max-w-[440px] flex-col items-center rounded-[26px] px-4 py-3' : 'aspect-[9/16] max-h-[43dvh] w-[min(68vw,270px)] flex-col items-center rounded-[26px] px-5 py-5'}`} style={{ backgroundColor: cardColor }}>
+                <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-12 -z-10 h-36 w-36 rounded-full bg-white/20 blur-2xl"/>
+                <div className={`flex min-w-0 flex-col items-center ${cardLandscape ? 'w-full' : ''}`}>
+                  {place.logo && <img src={place.logo} alt="" className={`mb-2 rounded-full border-2 border-black/10 object-cover ${cardLandscape ? 'hidden' : 'h-12 w-12'}`}/>}
+                  <h4 className={`line-clamp-2 w-full break-words font-extrabold leading-tight ${cardLandscape ? 'text-base' : 'text-[22px]'}`}>{place.name}</h4>
+                  <p className="mt-1 line-clamp-1 text-[11px] font-semibold opacity-65">{place.category}{place.location ? ` · ${place.location}` : ''}</p>
+                  {place.subtitle && place.subtitle.toLocaleLowerCase('es') !== 'establishment' && <p className="mt-1 line-clamp-2 text-[10px] opacity-60">{place.subtitle}</p>}
+                  {place.rating > 0 && <p className="mt-1 text-[10px] font-semibold opacity-75">★ {place.rating.toFixed(1)} · {place.reviewCount || 0} reseñas</p>}
+                  {place.address && <p className={`line-clamp-2 text-[10px] opacity-70 ${cardLandscape ? 'mt-1' : 'mt-2'}`}>{place.address}</p>}
+                  {place.phone && <p className="mt-1 text-[10px] font-semibold opacity-75">{place.phone}</p>}
+                  {place.websiteUrl && <p className="mt-1 line-clamp-1 text-[10px] opacity-65">{place.websiteUrl.replace(/^https?:\/\//, '')}</p>}
+                  {place.hours && <p className="mt-1 line-clamp-1 text-[9px] opacity-60">{place.hours}</p>}
+                </div>
+                <div className={`flex shrink-0 flex-col items-center ${cardLandscape ? 'mt-auto pt-1' : 'mt-auto pt-3'}`}>
+                  <div className="rounded-[17px] bg-white p-1.5 shadow-sm"><canvas ref={cardQrRef} aria-label={`Código QR para ver ${place.name}`} className={cardLandscape ? 'h-[58px] w-[58px]' : 'h-[86px] w-[86px]'}/></div>
+                  <span className="mt-1.5 text-[9px] font-bold tracking-wide opacity-65">ESCANEA PARA VER EL NEGOCIO</span>
+                </div>
+              </article>
+            </div>
+
+            <div className="mb-4 mt-3 flex items-center justify-center gap-3">
+              {[{ color: '#facc15', name: 'Amarillo' }, { color: '#60a5fa', name: 'Azul' }, { color: '#34d399', name: 'Verde' }, { color: '#c4b5fd', name: 'Violeta' }, { color: '#f9a8d4', name: 'Rosa' }].map(({ color, name }) => <button key={color} type="button" aria-label={`Color ${name}`} aria-pressed={cardColor === color} onClick={() => setCardColor(color)} className={`h-8 w-8 rounded-full border-2 transition-transform ${cardColor === color ? 'scale-110 border-white' : 'border-white/20'}`} style={{ backgroundColor: color }}/>) }
+              <button type="button" aria-label={`Cambiar a formato ${cardLandscape ? 'vertical' : 'horizontal'}`} title={cardLandscape ? 'Formato vertical 9:16' : 'Formato horizontal 16:9'} onClick={() => setCardLandscape((current) => !current)} className="ml-1 flex h-9 w-9 items-center justify-center rounded-full bg-white/[.09] text-white/80 transition-colors hover:bg-white/[.15]"><RotateCw className="h-4 w-4"/><span className="sr-only">{cardLandscape ? '16:9' : '9:16'}</span></button>
+            </div>
+            <p className="mb-3 text-center text-[10px] font-medium text-white/40">{cardLandscape ? 'Horizontal · 16:9' : 'Vertical · 9:16'}</p>
+            <div className="grid grid-cols-2 gap-2.5">
+              <button type="button" onClick={() => void shareBusinessCard()} className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-[#202124] transition active:scale-[.98]"><Share className="h-4 w-4"/>Compartir negocio</button>
+              <button type="button" onClick={() => { void downloadBusinessCard(); }} className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-white/[.1] px-4 text-sm font-bold text-white transition hover:bg-white/[.16] active:scale-[.98]"><Download className="h-4 w-4"/>Descargar PNG</button>
+            </div>
+            {cardFeedback && <p role="status" className="mt-3 text-center text-xs font-medium text-white/65">{cardFeedback}</p>}
+          </motion.section>
+        </>}
       </AnimatePresence>
       <AnimatePresence>
         {showCommunityActions && <CommunityActionsSheet place={place} initialMode={communityReviewMode} onReviewCreated={(review) => setCommunityReviews((current) => [review, ...current])} onClose={() => setShowCommunityActions(false)} />}

@@ -661,3 +661,5 @@ html.dark #app-root .home-footer {
 @media (prefers-reduced-motion: reduce) {
   .explore-round-control, .explore-menu-item { transition: none; }
 }
+.home-customizing [data-home-section] { cursor: grab; outline: 2px dashed rgba(26, 115, 232, .35); outline-offset: 5px; border-radius: 18px; }
+.home-customizing [data-home-section]:active { cursor: grabbing; }
