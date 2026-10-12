@@ -1,0 +1,19 @@
+{
+  "previewPort": 3000,
+  "healthPath": "/",
+  "startCommand": "docker compose -f docker-compose.base44.yml up -d",
+  "secrets": [
+    {
+      "name": "GEMINI_API_KEY",
+      "description": "Google Gemini API key for AI features (Ask Nochi). Get it from Google AI Studio (aistudio.google.com) → Get API key.",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    },
+    {
+      "name": "DATABASE_URL",
+      "description": "Neon Postgres connection string (e.g. postgresql://user:pass@host/db). Get it from your Neon dashboard (neon.tech) → Connection string.",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    }
+  ]
+}
