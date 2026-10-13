@@ -4,6 +4,7 @@ import { X, Share, Phone, Globe, ShoppingBag, MoreHorizontal, Navigation, BookOp
 import QRCode from 'qrcode';
 import { Place, Review } from '../types';
 import { mockPlaces } from '../data';
+import { getBusinessPath } from '../businessLinks';
 import CornerKit from '@cornerkit/core';
 import { CommunityActionsSheet } from './CommunityActionsSheet';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
@@ -45,7 +46,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
   const [showCommunityActions, setShowCommunityActions] = useState(false);
   const [communityReviewMode, setCommunityReviewMode] = useState<'menu' | 'reviews'>('menu');
   const [shareFeedback, setShareFeedback] = useState('');
-  const businessUrl = `${window.location.origin}/place/${encodeURIComponent(place.id)}`;
+  const businessUrl = `${window.location.origin}${getBusinessPath(place, mockPlaces)}`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=176x176&margin=8&data=${encodeURIComponent(businessUrl)}`;
   const shareText = `Mira ${place.name} en PuntoNochi`;
   const detailDrag = useSheetDrag(onClose);
@@ -57,7 +58,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
 
   useEffect(() => {
     if (!showDigitalCard || !cardQrRef.current) return;
-    void QRCode.toCanvas(cardQrRef.current, businessUrl, { width: 240, margin: 1, errorCorrectionLevel: 'H', color: { dark: '#111214', light: '#ffffff' } });
+    void QRCode.toCanvas(cardQrRef.current, businessUrl, { width: 512, margin: 2, errorCorrectionLevel: 'H', color: { dark: '#111214', light: '#ffffff' } });
   }, [showDigitalCard, businessUrl]);
 
   const downloadBusinessCard = async () => {
@@ -88,12 +89,13 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
     context.textBaseline = 'top';
     const titleSize = Math.round(width * (cardLandscape ? .064 : .068));
     context.font = `700 ${titleSize}px system-ui, sans-serif`;
+    const detailsWidth = cardLandscape ? Math.round(width * .58) : width - pad * 2;
     const words = place.name.split(/\s+/);
     const lines: string[] = [];
     let line = '';
     for (const word of words) {
       const candidate = line ? `${line} ${word}` : word;
-      if (context.measureText(candidate).width > width - pad * 2 && line) { lines.push(line); line = word; } else line = candidate;
+      if (context.measureText(candidate).width > detailsWidth && line) { lines.push(line); line = word; } else line = candidate;
     }
     if (line) lines.push(line);
     const top = cardLandscape ? Math.round(height * .22) : Math.round(height * .17);
@@ -102,21 +104,21 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
     context.fillStyle = palette.muted;
     context.font = `500 ${Math.round(width * .027)}px system-ui, sans-serif`;
     [place.category, place.subtitle, place.address || place.location, place.phone, place.websiteUrl, place.rating > 0 ? `★ ${place.rating.toFixed(1)} · ${place.reviewCount || 0} reseñas` : '', place.hours].filter(Boolean).slice(0, cardLandscape ? 4 : 6).forEach((detail) => {
-      context.fillText(String(detail), pad, infoY);
+      context.fillText(String(detail), pad, infoY, detailsWidth);
       infoY += Math.round(width * .042);
     });
-    const qrSize = Math.round(width * (cardLandscape ? .28 : .34));
+    const qrSize = Math.round(width * (cardLandscape ? .31 : .52));
     const qrCanvas = document.createElement('canvas');
-    await QRCode.toCanvas(qrCanvas, businessUrl, { width: qrSize, margin: 1, errorCorrectionLevel: 'H', color: { dark: '#111214', light: '#ffffff' } });
-    const qrX = Math.round((width - qrSize) / 2);
-    const qrY = cardLandscape ? height - qrSize - pad : height - qrSize - pad * 1.35;
+    await QRCode.toCanvas(qrCanvas, businessUrl, { width: qrSize, margin: 2, errorCorrectionLevel: 'H', color: { dark: '#111214', light: '#ffffff' } });
+    const qrX = cardLandscape ? width - pad - qrSize : Math.round((width - qrSize) / 2);
+    const qrY = cardLandscape ? Math.round((height - qrSize) / 2) : height - qrSize - pad * 1.35;
     context.fillStyle = '#fff';
     roundRect(qrX - pad * .2, qrY - pad * .2, qrSize + pad * .4, qrSize + pad * .4, Math.round(pad * .25));
     context.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
     context.fillStyle = palette.ink;
-    context.textAlign = 'center';
+    context.textAlign = cardLandscape ? 'right' : 'center';
     context.font = `600 ${Math.round(width * .022)}px system-ui, sans-serif`;
-    context.fillText('Escanea para ver el negocio', width / 2, qrY + qrSize + pad * .35);
+    context.fillText('Escanea para ver el negocio', cardLandscape ? width - pad : width / 2, cardLandscape ? qrY + qrSize + pad * .35 : qrY + qrSize + pad * .35);
     const link = document.createElement('a');
     link.download = `${place.name.trim().replace(/[^\p{L}\p{N}-]+/gu, '-').replace(/^-|-$/g, '') || 'tarjeta-digital'}.png`;
     link.href = canvas.toDataURL('image/png');
@@ -871,12 +873,12 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
             </div>
 
             <div className="flex min-h-0 flex-1 items-center justify-center py-2">
-              <article className={`relative isolate flex overflow-hidden text-center text-[#171717] shadow-[0_18px_45px_rgba(0,0,0,.3)] transition-[width,height] duration-300 ${cardLandscape ? 'aspect-video w-full max-h-[32dvh] max-w-[440px] flex-col items-center rounded-[26px] px-4 py-3' : 'aspect-[9/16] max-h-[43dvh] w-[min(68vw,270px)] flex-col items-center rounded-[26px] px-5 py-5'}`} style={{ backgroundColor: cardColor }}>
+              <article className={`relative isolate overflow-hidden text-[#171717] shadow-[0_18px_45px_rgba(0,0,0,.3)] transition-[width,height] duration-300 ${cardLandscape ? 'grid aspect-video w-full max-h-[32dvh] max-w-[440px] grid-cols-[1.35fr_.85fr] items-stretch gap-2 rounded-[26px] px-5 py-4 text-left' : 'flex aspect-[9/16] max-h-[43dvh] w-[min(68vw,270px)] flex-col items-center rounded-[26px] px-5 py-5 text-center'}`} style={{ backgroundColor: cardColor }}>
                 <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-12 -z-10 h-36 w-36 rounded-full bg-white/20 blur-2xl"/>
-                <div className={`flex min-w-0 flex-col items-center ${cardLandscape ? 'w-full' : ''}`}>
-                  {place.logo && <img src={place.logo} alt="" className={`mb-2 rounded-full border-2 border-black/10 object-cover ${cardLandscape ? 'hidden' : 'h-12 w-12'}`}/>}
+                <div className={`flex min-w-0 flex-col ${cardLandscape ? 'items-start justify-center pr-1' : 'items-center'}`}>
+                  {place.logo && <img src={place.logo} alt="" className={`mb-2 rounded-full border-2 border-black/10 object-cover ${cardLandscape ? 'h-8 w-8' : 'h-12 w-12'}`}/>}
                   <h4 className={`line-clamp-2 w-full break-words font-extrabold leading-tight ${cardLandscape ? 'text-base' : 'text-[22px]'}`}>{place.name}</h4>
-                  <p className="mt-1 line-clamp-1 text-[11px] font-semibold opacity-65">{place.category}{place.location ? ` · ${place.location}` : ''}</p>
+                  <p className={`mt-1 line-clamp-1 text-[11px] font-semibold opacity-65 ${cardLandscape ? 'w-full' : ''}`}>{place.category}{place.location ? ` · ${place.location}` : ''}</p>
                   {place.subtitle && place.subtitle.toLocaleLowerCase('es') !== 'establishment' && <p className="mt-1 line-clamp-2 text-[10px] opacity-60">{place.subtitle}</p>}
                   {place.rating > 0 && <p className="mt-1 text-[10px] font-semibold opacity-75">★ {place.rating.toFixed(1)} · {place.reviewCount || 0} reseñas</p>}
                   {place.address && <p className={`line-clamp-2 text-[10px] opacity-70 ${cardLandscape ? 'mt-1' : 'mt-2'}`}>{place.address}</p>}
@@ -884,9 +886,9 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
                   {place.websiteUrl && <p className="mt-1 line-clamp-1 text-[10px] opacity-65">{place.websiteUrl.replace(/^https?:\/\//, '')}</p>}
                   {place.hours && <p className="mt-1 line-clamp-1 text-[9px] opacity-60">{place.hours}</p>}
                 </div>
-                <div className={`flex shrink-0 flex-col items-center ${cardLandscape ? 'mt-auto pt-1' : 'mt-auto pt-3'}`}>
-                  <div className="rounded-[17px] bg-white p-1.5 shadow-sm"><canvas ref={cardQrRef} aria-label={`Código QR para ver ${place.name}`} className={cardLandscape ? 'h-[58px] w-[58px]' : 'h-[86px] w-[86px]'}/></div>
-                  <span className="mt-1.5 text-[9px] font-bold tracking-wide opacity-65">ESCANEA PARA VER EL NEGOCIO</span>
+                <div className={`flex min-w-0 flex-col items-center justify-center ${cardLandscape ? 'border-l border-black/10 pl-2' : 'mt-auto pt-3'}`}>
+                  <div className={`rounded-[20px] bg-white p-2 shadow-[0_5px_18px_rgba(0,0,0,.14)] ${cardLandscape ? '' : ''}`}><canvas ref={cardQrRef} aria-label={`Código QR para ver ${place.name}`} className={cardLandscape ? 'h-[82px] w-[82px]' : 'h-[96px] w-[96px]'}/></div>
+                  <span className="mt-2 text-center text-[9px] font-bold tracking-wide opacity-65">ESCANEA PARA VER EL NEGOCIO</span>
                 </div>
               </article>
             </div>

@@ -39,6 +39,7 @@ import { PageLoadingSkeleton } from './components/PageLoadingSkeleton';
 import { Analytics } from '@vercel/analytics/react';
 import { getTotalHypes, HYPES_UPDATED_EVENT } from './hypes';
 import { getDailyDropChoices, getDailyDropQuestion } from './dailyDrop';
+import { findBusinessByRouteSlug, getBusinessPath } from './businessLinks';
 
 const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
 const WELCOME_SEEN_KEY = 'puntonochi-welcome-seen-v1';
@@ -154,6 +155,8 @@ export default function App() {
         initialTab = 'ask-nochi';
       } else if (parts[0] === 'explorar' || parts[0] === 'guardados' || parts[0] === 'videos' || parts[0] === 'mercado' || parts[0] === 'noticias' || parts[0] === 'mapa' || parts[0] === 'crear' || parts[0] === 'guias' || parts[0] === 'articulos') {
         initialTab = parts[0] === 'mapa' || parts[0] === 'mercado' ? 'videos' : parts[0] === 'articulos' ? 'guias' : parts[0];
+      } else if (parts[0] === 'negocio' && parts[1]) {
+        initialBusiness = findBusinessByRouteSlug(parts[1], mockPlaces) || null;
       } else {
         // It might be a category name
         const cat = categories.find(c => c.name.toLowerCase() === parts[0].toLowerCase());
@@ -549,13 +552,7 @@ export default function App() {
     } else if (showSearch) {
       path = '/buscar';
     } else if (selectedBusiness) {
-      // If a business is selected, ideally we show /category/business-name
-      // But if category isn't selected (e.g. from Discover page), fallback to /place/
-      if (selectedCategory) {
-        path = `/${selectedCategory.name.toLowerCase()}/${selectedBusiness.id}`;
-      } else {
-        path = `/place/${selectedBusiness.id}`;
-      }
+      path = getBusinessPath(selectedBusiness, mockPlaces);
     } else if (selectedCategory) {
       path = `/${selectedCategory.name.toLowerCase()}`;
     } else if (showAllCategories) {
@@ -568,7 +565,10 @@ export default function App() {
       path = activeTab === 'videos' ? '/mercado' : activeTab === 'guias' ? '/articulos' : `/${activeTab}`;
     }
     
-    if (window.location.pathname !== path) window.history.pushState({}, '', path);
+    if (window.location.pathname !== path) {
+      if (/^\/place\/[^/]+\/?$/.test(window.location.pathname)) window.history.replaceState({}, '', path);
+      else window.history.pushState({}, '', path);
+    }
   }, [selectedBusiness, selectedCategory, showAllCategories, showColonias, activeTab, showSearch, showAdminPage, publicMenuId]);
 
   useEffect(() => {

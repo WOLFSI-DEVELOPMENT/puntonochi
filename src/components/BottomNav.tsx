@@ -629,7 +629,9 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
   };
   // while the menu is open the glass pill rests on the grid tab
   const visualActive = menuOpen ? "browse" : active;
-  const index = TABS.findIndex((t) => t.id === visualActive);
+  const rawActiveIndex = TABS.findIndex((t) => t.id === visualActive);
+  const primaryTabSelected = rawActiveIndex >= 0;
+  const index = Math.max(0, rawActiveIndex);
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -897,6 +899,8 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
               left: 3,
               width: `calc((100% - 6px) / ${TABS.length})`,
               transform: `translateX(${index * 100}%)`,
+              opacity: primaryTabSelected ? 1 : 0,
+              transition: `opacity 180ms ease, transform 520ms ${EASE_OUT}`,
               pointerEvents: "none",
             }}
           >
