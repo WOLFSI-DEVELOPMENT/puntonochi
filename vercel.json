@@ -41,6 +41,10 @@
     { "source": "/api/account/oauth/callback", "destination": "/api/account-dispatch?__accountPath=oauth/callback" },
     { "source": "/api/account/oauth/facebook/start", "destination": "/api/account-dispatch?__accountPath=oauth/facebook/start" },
     { "source": "/api/account/oauth/facebook/callback", "destination": "/api/account-dispatch?__accountPath=oauth/facebook/callback" },
+    { "source": "/api/account/passkey/authentication-options", "destination": "/api/account-dispatch?__accountPath=passkey/authentication-options" },
+    { "source": "/api/account/passkey/authenticate", "destination": "/api/account-dispatch?__accountPath=passkey/authenticate" },
+    { "source": "/api/account/passkey/registration-options", "destination": "/api/account-dispatch?__accountPath=passkey/registration-options" },
+    { "source": "/api/account/passkey/register", "destination": "/api/account-dispatch?__accountPath=passkey/register" },
     { "source": "/api/account/logout", "destination": "/api/account-dispatch?__accountPath=logout" },
     { "source": "/:path((?!api/).*)", "destination": "/index.html" }
   ],

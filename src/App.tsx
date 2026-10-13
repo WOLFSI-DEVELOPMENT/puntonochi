@@ -35,6 +35,7 @@ import { ProfileSheet } from './components/ProfileSheet';
 import { AccountAuthSheet } from './components/AccountSheets';
 import { getStreakMilestone, StreakBadgeCelebration, StreakPage } from './components/StreakPage';
 import { PublicMenuPage } from './components/PublicMenuPage';
+import { LegalPage, type LegalDocument } from './components/LegalPage';
 import { PageLoadingSkeleton } from './components/PageLoadingSkeleton';
 import { Analytics } from '@vercel/analytics/react';
 import { getTotalHypes, HYPES_UPDATED_EVENT } from './hypes';
@@ -138,10 +139,15 @@ export default function App() {
     let initShowAllCategories = false;
     let initShowColonias = false;
     let initShowAdmin = false;
+    let initialLegalDocument: LegalDocument | null = null;
     const initShowWelcome = path === '/' || /^\/inicio\/?$/.test(path);
 
     if (parts.length > 0) {
-      if (parts[0] === 'menu' && parts[1]) {
+      if (parts[0] === 'privacidad') {
+        initialLegalDocument = 'privacidad';
+      } else if (parts[0] === 'terminos') {
+        initialLegalDocument = 'terminos';
+      } else if (parts[0] === 'menu' && parts[1]) {
         initialMenuId = parts[1];
       } else if (parts[0] === 'admin') {
         initShowAdmin = true;
@@ -173,7 +179,7 @@ export default function App() {
       }
     }
     
-    return { initialTab, initialCategory, initialBusiness, initialMenuId, initShowAllCategories, initShowColonias, initShowAdmin, initShowWelcome };
+    return { initialTab, initialCategory, initialBusiness, initialMenuId, initShowAllCategories, initShowColonias, initShowAdmin, initShowWelcome, initialLegalDocument };
   };
 
   const init = getInitialState();
@@ -190,6 +196,7 @@ export default function App() {
   const [showDestacados, setShowDestacados] = useState(false);
   const [showBusinessPromotion, setShowBusinessPromotion] = useState(false);
   const [showBusinessSubmission, setShowBusinessSubmission] = useState(false);
+  const [legalDocument, setLegalDocument] = useState<LegalDocument | null>(init.initialLegalDocument);
   const [selectedColonia, setSelectedColonia] = useState<Colonia | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(init.initialCategory);
   const [selectedBusiness, setSelectedBusiness] = useState<Place | null>(init.initialBusiness);
@@ -546,7 +553,9 @@ export default function App() {
 
   useEffect(() => {
     let path = '/';
-    if (publicMenuId) {
+    if (legalDocument) {
+      path = `/${legalDocument}`;
+    } else if (publicMenuId) {
       path = `/menu/${encodeURIComponent(publicMenuId)}`;
     } else if (showAdminPage) {
       path = '/admin';
@@ -570,7 +579,7 @@ export default function App() {
       if (/^\/place\/[^/]+\/?$/.test(window.location.pathname)) window.history.replaceState({}, '', path);
       else window.history.pushState({}, '', path);
     }
-  }, [selectedBusiness, selectedCategory, showAllCategories, showColonias, activeTab, showSearch, showAdminPage, publicMenuId]);
+  }, [selectedBusiness, selectedCategory, showAllCategories, showColonias, activeTab, showSearch, showAdminPage, publicMenuId, legalDocument]);
 
   useEffect(() => {
     let title = 'PuntoNochi | Lugares, negocios y noticias de Nochistlán';
@@ -579,7 +588,13 @@ export default function App() {
     const articleSlug = activeTab === 'guias' ? window.location.pathname.match(/^\/articulos\/([^/]+)\/?$/)?.[1] : undefined;
     const routeArticle = articleSlug ? articleCatalog.find((article) => article.slug === decodeURIComponent(articleSlug)) : undefined;
 
-    if (publicMenuId) {
+    if (legalDocument === 'privacidad') {
+      title = 'Política de privacidad | PuntoNochi';
+      description = 'Consulta cómo PuntoNochi recopila, utiliza y protege información, incluidas las tecnologías publicitarias.';
+    } else if (legalDocument === 'terminos') {
+      title = 'Términos y condiciones | PuntoNochi';
+      description = 'Consulta los términos para usar PuntoNochi y participar en su comunidad.';
+    } else if (publicMenuId) {
       title = 'Menú digital | PuntoNochi';
       description = 'Consulta el menú digital de un negocio local en Nochistlán.';
     } else if (selectedBusiness) {
@@ -694,7 +709,7 @@ export default function App() {
       document.head.appendChild(schemaScript);
     }
     schemaScript.textContent = JSON.stringify(pageSchema).replace(/</g, '\\u003c');
-  }, [activeTab, selectedBusiness, selectedCategory, showAllCategories, showColonias, showSearch, showAdminPage, publicMenuId]);
+  }, [activeTab, selectedBusiness, selectedCategory, showAllCategories, showColonias, showSearch, showAdminPage, publicMenuId, legalDocument]);
 
   useEffect(() => {
     const onSearchQuery = (event: Event) => setSearchQuery((event as CustomEvent<string>).detail);
@@ -1040,6 +1055,8 @@ export default function App() {
               <button type="button" onClick={() => setActiveTab('explorar')} className="transition-colors hover:text-[#202124]">Explorar</button>
               <button type="button" onClick={() => setActiveTab('guias')} className="transition-colors hover:text-[#202124]">Artículos</button>
               <button type="button" onClick={() => setActiveTab('noticias')} className="transition-colors hover:text-[#202124]">Noticias</button>
+              <a href="/privacidad" onClick={(event) => { event.preventDefault(); setLegalDocument('privacidad'); }} className="transition-colors hover:text-[#202124]">Privacidad</a>
+              <a href="/terminos" onClick={(event) => { event.preventDefault(); setLegalDocument('terminos'); }} className="transition-colors hover:text-[#202124]">Términos</a>
             </nav>
             <p className="relative z-10 mt-6 text-center text-[11px] text-[#202124]/45">© {new Date().getFullYear()} PuntoNochi · Nochistlán, Zacatecas</p>
           </footer>
@@ -1085,10 +1102,11 @@ export default function App() {
         </>}
       </AnimatePresence>
       <AnimatePresence>{streakBadgeCelebration && <StreakBadgeCelebration key={`streak-badge-${streakBadgeCelebration.days}`} days={streakBadgeCelebration.days} name={streakBadgeCelebration.name} onDone={() => setStreakBadgeCelebration(null)}/>}</AnimatePresence>
+      <AnimatePresence>{legalDocument && <LegalPage document={legalDocument} onClose={() => { setLegalDocument(null); window.history.replaceState({}, '', '/'); }}/>}</AnimatePresence>
 
       {/* Bottom Navigation & Search */}
-      {activeTab !== 'ask-nochi' && !showAdminPage && !showStreakPage && !(activeTab === 'videos' && marketplaceDetailOpen) && (
-        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => setShowSearch(false)} onOpenProfile={() => setShowProfileSheet(true)} onSelectBusiness={(place) => setSelectedBusiness(place)} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} timerEndAt={timerEndAt} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onStopTimer={stopTimer} onTimerComplete={completeTimer} />
+      {activeTab !== 'ask-nochi' && !showAdminPage && !showStreakPage && !legalDocument && !(activeTab === 'videos' && marketplaceDetailOpen) && (
+        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => { setSearchQuery(''); setShowSearch(false); }} onOpenProfile={() => setShowProfileSheet(true)} onSelectBusiness={(place) => setSelectedBusiness(place)} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} timerEndAt={timerEndAt} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onStopTimer={stopTimer} onTimerComplete={completeTimer} searchQuery={searchQuery} searchOpen={showSearch} />
       )}
 
       {/* Pages & Overlays */}
@@ -1101,7 +1119,7 @@ export default function App() {
           <SearchPage
             key="search-page"
             query={searchQuery}
-            onClose={() => setShowSearch(false)}
+            onClose={() => { setSearchQuery(''); setShowSearch(false); }}
             onOpenEvents={() => setActiveTab('noticias')}
             onOpenMarketplace={() => setActiveTab('videos')}
             places={selectedCategory ? mockPlaces.filter((place) => place.category === selectedCategory.name) : mockPlaces}
@@ -1110,6 +1128,7 @@ export default function App() {
             onSelectBusiness={(place) => {
               setSelectedCategory(null);
               setSelectedBusiness(place);
+              setSearchQuery('');
               setShowSearch(false);
             }}
           />

@@ -555,7 +555,7 @@ const OPEN_W = 480;
 const SEARCH_IDLE_W = 62;
 
 /* ---------- The navbar ---------- */
-export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch, onOpenProfile, onSelectBusiness, profilePicture, profileName, timerEndAt, onStartTimer, onPauseTimer, onResumeTimer, onStopTimer }) {
+export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch, onOpenProfile, onSelectBusiness, profilePicture, profileName, timerEndAt, onStartTimer, onPauseTimer, onResumeTimer, onStopTimer, searchQuery: externalSearchQuery, searchOpen: externalSearchOpen }) {
   const onChange = (id) => onChangeTab(({ home: 'inicio', explore: 'explorar' })[id] || id);
   const onSearchOpenChange = (open) => open ? onOpenSearch() : onCloseSearch();
   const avatarSrc = profilePicture;
@@ -610,6 +610,12 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
   const stopwatchHasSession = stopwatchRunning || stopwatchElapsedBeforeRun > 0;
   const stopwatchDisplay = `${String(Math.floor(stopwatchElapsed / 60000)).padStart(2, '0')}:${String(Math.floor((stopwatchElapsed % 60000) / 1000)).padStart(2, '0')},${String(Math.floor((stopwatchElapsed % 1000) / 10)).padStart(2, '0')}`;
   useEffect(() => setActive(appTab), [appTab]);
+  useEffect(() => {
+    if (externalSearchQuery !== undefined) setQuery(externalSearchQuery);
+  }, [externalSearchQuery]);
+  useEffect(() => {
+    if (externalSearchOpen !== undefined) setSearching(externalSearchOpen);
+  }, [externalSearchOpen]);
   useEffect(() => {
     if (!timerActive && !stopwatchRunning) return undefined;
     const tick = window.setInterval(() => setTimerNow(Date.now()), 200);
@@ -857,9 +863,31 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
           <button type="button" aria-label="Ir al inicio" title="Inicio" onClick={() => select('home')} className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#17181a] transition-transform active:scale-95">
             <img src="/pwa-192.png" alt="PuntoNochi" className="h-full w-full object-cover" />
           </button>
-          <button type="button" onClick={onOpenSearch} aria-label="Buscar en PuntoNochi" className="flex h-10 min-w-0 w-full max-w-[280px] items-center gap-2.5 rounded-full bg-[#3a3b3c] px-3.5 text-left text-sm text-white/55 transition-colors hover:bg-[#454648]">
-            <Search aria-hidden="true" className="h-[17px] w-[17px] shrink-0"/><span className="truncate">Buscar en PuntoNochi</span>
-          </button>
+          <form role="search" onSubmit={(event) => event.preventDefault()} className="flex h-10 min-w-0 w-full max-w-[280px] items-center gap-2.5 rounded-full bg-[#3a3b3c] px-3.5 text-sm text-white/55 transition-colors focus-within:bg-[#454648]">
+            <Search aria-hidden="true" className="h-[17px] w-[17px] shrink-0"/>
+            <input
+              type="search"
+              value={query}
+              placeholder="Buscar en PuntoNochi"
+              aria-label="Buscar en PuntoNochi"
+              autoComplete="off"
+              onFocus={() => {
+                if (searching) return;
+                setMenuOpen(false);
+                setSearching(true);
+                onSearchOpenChange(true);
+              }}
+              onChange={(event) => { setQuery(event.target.value); onSearch(event.target.value); }}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.currentTarget.blur();
+                  closeSearch();
+                }
+              }}
+              className="search-input-fix min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-[14px] text-white outline-none ring-0 focus:border-0 focus:bg-transparent focus:outline-none focus:ring-0 placeholder:text-white/55 [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden [&::-webkit-search-results-button]:hidden [&::-webkit-search-results-decoration]:hidden"
+            />
+            {query && <button type="button" aria-label="Borrar búsqueda" onClick={() => { setQuery(''); onSearch(''); }} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white/65 hover:bg-white/10 hover:text-white"><X className="h-3.5 w-3.5"/></button>}
+          </form>
         </div>
         <div className="flex h-full flex-[1.8] items-stretch justify-center gap-2">
           {([
