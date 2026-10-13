@@ -310,7 +310,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
         exit={{ y: "100%" }}
         transition={{ type: "spring", damping: 32, stiffness: 360, mass: 0.82 }}
         {...detailDrag}
-        data-no-tab-swipe
+        data-no-tab-swipe data-desktop-sheet="side-right"
         className="fixed inset-x-0 bottom-0 z-[61] h-[min(92dvh,900px)] max-h-[calc(100dvh-env(safe-area-inset-top))] overflow-hidden rounded-t-[32px] bg-[#171717] flex flex-col"
       >
         <SheetDragHandle controls={detailDrag.dragControls} tone="dark" className="absolute inset-x-0 top-0 z-20" />
@@ -596,7 +596,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 32, stiffness: 360, mass: 0.82 }}
               {...mapDrag}
-              className="fixed inset-x-0 bottom-0 z-[73] rounded-t-[24px] bg-[#202124] p-5 pb-8 text-white shadow-[0_-10px_40px_rgba(0,0,0,0.35)]"
+              data-desktop-sheet="popup" className="fixed inset-x-0 bottom-0 z-[73] rounded-t-[24px] bg-[#202124] p-5 pb-8 text-white shadow-[0_-10px_40px_rgba(0,0,0,0.35)]"
             >
               <SheetDragHandle controls={mapDrag.dragControls} className="-mx-5 -mt-5 mb-2" />
 
@@ -659,7 +659,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
               animate={{ y: 0, opacity: 1, scale: 1 }}
               exit={{ y: "100%", opacity: 0, scale: 0.95 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="fixed inset-x-4 bottom-8 z-[71] bg-white rounded-3xl p-6 shadow-2xl flex flex-col items-center text-center"
+              data-desktop-sheet="popup" className="fixed inset-x-4 bottom-8 z-[71] bg-white rounded-3xl p-6 shadow-2xl flex flex-col items-center text-center"
             >
               <div className="w-20 h-20 rounded-full border-4 border-neutral-100 bg-white overflow-hidden shadow-sm mb-4">
                 <img src={place.logo} alt={place.name} className="w-full h-full object-cover" />
@@ -720,7 +720,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 32, stiffness: 360, mass: 0.82 }}
               {...phoneDrag}
-              className="fixed inset-x-0 bottom-0 z-[73] bg-white rounded-t-[24px] overflow-hidden flex flex-col p-5 pb-8 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]"
+              data-desktop-sheet="popup" className="fixed inset-x-0 bottom-0 z-[73] bg-white rounded-t-[24px] overflow-hidden flex flex-col p-5 pb-8 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]"
             >
               <SheetDragHandle controls={phoneDrag.dragControls} tone="dark" className="-mx-5 -mt-5 mb-2" />
 
@@ -755,7 +755,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 32, stiffness: 360, mass: 0.82 }}
               {...menuDrag}
-              className="fixed inset-x-0 bottom-0 z-[73] h-[85vh] bg-white rounded-t-[32px] overflow-hidden flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.1)]"
+              data-desktop-sheet="side-right" className="fixed inset-x-0 bottom-0 z-[73] h-[85vh] bg-white rounded-t-[32px] overflow-hidden flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.1)]"
             >
               <SheetDragHandle controls={menuDrag.dragControls} tone="dark" className="absolute inset-x-0 top-0 z-20" />
 
@@ -808,7 +808,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 32, stiffness: 360, mass: 0.82 }}
-              className="fixed inset-x-0 bottom-0 z-[81] bg-white rounded-t-3xl p-6 shadow-2xl flex flex-col pb-safe"
+              data-desktop-sheet="popup" className="fixed inset-x-0 bottom-0 z-[81] bg-white rounded-t-3xl p-6 shadow-2xl flex flex-col pb-safe"
               {...shareDrag}
             >
               <SheetDragHandle controls={shareDrag.dragControls} tone="dark" className="-mt-5 mb-3" />
@@ -865,7 +865,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
       <AnimatePresence>
         {showDigitalCard && <>
           <motion.button type="button" aria-label="Cerrar tarjeta digital" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowDigitalCard(false)} className="fixed inset-0 z-[88] cursor-default bg-black/55 backdrop-blur-sm" />
-          <motion.section role="dialog" aria-modal="true" aria-labelledby="digital-card-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360, mass: .82 }} {...digitalCardDrag} className="fixed inset-x-0 bottom-0 z-[89] mx-auto flex max-h-[94dvh] w-full max-w-[520px] flex-col overflow-y-auto rounded-t-[30px] bg-[#202124] px-6 pb-[max(24px,env(safe-area-inset-bottom))] pt-3 text-white shadow-2xl">
+          <motion.section data-desktop-sheet="popup" role="dialog" aria-modal="true" aria-labelledby="digital-card-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360, mass: .82 }} {...digitalCardDrag} className="fixed inset-x-0 bottom-0 z-[89] mx-auto flex max-h-[94dvh] w-full max-w-[520px] flex-col overflow-y-auto rounded-t-[30px] bg-[#202124] px-6 pb-[max(24px,env(safe-area-inset-bottom))] pt-3 text-white shadow-2xl">
             <SheetDragHandle controls={digitalCardDrag.dragControls} tone="dark" className="-mt-5 mb-3" />
             <div className="mb-4 flex items-center justify-between px-1">
               <div><h3 id="digital-card-title" className="text-center text-xl font-bold">Tarjeta digital</h3><p className="mt-1 text-center text-xs text-white/45">Comparte los datos de este negocio</p></div>
@@ -912,7 +912,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
       <AnimatePresence>
         {showHypeSheet && <>
           <motion.button type="button" aria-label="Cerrar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowHypeSheet(false)} className="fixed inset-0 z-[120] cursor-default bg-black/65 backdrop-blur-sm" />
-          <motion.section role="dialog" aria-modal="true" aria-labelledby="hype-sheet-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 330 }} className="fixed inset-x-0 bottom-0 z-[121] mx-auto w-full max-w-lg rounded-t-[30px] bg-[#111214] px-5 pb-[max(24px,env(safe-area-inset-bottom))] pt-3 text-white shadow-2xl">
+          <motion.section data-desktop-sheet="popup" role="dialog" aria-modal="true" aria-labelledby="hype-sheet-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 330 }} className="fixed inset-x-0 bottom-0 z-[121] mx-auto w-full max-w-lg rounded-t-[30px] bg-[#111214] px-5 pb-[max(24px,env(safe-area-inset-bottom))] pt-3 text-white shadow-2xl">
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/30" />
             <button type="button" onClick={() => setShowHypeSheet(false)} aria-label="Cerrar hoja" className="absolute right-4 top-3 flex h-9 w-9 items-center justify-center rounded-full text-white/55 hover:bg-white/10 hover:text-white"><X className="h-5 w-5"/></button>
             <div className="mx-auto flex min-h-36 max-w-xs flex-col items-center justify-center text-center">

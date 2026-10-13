@@ -73,6 +73,36 @@
   }
 }
 
+@media (min-width: 1024px) {
+  [data-desktop-sheet="popup"] {
+    position: fixed !important;
+    inset: 0 !important;
+    margin: auto !important;
+    width: min(560px, calc(100vw - 48px)) !important;
+    max-width: min(560px, calc(100vw - 48px)) !important;
+    max-height: min(88dvh, 900px) !important;
+    border-radius: 28px !important;
+    translate: none !important;
+  }
+
+  [data-desktop-sheet="side-right"],
+  [data-desktop-sheet="side-left"] {
+    position: fixed !important;
+    top: 80px !important;
+    bottom: 20px !important;
+    width: min(480px, calc(100vw - 40px)) !important;
+    max-width: min(480px, calc(100vw - 40px)) !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    border-radius: 28px !important;
+    translate: none !important;
+  }
+
+  [data-desktop-sheet="side-right"] { left: auto !important; right: 20px !important; }
+  [data-desktop-sheet="side-left"] { left: 20px !important; right: auto !important; }
+}
+
 /* Marketplace page surfaces and layout, scoped from the app-wide dark theme. */
 .marketplace-page {
   min-height: 100vh;

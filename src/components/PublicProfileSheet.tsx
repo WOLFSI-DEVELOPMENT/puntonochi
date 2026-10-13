@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { CalendarDays, Camera, Grid2X2, LoaderCircle, MapPin, MessageCircle, Pencil, Settings, Star, Store, UserRound, Users, X } from 'lucide-react';
 import { AccountRequiredPrompt } from './AccountSheets';
+import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 
 type Profile = { id: string; name: string; picture: string | null; bio: string; posts: number; reviews: number; events: number; listings: number; followers: number; following: number; isFollowing: boolean; isSelf: boolean };
 type Activity = {
@@ -31,6 +32,7 @@ export function PublicProfileSheet({ profileId, onClose }: { profileId: string; 
   const [editBio, setEditBio] = useState('');
   const [photoData, setPhotoData] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
+  const editSheetDrag = useSheetDrag(() => { setEditing(false); setPhotoData(''); });
 
   useEffect(() => {
     let active = true;
@@ -91,18 +93,12 @@ export function PublicProfileSheet({ profileId, onClose }: { profileId: string; 
 
   return <>
     <motion.button type="button" aria-label="Cerrar perfil público" onClick={onClose} className="fixed inset-0 z-[126] bg-black/70 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}/>
-    <motion.main role="dialog" aria-modal="true" aria-label="Perfil público" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 340 }} className="fixed inset-0 z-[127] flex w-full flex-col overflow-y-auto bg-[#111214] pb-[env(safe-area-inset-bottom)] text-white">
+    <motion.main data-desktop-sheet="side-right" role="dialog" aria-modal="true" aria-label="Perfil público" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 340 }} className="fixed inset-0 z-[127] flex w-full flex-col overflow-y-auto bg-[#111214] pb-[env(safe-area-inset-bottom)] text-white">
       <header className="sticky top-0 z-10 flex items-center justify-between bg-[#111214]/85 px-5 py-3 backdrop-blur-xl"><span className="text-sm font-semibold">Perfil</span><div className="flex items-center gap-2">{profile?.isSelf && <button type="button" aria-label="Abrir ajustes" onClick={() => window.dispatchEvent(new Event('open-profile-settings'))} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.08]"><Settings className="h-4 w-4"/></button>}<button type="button" aria-label="Cerrar" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.08]"><X className="h-4 w-4"/></button></div></header>
       <section className="px-5 pb-5 pt-2">
         {loading ? <div className="flex min-h-44 items-center justify-center"><LoaderCircle className="h-6 w-6 animate-spin text-white/55"/></div> : error && !profile ? <p role="alert" className="py-12 text-center text-sm text-white/55">{error}</p> : profile && <>
-          <div className="flex items-center gap-4">{profile.picture ? <img src={profile.picture} alt="" referrerPolicy="no-referrer" className="h-20 w-20 rounded-full object-cover"/> : <span className="flex h-20 w-20 items-center justify-center rounded-full bg-[#292a2d]"><UserRound className="h-9 w-9 text-white/65"/></span>}<div className="min-w-0 flex-1"><h1 className="truncate text-2xl font-bold">{profile.name}</h1><p className="mt-1 text-xs text-white/45">Comunidad de Nochistlán</p></div>{profile.isSelf && <button type="button" onClick={() => { setEditName(profile.name); setEditBio(profile.bio); setPhotoData(''); setEditing((value) => !value); }} className="flex h-10 shrink-0 items-center gap-2 rounded-full bg-white/[0.09] px-3 text-xs font-semibold"><Pencil className="h-3.5 w-3.5"/>Editar</button>}</div>
+          <div className="flex items-center gap-4">{profile.picture ? <img src={profile.picture} alt="" referrerPolicy="no-referrer" className="h-20 w-20 rounded-full object-cover"/> : <span className="flex h-20 w-20 items-center justify-center rounded-full bg-[#292a2d]"><UserRound className="h-9 w-9 text-white/65"/></span>}<div className="min-w-0 flex-1"><h1 className="truncate text-2xl font-bold">{profile.name}</h1><p className="mt-1 text-xs text-white/45">Comunidad de Nochistlán</p></div>{profile.isSelf && <button type="button" onClick={() => { setEditName(profile.name); setEditBio(profile.bio); setPhotoData(''); setEditing(true); }} className="flex h-10 shrink-0 items-center gap-2 rounded-full bg-white/[0.09] px-3 text-xs font-semibold"><Pencil className="h-3.5 w-3.5"/>Editar</button>}</div>
           {profile.bio && <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-white/75">{profile.bio}</p>}
-          {editing && profile.isSelf && <div className="mt-5 space-y-3 rounded-[22px] bg-[#202124] p-4">
-            <label className="block text-xs font-semibold text-white/55">Nombre público<input value={editName} maxLength={60} onChange={(event) => setEditName(event.target.value)} className="mt-1.5 h-11 w-full rounded-[14px] border border-white/10 bg-[#151618] px-3 text-sm text-white outline-none focus:border-blue-300/60"/></label>
-            <label className="block text-xs font-semibold text-white/55">Biografía<textarea value={editBio} maxLength={280} rows={3} onChange={(event) => setEditBio(event.target.value)} placeholder="Cuéntale algo a la comunidad" className="mt-1.5 w-full resize-none rounded-[14px] border border-white/10 bg-[#151618] px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/25 focus:border-blue-300/60"/><span className="mt-1 block text-right text-[10px] text-white/35">{editBio.length}/280</span></label>
-            <label className="flex cursor-pointer items-center gap-2 rounded-[14px] bg-[#151618] px-3 py-3 text-sm font-semibold text-white/75"><Camera className="h-4 w-4"/>{photoData ? 'Foto lista' : 'Cambiar foto de perfil'}<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => void choosePhoto(event.target.files?.[0])}/></label>
-            <div className="flex gap-2"><button type="button" onClick={() => { setEditing(false); setPhotoData(''); }} className="h-10 flex-1 rounded-full bg-white/[0.08] text-sm font-semibold">Cancelar</button><button type="button" disabled={savingProfile} onClick={() => void saveProfile()} className="h-10 flex-1 rounded-full bg-blue-500 text-sm font-bold disabled:opacity-50">{savingProfile ? 'Guardando…' : 'Guardar perfil'}</button></div>
-          </div>}
           <div className="mt-5 flex items-center gap-6"><div><strong>{profile.posts}</strong><span className="ml-1.5 text-xs text-white/50">publicaciones</span></div><div><strong>{profile.followers}</strong><span className="ml-1.5 text-xs text-white/50">seguidores</span></div><div><strong>{profile.following}</strong><span className="ml-1.5 text-xs text-white/50">siguiendo</span></div></div>
           {!profile.isSelf && <button type="button" disabled={busy} onClick={() => void toggleFollow()} className={`mt-5 flex h-10 w-full items-center justify-center rounded-full text-sm font-bold disabled:opacity-60 ${profile.isFollowing ? 'bg-[#292a2d] text-white' : 'bg-[#1683f8] text-white'}`}>{busy ? 'Un momento…' : profile.isFollowing ? 'Siguiendo' : 'Seguir'}</button>}
           {error && <p role="alert" className="mt-3 text-xs text-rose-300">{error}</p>}
@@ -118,6 +114,22 @@ export function PublicProfileSheet({ profileId, onClose }: { profileId: string; 
         </section>
       </>}
     </motion.main>
+    <AnimatePresence>
+      {editing && profile?.isSelf && <>
+        <motion.button type="button" aria-label="Cerrar edición del perfil" onClick={() => { setEditing(false); setPhotoData(''); }} className="fixed inset-0 z-[138] bg-black/65 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}/>
+        <motion.section {...editSheetDrag} data-desktop-sheet="popup" role="dialog" aria-modal="true" aria-labelledby="edit-profile-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360, mass: .82 }} className="fixed inset-x-0 bottom-0 z-[139] mx-auto flex max-h-[85dvh] w-full max-w-lg flex-col overflow-y-auto rounded-t-[30px] bg-[#202124] px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-2 text-white shadow-2xl">
+          <SheetDragHandle controls={editSheetDrag.dragControls} tone="dark" className="mb-2"/>
+          <header className="mb-5 flex items-center justify-between"><div><h2 id="edit-profile-title" className="text-xl font-bold">Editar perfil</h2><p className="mt-1 text-xs text-white/45">Actualiza cómo te ve la comunidad.</p></div><button type="button" aria-label="Cerrar edición del perfil" onClick={() => { setEditing(false); setPhotoData(''); }} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.08] text-white/75"><X className="h-4 w-4"/></button></header>
+          <div className="space-y-4">
+            <label className="block text-xs font-semibold text-white/55">Nombre público<input value={editName} maxLength={60} onChange={(event) => setEditName(event.target.value)} className="mt-1.5 h-12 w-full rounded-[16px] bg-[#151618] px-4 text-sm text-white outline-none placeholder:text-white/25 focus:ring-1 focus:ring-blue-300/60"/></label>
+            <label className="block text-xs font-semibold text-white/55">Biografía<textarea value={editBio} maxLength={280} rows={4} onChange={(event) => setEditBio(event.target.value)} placeholder="Cuéntale algo a la comunidad" className="mt-1.5 w-full resize-none rounded-[16px] bg-[#151618] px-4 py-3 text-sm text-white outline-none placeholder:text-white/25 focus:ring-1 focus:ring-blue-300/60"/><span className="mt-1 block text-right text-[10px] text-white/35">{editBio.length}/280</span></label>
+            <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-[16px] bg-[#151618] px-4 py-3 text-sm font-semibold text-white/75"><Camera className="h-4 w-4"/>{photoData ? 'Foto lista' : 'Cambiar foto de perfil'}<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => void choosePhoto(event.target.files?.[0])}/></label>
+            {error && <p role="alert" className="text-xs text-rose-300">{error}</p>}
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-2.5"><button type="button" onClick={() => { setEditing(false); setPhotoData(''); }} className="min-h-12 rounded-full bg-white/[0.08] text-sm font-semibold">Cancelar</button><button type="button" disabled={savingProfile} onClick={() => void saveProfile()} className="min-h-12 rounded-full bg-blue-500 text-sm font-bold disabled:opacity-50">{savingProfile ? 'Guardando…' : 'Guardar perfil'}</button></div>
+        </motion.section>
+      </>}
+    </AnimatePresence>
     {showAccountPrompt && <AccountRequiredPrompt onClose={() => setShowAccountPrompt(false)} message="Inicia sesión con Google o Facebook para seguir a otras personas de la comunidad."/>}
   </>;
 }

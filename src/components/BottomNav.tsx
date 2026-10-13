@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useEffect, useRef, useState } from "react";
-import { AlarmClock, Bell, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Flag, Mic, Pause, Play, Plus, Square, Timer, Trash2, X } from "lucide-react";
+import { AlarmClock, Bell, BookOpen, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Compass, Flag, Home, LayoutGrid, Mic, Newspaper, Pause, Play, Plus, Search, Square, Store, Timer, Trash2, UserRound, X } from "lucide-react";
 import CornerKit from '@cornerkit/core';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -156,6 +156,15 @@ const CSS_TEXT = `
   .lgn-slider, .lgn-ico, .lgn-row, .lgn-tabbar, .lgn-search-wrap,
   .lgn-s-ico, .lgn-input, .lgn-close, .lgn-menu, .lgn-item { transition: none !important; }
   .lgn-blob.is-moving { animation: none; }
+}
+@media (min-width: 1024px) {
+  .lgn-row { display: contents !important; }
+  .lgn-tabbar, .lgn-search-wrap { display: none !important; }
+  .pn-desktop-topbar { display: flex !important; }
+  .lgn-menu { left: auto !important; right: 18px !important; top: 72px !important; bottom: auto !important; width: min(360px, calc(100vw - 36px)) !important; max-width: 360px !important; margin-inline: 0 !important; z-index: 65 !important; transform-origin: 100% 0 !important; }
+}
+@media (max-width: 1023px) {
+  .pn-desktop-topbar { display: none !important; }
 }
 `;
 
@@ -437,7 +446,7 @@ function AppleUtilitySheets({ active, onClose }) {
   const title = active === 'alarms' ? 'Alarmas' : active === 'reminders' ? 'Recordatorios' : 'Calendario';
   return <>
     <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[139] bg-black/50 backdrop-blur-sm"/>
-    <motion.section data-lgn-utility-sheet role="dialog" aria-modal="false" aria-label={title} initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }} className={`pointer-events-auto fixed inset-x-[5px] bottom-[5px] z-[140] mx-auto flex h-[min(84dvh,780px)] max-w-[680px] flex-col overflow-hidden rounded-[30px] text-white shadow-[0_-18px_70px_rgba(0,0,0,.48)] ${active === 'calendar' ? 'bg-[#111214]' : active === 'alarms' ? 'bg-[#08090b]' : 'bg-[#1c1d20]'}`}>
+    <motion.section data-lgn-utility-sheet data-desktop-sheet="side-right" role="dialog" aria-modal="false" aria-label={title} initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }} className={`pointer-events-auto fixed inset-x-[5px] bottom-[5px] z-[140] mx-auto flex h-[min(84dvh,780px)] max-w-[680px] flex-col overflow-hidden rounded-[30px] text-white shadow-[0_-18px_70px_rgba(0,0,0,.48)] ${active === 'calendar' ? 'bg-[#111214]' : active === 'alarms' ? 'bg-[#08090b]' : 'bg-[#1c1d20]'}`}>
       <header className="flex shrink-0 items-start justify-between px-5 pb-3 pt-5"><div className={active === 'calendar' ? 'flex min-w-0 flex-1 items-start justify-between pr-3' : ''}>{active === 'calendar' ? <><div className="flex items-center gap-1.5"><h2 className="text-[25px] font-semibold leading-7 tracking-tight capitalize">{new Intl.DateTimeFormat('es-MX', { weekday: 'short' }).format(selectedCalendarDate).replace('.', '')}</h2><span aria-hidden="true" className="mt-1 h-2 w-2 rounded-full bg-[#ff5b52]"/></div><p className="pt-0.5 text-right text-[11px] leading-[14px] text-white/55">{new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'long' }).format(selectedCalendarDate)}<br/>{selectedCalendarDate.getFullYear()}</p></> : <><h2 className="text-[21px] font-bold tracking-tight">{title}</h2>{active === 'reminders' && <p className="mt-0.5 text-xs text-white/45">{pendingReminders.length} pendientes · {reminders.filter((item) => item.completed).length} completados</p>}{active === 'alarms' && <p className="mt-0.5 text-xs text-white/40">Reloj</p>}</>}</div><button type="button" onClick={onClose} aria-label={`Cerrar ${title}`} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[.09] text-white/75"><X className="h-4 w-4"/></button></header>
       {active === 'alarms' && <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-5 pt-4">
         <div className="mb-4 rounded-[24px] bg-[#17181b] px-5 pb-5 pt-4 shadow-[inset_0_1px_0_rgba(255,255,255,.05)]"><div className="flex items-center justify-between"><span className="text-[10px] font-semibold uppercase tracking-[.18em] text-white/40">Siguiente</span><AlarmClock className="h-4 w-4 text-[#ff9f0a]"/></div><p className="mt-2 font-mono text-[54px] font-light leading-[1.05] tracking-[-.06em] tabular-nums">{nextAlarm?.time || '—:—'}</p><p className="mt-2 text-xs text-white/45">{nextAlarm ? `${nextAlarm.label}${nextAlarm.repeatDaily ? ' · Todos los días' : ''}` : 'Añade una alarma para empezar'}</p></div>
@@ -466,7 +475,7 @@ function AppleUtilitySheets({ active, onClose }) {
     </motion.section>
     <AnimatePresence>
       {reminderComposer && (active === 'reminders' || active === 'calendar') && <motion.button type="button" aria-label="Salir de recordatorios" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeReminderComposer} className="fixed inset-0 z-[159] bg-black/55 backdrop-blur-[3px]"/>}
-      {reminderComposer && (active === 'reminders' || active === 'calendar') && <motion.section data-lgn-reminder-composer role="dialog" aria-modal="true" aria-labelledby="lgn-reminder-composer-title" initial={{ y: '100%', opacity: .8 }} animate={{ y: 0, opacity: 1 }} exit={{ y: '100%', opacity: .8 }} transition={{ type: 'spring', damping: 30, stiffness: 310 }} className="fixed inset-x-[10px] bottom-[10px] z-[160] mx-auto flex max-h-[min(70dvh,560px)] min-h-[280px] w-[calc(100%-20px)] max-w-[560px] flex-col overflow-hidden rounded-[30px] bg-[#1c1d20] p-5 text-white shadow-[0_20px_80px_rgba(0,0,0,.6)]">
+      {reminderComposer && (active === 'reminders' || active === 'calendar') && <motion.section data-lgn-reminder-composer data-desktop-sheet="popup" role="dialog" aria-modal="true" aria-labelledby="lgn-reminder-composer-title" initial={{ y: '100%', opacity: .8 }} animate={{ y: 0, opacity: 1 }} exit={{ y: '100%', opacity: .8 }} transition={{ type: 'spring', damping: 30, stiffness: 310 }} className="fixed inset-x-[10px] bottom-[10px] z-[160] mx-auto flex max-h-[min(70dvh,560px)] min-h-[280px] w-[calc(100%-20px)] max-w-[560px] flex-col overflow-hidden rounded-[30px] bg-[#1c1d20] p-5 text-white shadow-[0_20px_80px_rgba(0,0,0,.6)]">
           <header className="relative z-10 mb-4 flex shrink-0 items-center justify-between"><div><button type="button" onClick={() => setReminderListMenuOpen((open) => !open)} aria-expanded={reminderListMenuOpen} className="flex items-center gap-1 text-[17px] font-semibold text-[#ff9f0a]"><span>Recordatorios</span><ChevronDown className={`h-4 w-4 transition-transform ${reminderListMenuOpen ? 'rotate-180' : ''}`}/></button><h2 id="lgn-reminder-composer-title" className="mt-1 text-[12px] text-white/45">Nuevo recordatorio</h2></div><button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); closeReminderComposer(); }} aria-label="Cerrar y salir" className="pointer-events-auto relative z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/[.12] text-white/80"><X className="h-4 w-4"/></button>
             {reminderListMenuOpen && <div className="absolute left-0 top-[48px] z-20 w-56 overflow-hidden rounded-[18px] bg-[#303136] p-1 shadow-xl">{[{ id: 'none', label: 'Mis recordatorios' }, { id: 'today', label: 'Hoy' }, { id: 'scheduled', label: 'Programado' }].map((option) => <button key={option.id} type="button" onClick={() => selectReminderSchedule(option.id)} className="flex h-10 w-full items-center rounded-[13px] px-3 text-left text-sm text-white/85 hover:bg-white/[.08]">{option.label}</button>)}</div>}
           </header>
@@ -517,7 +526,7 @@ function QuickNotesSheet({ onClose }) {
 
   return <>
     <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[139] bg-black/60 backdrop-blur-sm"/>
-    <motion.section data-lgn-notes-sheet role="dialog" aria-modal="false" aria-labelledby="lgn-notes-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }} className="pointer-events-auto fixed inset-x-[5px] bottom-[5px] z-[140] mx-auto flex h-[min(82dvh,760px)] max-w-[720px] flex-col overflow-hidden rounded-[30px] bg-[#1c1d20] text-white shadow-2xl">
+    <motion.section data-lgn-notes-sheet data-desktop-sheet="side-right" role="dialog" aria-modal="false" aria-labelledby="lgn-notes-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }} className="pointer-events-auto fixed inset-x-[5px] bottom-[5px] z-[140] mx-auto flex h-[min(82dvh,760px)] max-w-[720px] flex-col overflow-hidden rounded-[30px] bg-[#1c1d20] text-white shadow-2xl">
       <header className="relative z-10 flex shrink-0 items-center justify-between gap-3 border-b border-white/[.07] px-5 pb-3 pt-4"><div className="min-w-0"><h2 id="lgn-notes-title" className="text-lg font-bold">Cuaderno</h2><p className="mt-0.5 text-[11px] text-white/45">{notes.length} {notes.length === 1 ? 'nota adhesiva' : 'notas adhesivas'}</p></div><button type="button" onClick={onClose} aria-label="Cerrar cuaderno" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[.08] text-white/80 transition-colors hover:bg-white/[.14]"><X className="h-4 w-4"/></button></header>
       <div ref={canvasRef} className="relative min-h-0 flex-1 touch-pan-x touch-pan-y overflow-auto overscroll-contain" style={{ backgroundColor: '#202124', backgroundImage: 'radial-gradient(rgba(255,255,255,.17) 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
         <div className="relative min-h-[1500px] min-w-[1600px]" style={{ width: '1600px', height: '1500px' }}>
@@ -557,6 +566,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
   const inputRef = useRef(null);
   const menuRef = useRef(null);
   const browseRef = useRef(null);
+  const desktopActionsRef = useRef(null);
 
   const [active, setActive] = useState(appTab);
   const [moves, setMoves] = useState(0); // bumps on each tab switch to replay the stretch
@@ -646,6 +656,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
       const t = e.target;
       if (menuRef.current && menuRef.current.contains(t)) return;
       if (browseRef.current && browseRef.current.contains(t)) return;
+      if (desktopActionsRef.current && desktopActionsRef.current.contains(t)) return;
       setMenuOpen(false);
     };
     const onKey = (e) => e.key === "Escape" && setMenuOpen(false);
@@ -841,6 +852,38 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
       }}
     >
       <style>{CSS_TEXT}</style>
+      <header className="pn-desktop-topbar" aria-label="Navegación de PuntoNochi" style={{ position: 'fixed', inset: '0 0 auto', zIndex: 60, height: 64, alignItems: 'center', gap: 20, padding: '0 18px', background: '#242526', borderBottom: '1px solid rgba(255,255,255,.08)', boxShadow: '0 2px 12px rgba(0,0,0,.18)', pointerEvents: 'auto' }}>
+        <div className="flex min-w-0 flex-[1.1] items-center gap-3">
+          <button type="button" aria-label="Ir al inicio" title="Inicio" onClick={() => select('home')} className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#17181a] transition-transform active:scale-95">
+            <img src="/pwa-192.png" alt="PuntoNochi" className="h-full w-full object-cover" />
+          </button>
+          <button type="button" onClick={onOpenSearch} aria-label="Buscar en PuntoNochi" className="flex h-10 min-w-0 w-full max-w-[280px] items-center gap-2.5 rounded-full bg-[#3a3b3c] px-3.5 text-left text-sm text-white/55 transition-colors hover:bg-[#454648]">
+            <Search aria-hidden="true" className="h-[17px] w-[17px] shrink-0"/><span className="truncate">Buscar en PuntoNochi</span>
+          </button>
+        </div>
+        <div className="flex h-full flex-[1.8] items-stretch justify-center gap-2">
+          {([
+            { id: 'home', tab: 'inicio', label: 'Inicio', Icon: Home },
+            { id: 'explore', tab: 'explorar', label: 'Explorar', Icon: Compass },
+            { id: 'videos', tab: 'videos', label: 'Mercado', Icon: Store },
+            { id: 'noticias', tab: 'noticias', label: 'Noticias', Icon: Newspaper },
+            { id: 'guias', tab: 'guias', label: 'Artículos', Icon: BookOpen },
+          ] as const).map(({ id, tab, label, Icon }) => {
+            const selected = activeTab === tab;
+            return <button key={id} type="button" aria-label={label} aria-current={selected ? 'page' : undefined} title={label} onClick={() => select(id)} className={`relative flex min-w-[56px] max-w-[112px] flex-1 items-center justify-center text-white/60 transition-colors hover:text-white ${selected ? 'text-white' : ''}`}>
+              <Icon aria-hidden="true" className="h-[23px] w-[23px]" strokeWidth={selected ? 2.25 : 1.8}/>
+              {selected && <span className="absolute inset-x-1 bottom-0 h-[3px] rounded-t-full bg-[#6aa7ff]"/>}
+            </button>;
+          })}
+        </div>
+        <div className="flex flex-[1.1] items-center justify-end gap-2.5">
+          <button type="button" onClick={() => select('crear')} aria-label="Crear publicación" title="Crear" className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3a3b3c] text-white/80 transition-colors hover:bg-[#4b4c4d]"><Plus className="h-5 w-5"/></button>
+          <button ref={desktopActionsRef} type="button" onClick={() => setMenuOpen((open) => !open)} aria-label="Acciones rápidas" aria-haspopup="menu" aria-expanded={menuOpen} title="Acciones rápidas" className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${menuOpen ? 'bg-[#4b4c4d] text-white' : 'bg-[#3a3b3c] text-white/80 hover:bg-[#4b4c4d]'}`}><LayoutGrid className="h-[19px] w-[19px]"/></button>
+          <button type="button" onClick={onOpenProfile} aria-label="Abrir perfil" title="Perfil" className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#3a3b3c] text-white/80 ring-2 ring-transparent transition-colors hover:ring-white/20">
+            {avatarSrc ? <img src={avatarSrc} alt={profileName || 'Perfil'} referrerPolicy="no-referrer" className="h-full w-full object-cover"/> : <UserRound aria-hidden="true" className="h-[21px] w-[21px]"/>}
+          </button>
+        </div>
+      </header>
       <svg width="0" height="0" aria-hidden="true" style={{ position: "absolute" }}>
         <defs>
           <linearGradient id="lgn-glass" x1="0" y1="0" x2="0" y2="1">
@@ -1161,7 +1204,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
       <AnimatePresence>
         {timerPickerOpen && <>
           <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[129] bg-black/45 backdrop-blur-sm"/>
-          <motion.section data-lgn-timer-sheet role="dialog" aria-modal="false" aria-labelledby="lgn-timer-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }} className="pointer-events-auto fixed inset-x-[5px] bottom-[5px] z-[130] mx-auto w-[calc(100%-10px)] max-w-[520px] overflow-hidden rounded-[28px] bg-black p-5 pb-[max(20px,env(safe-area-inset-bottom))] text-white shadow-2xl backdrop-blur-2xl">
+          <motion.section data-lgn-timer-sheet data-desktop-sheet="popup" role="dialog" aria-modal="false" aria-labelledby="lgn-timer-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }} className="pointer-events-auto fixed inset-x-[5px] bottom-[5px] z-[130] mx-auto w-[calc(100%-10px)] max-w-[520px] overflow-hidden rounded-[28px] bg-black p-5 pb-[max(20px,env(safe-area-inset-bottom))] text-white shadow-2xl backdrop-blur-2xl">
             <div className="h-[env(safe-area-inset-top)]" aria-hidden="true"/><div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/25"/>
             <div className="relative -mt-1 flex min-h-12 items-start justify-between pr-10"><div><h2 id="lgn-timer-title" className="text-xl font-bold">{timerActive ? 'Temporizador activo' : '¿Cuánto tiempo?'}</h2></div><button type="button" onClick={() => setTimerPickerOpen(false)} aria-label="Cerrar temporizador" className="absolute right-[-15px] top-[-15px] flex h-9 w-9 items-center justify-center rounded-full bg-white/[.1] p-2 text-white transition-colors hover:bg-white/[.16] active:bg-white/[.22]"><X className="h-4 w-4"/></button></div>
             {timerActive ? <><div className="py-6 text-center"><span className="font-mono text-6xl font-semibold tabular-nums tracking-tight">{timerDisplay}</span><p className="mt-2 text-xs text-white/45">{timerPausedRemaining !== null ? 'En pausa' : 'Tiempo restante'}</p></div><div className="flex gap-2"><button type="button" onClick={() => { if (timerPausedRemaining !== null) { onResumeTimer?.(); setTimerPausedRemaining(null); } else { setTimerPausedRemaining(Math.max(0, (timerEndAt || 0) - Date.now())); onPauseTimer?.(); } }} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-white/[.1] text-sm font-semibold">{timerPausedRemaining !== null ? <Play className="h-4 w-4"/> : <Pause className="h-4 w-4"/>}{timerPausedRemaining !== null ? 'Reanudar' : 'Pausar'}</button><button type="button" onClick={() => { onStopTimer?.(); setTimerPausedRemaining(null); setTimerPickerOpen(false); setTimerNoticeDismissed(true); }} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-[#ff453a]/15 text-sm font-semibold text-[#ff6b63]"><X className="h-4 w-4"/>Detener</button></div></> : <><div className="relative mb-4 overflow-hidden rounded-[26px] bg-black px-3 pb-4 pt-3">

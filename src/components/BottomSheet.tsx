@@ -31,6 +31,7 @@ export function BottomSheet({ children, onClose, fullHeight = false }: BottomShe
       />
       <motion.div
         {...sheetDrag}
+        data-desktop-sheet="side-right"
         initial={{ y: '100%' }}
         animate={{ y: 0 }}
         exit={{ y: '100%' }}

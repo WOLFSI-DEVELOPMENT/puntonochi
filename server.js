@@ -2398,6 +2398,7 @@ app.get('/api/places', requireNeon, async (req, res) => {
     }
     res.json(places.map((place) => ({
       ...place,
+      logo: /\boxxo\b/i.test(place.name) ? 'https://soybacalar.com/img_logos/616c7c7e89651.png' : place.logo,
       images: [...(Array.isArray(place.images) ? place.images : []), ...(postImagesByPlace.get(place.id) || [])],
       communityPosts: communityPostsByPlace.get(place.id) || [],
       goodToKnow: Array.isArray(place.goodToKnow) ? place.goodToKnow : [],
@@ -2521,7 +2522,8 @@ app.post('/api/ask-nochi', requireNeon, async (req, res) => {
     const topMatches = ranked.filter(({ score }) => score > 0).slice(0, 4);
     const selected = (topMatches.length ? topMatches : ranked.slice(0, 3)).map(({ place }) => ({
       id: place.id, name: place.name, category: place.category, subtitle: place.subtitle, location: place.location,
-      address: place.address, mapUrl: place.mapUrl, images: Array.isArray(place.images) ? place.images : [], logo: place.logo,
+      address: place.address, mapUrl: place.mapUrl, images: Array.isArray(place.images) ? place.images : [],
+      logo: /\boxxo\b/i.test(place.name) ? 'https://soybacalar.com/img_logos/616c7c7e89651.png' : place.logo,
       rating: Number(place.rating || 0), reviewCount: Number(place.reviewCount || 0), isOpen: Boolean(place.isOpen),
       cost: Number(place.cost || 0), distance: place.distance || '', goodToKnow: Array.isArray(place.goodToKnow) ? place.goodToKnow : [],
       hours: place.hours || '', weeklyHours: place.weeklyHours || null, lat: place.lat == null ? undefined : Number(place.lat),

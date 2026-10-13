@@ -261,6 +261,7 @@ export default function App() {
   });
   const [welcomeTransitionDone, setWelcomeTransitionDone] = useState(true);
   const [publicProfileId, setPublicProfileId] = useState<string | null>(null);
+  const [showProfileSheet, setShowProfileSheet] = useState(false);
   const [showAccountAuth, setShowAccountAuth] = useState(() => new URLSearchParams(window.location.search).has('accountAuthError'));
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [showStreakPage, setShowStreakPage] = useState(false);
@@ -709,7 +710,7 @@ export default function App() {
   if (publicMenuId) return <PublicMenuPage id={publicMenuId}/>;
 
   return (
-    <AutoLayoutRoot id="app-root" className={`auto-layout-root relative min-h-screen bg-[#f8f9fa] ${activeTab === 'explorar' || activeTab === 'inicio' ? 'pb-0' : 'pb-36'} font-sans text-neutral-900 selection:bg-blue-100`} style={{ fontFamily: "'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif" }}>
+    <AutoLayoutRoot id="app-root" className={`auto-layout-root relative min-h-screen bg-[#f8f9fa] lg:pt-16 ${activeTab === 'explorar' || activeTab === 'inicio' ? 'pb-0' : 'pb-36'} font-sans text-neutral-900 selection:bg-blue-100`} style={{ fontFamily: "'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif" }}>
       {/* Dynamic Main Content based on activeTab */}
       <AnimatePresence mode="wait" initial={false}>
       {activeTab === 'inicio' && (
@@ -1076,7 +1077,7 @@ export default function App() {
       <AnimatePresence>
         {showSponsorSheet && <>
           <motion.button type="button" aria-label="Cerrar información para patrocinadores" onClick={() => setShowSponsorSheet(false)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[130] bg-black/65 backdrop-blur-sm"/>
-          <motion.section role="dialog" aria-modal="true" aria-labelledby="sponsor-sheet-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 34, stiffness: 280, mass: .9 }} className="fixed inset-x-0 bottom-0 z-[131] mx-auto w-full max-w-[560px] rounded-t-[30px] bg-[#202124] px-6 pb-[max(24px,env(safe-area-inset-bottom))] pt-3 text-white shadow-2xl">
+          <motion.section data-desktop-sheet="popup" role="dialog" aria-modal="true" aria-labelledby="sponsor-sheet-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 34, stiffness: 280, mass: .9 }} className="fixed inset-x-0 bottom-0 z-[131] mx-auto w-full max-w-[560px] rounded-t-[30px] bg-[#202124] px-6 pb-[max(24px,env(safe-area-inset-bottom))] pt-3 text-white shadow-2xl">
             <div aria-hidden="true" className="mx-auto h-1.5 w-12 rounded-full bg-white/25"/>
             <button type="button" onClick={() => setShowSponsorSheet(false)} aria-label="Cerrar" className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.08]"><X className="h-4 w-4"/></button>
             <div className="px-1 pb-1 pt-5"><span className="flex h-12 w-12 items-center justify-center rounded-[16px] bg-gradient-to-br from-[#ffb347] via-[#ee2a7b] to-[#6228d7]"><Instagram aria-hidden="true" className="h-6 w-6"/></span><h2 id="sponsor-sheet-title" className="mt-4 pr-10 text-xl font-bold">¿Quieres ser patrocinador?</h2><p className="mt-2 text-sm leading-relaxed text-white/60">Mándanos un mensaje por Instagram y cuéntanos sobre tu negocio. Te compartimos las opciones para aparecer en PuntoNochi.</p><a href="https://www.instagram.com/puntonochistlan/" target="_blank" rel="noopener noreferrer" className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-bold text-[#202124] transition-transform active:scale-[.99]"><Instagram aria-hidden="true" className="h-4 w-4"/>Escribir a @puntonochistlan</a></div>
@@ -1087,7 +1088,7 @@ export default function App() {
 
       {/* Bottom Navigation & Search */}
       {activeTab !== 'ask-nochi' && !showAdminPage && !showStreakPage && !(activeTab === 'videos' && marketplaceDetailOpen) && (
-        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => setShowSearch(false)} onOpenProfile={() => { if (signedInAccount) setPublicProfileId(signedInAccount.id); else setShowAccountAuth(true); }} onSelectBusiness={(place) => setSelectedBusiness(place)} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} timerEndAt={timerEndAt} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onStopTimer={stopTimer} onTimerComplete={completeTimer} />
+        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => setShowSearch(false)} onOpenProfile={() => setShowProfileSheet(true)} onSelectBusiness={(place) => setSelectedBusiness(place)} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} timerEndAt={timerEndAt} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onStopTimer={stopTimer} onTimerComplete={completeTimer} />
       )}
 
       {/* Pages & Overlays */}
@@ -1167,6 +1168,7 @@ export default function App() {
         <SmartOnboarding enabled={!loading && !showWelcome && welcomeTransitionDone && !showAdminPage} onLocation={setDeviceLocation} />
         {showWelcome && !showAdminPage && <WelcomePage onContinue={finishWelcome} />}
         {publicProfileId && <PublicProfileSheet profileId={publicProfileId} onClose={() => setPublicProfileId(null)} />}
+        {showProfileSheet && <ProfileSheet onClose={() => setShowProfileSheet(false)} onSelectBusiness={(place) => setSelectedBusiness(place)} />}
         {showAccountAuth && <AccountAuthSheet onClose={() => setShowAccountAuth(false)}/>}
         {showProfileSettings && <ProfileSheet settingsOnly onClose={() => setShowProfileSettings(false)} onSelectBusiness={(place) => setSelectedBusiness(place)} />}
       </AnimatePresence>
