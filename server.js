@@ -2565,8 +2565,11 @@ ${JSON.stringify(listingRows)}`,
     if (!answer) return res.status(502).json({ error: 'Nochi no pudo generar una respuesta. Inténtalo de nuevo.' });
     const answerKey = answer.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     const mentionedPlaces = selected.filter((place) => answerKey.includes(String(place.name).toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '')));
+    const returnedPlaces = req.body?.searchMode === 'business'
+      ? (mentionedPlaces.length ? mentionedPlaces : topMatches.slice(0, 3).map(({ place }) => selected.find((candidate) => candidate.id === place.id)).filter(Boolean))
+      : mentionedPlaces;
     res.set('Cache-Control', 'no-store');
-    return res.json({ answer, places: mentionedPlaces });
+    return res.json({ answer, places: returnedPlaces });
   } catch (error) {
     console.error('Could not answer Ask Nochi query:', error);
     return res.status(502).json({ error: 'No se pudo consultar Ask Nochi. Inténtalo de nuevo en un momento.' });

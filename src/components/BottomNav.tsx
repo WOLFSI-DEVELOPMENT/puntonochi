@@ -1,5 +1,8 @@
 // @ts-nocheck
 import { useEffect, useRef, useState } from "react";
+import { AlarmClock, Bell, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Flag, Mic, Pause, Play, Plus, Square, Timer, Trash2, X } from "lucide-react";
+import CornerKit from '@cornerkit/core';
+import { AnimatePresence, motion } from 'motion/react';
 
 /* ------------------------------------------------------------------
    Liquid Glass Navbar — dark, thin, single file React
@@ -118,12 +121,15 @@ const CSS_TEXT = `
 .lgn-input {
   -webkit-appearance: none;
   appearance: none;
-  background: transparent;
+  background: transparent !important;
+  background-color: transparent !important;
   border: 0;
   outline: 0;
   margin: 0;
   padding: 0;
   border-radius: 0;
+  box-sizing: border-box;
+  min-width: 0;
   width: 100%;
   height: 100%;
   color: #fff;
@@ -136,6 +142,15 @@ const CSS_TEXT = `
 .lgn-input::placeholder { color: rgba(255,255,255,0.62); opacity: 1; }
 .lgn-input::-webkit-input-placeholder { color: rgba(255,255,255,0.62); opacity: 1; }
 .lgn-input::-webkit-search-cancel-button { display: none; }
+.lgn-input:-webkit-autofill,
+.lgn-input:-webkit-autofill:hover,
+.lgn-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px transparent inset !important;
+  box-shadow: 0 0 0 1000px transparent inset !important;
+  -webkit-text-fill-color: #fff !important;
+  caret-color: #fff;
+  transition: background-color 999999s ease-out 0s;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .lgn-slider, .lgn-ico, .lgn-row, .lgn-tabbar, .lgn-search-wrap,
@@ -186,11 +201,11 @@ const Icon = ({ name, size = 22 }) => (
 );
 
 /* ---------- Profile picture (falls back to a silhouette) ---------- */
-const AVATAR = 24;
-const Avatar = ({ src, alt }) => {
+const AVATAR = 30;
+const Avatar = ({ src, alt, timerActive = false }) => {
   const [failed, setFailed] = useState(false);
   return (
-    <span className="lgn-ico">
+    <span className={`lgn-ico relative rounded-full ${timerActive ? 'ring-[2.5px] ring-[#ff9f0a] ring-offset-2 ring-offset-[#242321]' : ''}`}>
       {src && !failed ? (
         <img
           src={src}
@@ -248,14 +263,282 @@ const TABS = [
 ];
 
 const MENU_W = 236;
-const ITEM_H = 46; // keep in sync with .lgn-item height in CSS_TEXT
 const DEFAULT_MENU = [
   { id: "videos", label: "Mercado", icon: "storefront" },
   { id: "noticias", label: "Noticias", icon: "newspaper" },
   { id: "guias", label: "Artículos", icon: "menu_book" },
   { id: "crear", label: "Crear", icon: "add" },
   { id: "ask-nochi", label: "Pregúntale a Nochi", icon: "auto_awesome" },
+  { id: "voice-search", label: "Búsqueda por voz", icon: "mic" },
 ];
+const COMING_SOON = [
+  { label: "Temporizador", symbol: "timer" },
+  { label: "Cronómetro", symbol: "timer" },
+  { label: "Alarmas", symbol: "alarm" },
+  { label: "Notas rápidas", symbol: "description" },
+  { label: "Recordatorios", symbol: "notifications" },
+  { label: "Calendario", symbol: "calendar_month" },
+];
+const QUICK_NOTES_KEY = 'puntonochi-quick-notes-v1';
+const REMINDERS_KEY = 'puntonochi-reminders-v1';
+const ALARMS_KEY = 'puntonochi-alarms-v1';
+const NOTE_COLORS = [
+  { name: 'Amarillo', value: '#fff0a6' },
+  { name: 'Rosa', value: '#ffd0dc' },
+  { name: 'Azul', value: '#c9e5ff' },
+  { name: 'Verde', value: '#d6f1c4' },
+  { name: 'Lavanda', value: '#e6d8ff' },
+  { name: 'Durazno', value: '#ffd8bd' },
+  { name: 'Menta', value: '#bfeee2' },
+  { name: 'Lila', value: '#d7c9ff' },
+  { name: 'Coral', value: '#ffbdb5' },
+  { name: 'Crema', value: '#f5e6c8' },
+  { name: 'Cielo', value: '#bde8f5' },
+  { name: 'Limón', value: '#e5f5a9' },
+];
+
+function readQuickNotes() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(QUICK_NOTES_KEY) || '[]');
+    return Array.isArray(saved) ? saved : [];
+  } catch { return []; }
+}
+
+function readSavedList(key) {
+  try { const value = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(value) ? value : []; } catch { return []; }
+}
+
+const dayKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+function AppleUtilitySheets({ active, onClose }) {
+  const [reminders, setReminders] = useState(() => readSavedList(REMINDERS_KEY));
+  const [alarms, setAlarms] = useState(() => readSavedList(ALARMS_KEY));
+  const [reminderComposer, setReminderComposer] = useState(false);
+  const [reminderTitle, setReminderTitle] = useState('');
+  const [reminderDueDate, setReminderDueDate] = useState('');
+  const [reminderDueTime, setReminderDueTime] = useState('');
+  const [reminderNotes, setReminderNotes] = useState('');
+  const [reminderPriority, setReminderPriority] = useState('normal');
+  const [reminderListMenuOpen, setReminderListMenuOpen] = useState(false);
+  const [reminderDateVisible, setReminderDateVisible] = useState(false);
+  const [reminderTimeVisible, setReminderTimeVisible] = useState(false);
+  const reminderComposerScrollRef = useRef(null);
+  const [reminderFilter, setReminderFilter] = useState('all');
+  const [alarmComposer, setAlarmComposer] = useState(false);
+  const [alarmTime, setAlarmTime] = useState('08:00');
+  const [alarmLabel, setAlarmLabel] = useState('Alarma');
+  const [alarmRepeats, setAlarmRepeats] = useState(false);
+  const [ringingAlarm, setRingingAlarm] = useState(null);
+  const [dueReminder, setDueReminder] = useState(null);
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [selectedDay, setSelectedDay] = useState(() => dayKey(new Date()));
+  const [calendarQuickAddOpen, setCalendarQuickAddOpen] = useState(false);
+  const [calendarQuickTitle, setCalendarQuickTitle] = useState('');
+  const calendarQuickAddRef = useRef(null);
+
+  useEffect(() => { try { localStorage.setItem(REMINDERS_KEY, JSON.stringify(reminders)); } catch { /* Keep the in-memory list usable if storage is unavailable. */ } }, [reminders]);
+  useEffect(() => { try { localStorage.setItem(ALARMS_KEY, JSON.stringify(alarms)); } catch { /* Keep the in-memory list usable if storage is unavailable. */ } }, [alarms]);
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const now = Date.now();
+      if (!ringingAlarm) {
+        const due = alarms.find((alarm) => alarm.enabled && alarm.nextAt <= now);
+        if (due) {
+          setRingingAlarm(due);
+          setAlarms((current) => current.map((alarm) => alarm.id !== due.id ? alarm : alarm.repeatDaily ? { ...alarm, nextAt: new Date(alarm.nextAt).setDate(new Date(alarm.nextAt).getDate() + 1) } : { ...alarm, enabled: false }));
+        }
+      }
+      if (!dueReminder) {
+        const due = reminders.find((reminder) => !reminder.completed && !reminder.notified && reminder.dueAt && reminder.dueAt <= now);
+        if (due) { setDueReminder(due); setReminders((current) => current.map((item) => item.id === due.id ? { ...item, notified: true } : item)); }
+      }
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [alarms, reminders, ringingAlarm, dueReminder]);
+  useEffect(() => {
+    if (!active) return undefined;
+    const timer = window.setTimeout(() => { const corners = new CornerKit(); corners.applyAll('[data-lgn-utility-sheet]', { radius: 30, smoothing: 1 }); corners.applyAll('[data-lgn-reminder-composer]', { radius: 30, smoothing: 1 }); corners.applyAll('[data-lgn-reminder-pill]', { radius: 22, smoothing: 1 }); }, 40);
+    return () => window.clearTimeout(timer);
+  }, [active, reminderComposer]);
+  useEffect(() => {
+    if (!active) return undefined;
+    const handleKeyDown = (event) => { if (event.key === 'Escape') { event.preventDefault(); if (reminderComposer) closeReminderComposer(); else onClose(); } };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [active, reminderComposer, onClose]);
+  useEffect(() => {
+    if (!calendarQuickAddOpen) return undefined;
+    const closeOnOutsidePress = (event) => {
+      if (calendarQuickAddRef.current?.contains(event.target)) return;
+      setCalendarQuickAddOpen(false);
+      setCalendarQuickTitle('');
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePress);
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePress);
+  }, [calendarQuickAddOpen]);
+  useEffect(() => {
+    if (!reminderDateVisible && !reminderTimeVisible) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const scroller = reminderComposerScrollRef.current;
+      if (scroller) scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [reminderDateVisible, reminderTimeVisible]);
+
+  const openReminderComposer = (due = '') => { const date = due ? new Date(due) : null; setReminderTitle(''); setReminderNotes(''); setReminderPriority('normal'); setReminderDueDate(date ? dayKey(date) : ''); setReminderDueTime(date ? `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}` : ''); setReminderDateVisible(Boolean(due)); setReminderTimeVisible(Boolean(due)); setReminderListMenuOpen(false); setReminderComposer(true); };
+  const closeReminderComposer = () => { setReminderComposer(false); setReminderListMenuOpen(false); setReminderDateVisible(false); setReminderTimeVisible(false); };
+  const selectReminderSchedule = (schedule) => {
+    setReminderListMenuOpen(false);
+    if (schedule === 'none') { setReminderDueDate(''); setReminderDueTime(''); setReminderDateVisible(false); setReminderTimeVisible(false); return; }
+    const date = new Date();
+    if (schedule === 'today') date.setHours(date.getHours() + 1, 0, 0, 0);
+    else date.setDate(date.getDate() + 1), date.setHours(9, 0, 0, 0);
+    setReminderDueDate(dayKey(date)); setReminderDueTime(`${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`); setReminderDateVisible(true); setReminderTimeVisible(true);
+  };
+  const createReminder = () => {
+    const title = reminderTitle.trim(); if (!title) return;
+    const dueAt = reminderDueDate ? new Date(`${reminderDueDate}T${reminderDueTime || '09:00'}`).getTime() : null;
+    setReminders((current) => [...current, { id: globalThis.crypto?.randomUUID?.() || `reminder-${Date.now()}`, title, notes: reminderNotes.trim(), priority: reminderPriority, dueAt, completed: false, notified: false, createdAt: Date.now() }]);
+    setReminderTitle(''); setReminderNotes(''); setReminderDueDate(''); setReminderDueTime(''); setReminderPriority('normal'); setReminderDateVisible(false); setReminderTimeVisible(false); setReminderComposer(false);
+  };
+  const createAlarm = () => {
+    if (!alarmTime) return;
+    const [hour, minute] = alarmTime.split(':').map(Number);
+    const next = new Date(); next.setHours(hour, minute, 0, 0); if (next.getTime() <= Date.now()) next.setDate(next.getDate() + 1);
+    setAlarms((current) => [...current, { id: globalThis.crypto?.randomUUID?.() || `alarm-${Date.now()}`, label: alarmLabel.trim() || 'Alarma', time: alarmTime, nextAt: next.getTime(), enabled: true, repeatDaily: alarmRepeats }]);
+    setAlarmLabel('Alarma'); setAlarmComposer(false);
+  };
+  const dates = (() => { const first = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1); const start = new Date(first); start.setDate(1 - ((first.getDay() + 6) % 7)); return Array.from({ length: 42 }, (_, index) => { const date = new Date(start); date.setDate(start.getDate() + index); return date; }); })();
+  const selectedCalendarDate = new Date(`${selectedDay}T12:00:00`);
+  const weekStart = new Date(selectedCalendarDate); weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
+  const weekDates = Array.from({ length: 7 }, (_, index) => { const date = new Date(weekStart); date.setDate(weekStart.getDate() + index); return date; });
+  const selectCalendarDate = (date) => { const key = dayKey(date); setSelectedDay(key); setCalendarMonth(new Date(date.getFullYear(), date.getMonth(), 1)); };
+  const createCalendarEvent = () => {
+    const eventTitle = calendarQuickTitle.trim(); if (!eventTitle) return;
+    const now = new Date();
+    const due = new Date(`${selectedDay}T09:00:00`);
+    if (selectedDay === dayKey(now)) due.setHours(now.getHours() + 1, 0, 0, 0);
+    setReminders((current) => [...current, { id: globalThis.crypto?.randomUUID?.() || `event-${Date.now()}`, title: eventTitle, notes: '', priority: 'normal', dueAt: due.getTime(), completed: false, notified: false, createdAt: Date.now() }]);
+    setCalendarQuickTitle(''); setCalendarQuickAddOpen(false);
+  };
+  const selectedReminders = reminders.filter((item) => item.dueAt && dayKey(new Date(item.dueAt)) === selectedDay).sort((a, b) => a.dueAt - b.dueAt);
+  const nextAlarm = alarms.filter((item) => item.enabled).sort((a, b) => a.nextAt - b.nextAt)[0];
+  const pendingReminders = reminders.filter((item) => !item.completed).sort((a, b) => (a.dueAt || Infinity) - (b.dueAt || Infinity));
+  const todayKey = dayKey(new Date());
+  const reminderGroups = [
+    { id: 'today', label: 'Hoy', icon: CalendarDays, color: '#ff9f0a', items: pendingReminders.filter((item) => item.dueAt && dayKey(new Date(item.dueAt)) === todayKey) },
+    { id: 'scheduled', label: 'Programado', icon: Clock3, color: '#0a84ff', items: pendingReminders.filter((item) => item.dueAt && dayKey(new Date(item.dueAt)) !== todayKey) },
+    { id: 'all', label: 'Todos', icon: Bell, color: '#bf5af2', items: pendingReminders },
+    { id: 'completed', label: 'Completados', icon: Check, color: '#30d158', items: reminders.filter((item) => item.completed) },
+  ];
+  const visibleReminderItems = reminderGroups.find((group) => group.id === reminderFilter)?.items || pendingReminders;
+  const dateLabel = (value) => new Intl.DateTimeFormat('es-MX', { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(value));
+
+  if (!active) return null;
+  const title = active === 'alarms' ? 'Alarmas' : active === 'reminders' ? 'Recordatorios' : 'Calendario';
+  return <>
+    <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[139] bg-black/50 backdrop-blur-sm"/>
+    <motion.section data-lgn-utility-sheet role="dialog" aria-modal="false" aria-label={title} initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }} className={`pointer-events-auto fixed inset-x-[5px] bottom-[5px] z-[140] mx-auto flex h-[min(84dvh,780px)] max-w-[680px] flex-col overflow-hidden rounded-[30px] text-white shadow-[0_-18px_70px_rgba(0,0,0,.48)] ${active === 'calendar' ? 'bg-[#111214]' : active === 'alarms' ? 'bg-[#08090b]' : 'bg-[#1c1d20]'}`}>
+      <header className="flex shrink-0 items-start justify-between px-5 pb-3 pt-5"><div className={active === 'calendar' ? 'flex min-w-0 flex-1 items-start justify-between pr-3' : ''}>{active === 'calendar' ? <><div className="flex items-center gap-1.5"><h2 className="text-[25px] font-semibold leading-7 tracking-tight capitalize">{new Intl.DateTimeFormat('es-MX', { weekday: 'short' }).format(selectedCalendarDate).replace('.', '')}</h2><span aria-hidden="true" className="mt-1 h-2 w-2 rounded-full bg-[#ff5b52]"/></div><p className="pt-0.5 text-right text-[11px] leading-[14px] text-white/55">{new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'long' }).format(selectedCalendarDate)}<br/>{selectedCalendarDate.getFullYear()}</p></> : <><h2 className="text-[21px] font-bold tracking-tight">{title}</h2>{active === 'reminders' && <p className="mt-0.5 text-xs text-white/45">{pendingReminders.length} pendientes · {reminders.filter((item) => item.completed).length} completados</p>}{active === 'alarms' && <p className="mt-0.5 text-xs text-white/40">Reloj</p>}</>}</div><button type="button" onClick={onClose} aria-label={`Cerrar ${title}`} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[.09] text-white/75"><X className="h-4 w-4"/></button></header>
+      {active === 'alarms' && <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-5 pt-4">
+        <div className="mb-4 rounded-[24px] bg-[#17181b] px-5 pb-5 pt-4 shadow-[inset_0_1px_0_rgba(255,255,255,.05)]"><div className="flex items-center justify-between"><span className="text-[10px] font-semibold uppercase tracking-[.18em] text-white/40">Siguiente</span><AlarmClock className="h-4 w-4 text-[#ff9f0a]"/></div><p className="mt-2 font-mono text-[54px] font-light leading-[1.05] tracking-[-.06em] tabular-nums">{nextAlarm?.time || '—:—'}</p><p className="mt-2 text-xs text-white/45">{nextAlarm ? `${nextAlarm.label}${nextAlarm.repeatDaily ? ' · Todos los días' : ''}` : 'Añade una alarma para empezar'}</p></div>
+        <div className="mb-2 flex items-center justify-between px-1"><h3 className="text-[11px] font-semibold uppercase tracking-[.16em] text-white/40">Alarmas</h3><button type="button" onClick={() => setAlarmComposer(true)} aria-label="Añadir alarma" className="flex h-8 w-8 items-center justify-center rounded-full bg-[#ff9f0a] text-black"><Plus className="h-4 w-4"/></button></div>
+        <div className="overflow-hidden rounded-[18px] bg-[#17181b]">{alarms.length ? alarms.slice().sort((a,b) => a.time.localeCompare(b.time)).map((alarm, index) => <div key={alarm.id} className={`flex items-center gap-3 px-4 py-3 ${index ? '' : ''}`}><div className="min-w-0 flex-1"><p className={`font-mono text-[27px] leading-8 tabular-nums ${alarm.enabled ? 'text-white' : 'text-white/35'}`}>{alarm.time}</p><p className="mt-0.5 text-xs text-white/40">{alarm.label}{alarm.repeatDaily ? ' · Diario' : ''}</p></div><button type="button" role="switch" aria-checked={alarm.enabled} aria-label={`Activar ${alarm.label}`} onClick={() => setAlarms((current) => current.map((item) => item.id !== alarm.id ? item : { ...item, enabled: !item.enabled, nextAt: !item.enabled ? (() => { const next = new Date(); const [h,m] = item.time.split(':').map(Number); next.setHours(h,m,0,0); if (next.getTime() <= Date.now()) next.setDate(next.getDate()+1); return next.getTime(); })() : item.nextAt }))} className={`relative h-[28px] w-[48px] rounded-full transition-colors ${alarm.enabled ? 'bg-[#30d158]' : 'bg-[#25262a]/20'}`}><span className={`absolute top-[2px] h-6 w-6 rounded-full bg-white shadow transition-transform ${alarm.enabled ? 'translate-x-[20px]' : 'translate-x-[2px]'}`}/></button><button type="button" onClick={() => setAlarms((current) => current.filter((item) => item.id !== alarm.id))} aria-label="Eliminar alarma" className="p-1 text-white/35"><Trash2 className="h-4 w-4"/></button></div>) : <p className="px-4 py-5 text-sm text-white/40">No tienes alarmas guardadas.</p>}</div>
+        {alarmComposer && <div className="mt-4 rounded-[22px] bg-[#202125] p-4"><div className="mb-3 flex items-center justify-between"><h3 className="font-semibold">Nueva alarma</h3><button onClick={() => setAlarmComposer(false)} className="text-sm text-[#ff9f0a]">Cancelar</button></div><input type="time" value={alarmTime} onChange={(event) => setAlarmTime(event.target.value)} className="w-full rounded-2xl bg-black/30 px-4 py-3 font-mono text-3xl text-white outline-none [color-scheme:dark]"/><input value={alarmLabel} onChange={(event) => setAlarmLabel(event.target.value)} maxLength={48} placeholder="Etiqueta" className="mt-3 w-full rounded-xl bg-black/25 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/35"/><label className="mt-3 flex items-center justify-between text-sm text-white/75">Repetir cada día<input type="checkbox" checked={alarmRepeats} onChange={(event) => setAlarmRepeats(event.target.checked)} className="h-5 w-5 accent-[#ff9f0a]"/></label><button type="button" onClick={createAlarm} className="mt-4 h-11 w-full rounded-full bg-[#ff9f0a] text-sm font-semibold text-black">Guardar alarma</button></div>}
+      </div>}
+      {active === 'reminders' && <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 pt-2">
+        <div className="mb-5 grid grid-cols-2 gap-3">{reminderGroups.map((group) => { const Icon = group.icon; const selected = reminderFilter === group.id; return <button key={group.id} type="button" onClick={() => setReminderFilter(group.id)} className={`flex min-h-[108px] flex-col justify-between rounded-[21px] bg-[#25262a] p-4 text-left transition-transform active:scale-[.98] ${selected ? 'brightness-110' : ''}`}><div className="flex w-full items-center justify-between"><span className="flex h-9 w-9 items-center justify-center rounded-full" style={{ backgroundColor: `${group.color}24`, color: group.color }}><Icon className="h-[18px] w-[18px]"/></span><span className="text-[22px] font-semibold leading-none tabular-nums text-white/90">{group.items.length}</span></div><span className="block text-[13px] font-semibold leading-4 text-white/80">{group.label}</span></button>; })}</div>
+        <div className="mb-3 flex min-h-11 items-center justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-[17px] font-semibold leading-5 tracking-tight">{reminderGroups.find((group) => group.id === reminderFilter)?.label || 'Todos'}</h3><p className="mt-1 text-[11px] leading-4 text-white/40">{visibleReminderItems.length} {visibleReminderItems.length === 1 ? 'recordatorio' : 'recordatorios'}</p></div><button type="button" onClick={() => { openReminderComposer(); }} aria-label="Nuevo recordatorio" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0a84ff] text-white"><Plus className="h-[18px] w-[18px]"/></button></div>
+        <div className="flex flex-col gap-2">{visibleReminderItems.length ? visibleReminderItems.map((item) => <div key={item.id} className="flex min-h-[66px] items-center gap-3 rounded-[17px] bg-[#25262a] px-3.5 py-3"><button type="button" onClick={() => setReminders((current) => current.map((entry) => entry.id === item.id ? { ...entry, completed: !entry.completed } : entry))} aria-label={item.completed ? 'Reabrir recordatorio' : 'Completar recordatorio'} className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full ${item.completed ? 'bg-[#30d158] text-black' : 'bg-white/[.1] text-transparent'}`}>{item.completed && <Check className="h-3 w-3"/>}</button><div className="min-w-0 flex-1"><p className={`break-words text-[14px] leading-[19px] ${item.completed ? 'text-white/40 line-through' : 'font-medium text-white/90'}`}>{item.title}</p>{item.notes && <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-white/45">{item.notes}</p>}<div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-4 text-white/40">{item.dueAt ? <span className="flex items-center gap-1"><Clock3 className="h-3 w-3 shrink-0"/>{dateLabel(item.dueAt)}</span> : <span>Sin fecha</span>}{item.priority && item.priority !== 'normal' && <span className={`flex items-center gap-1 ${item.priority === 'urgent' ? 'text-[#ff6961]' : 'text-[#ffb347]'}`}><Flag className="h-3 w-3"/>{item.priority === 'urgent' ? 'Urgente' : 'Importante'}</span>}</div></div><button type="button" onClick={() => setReminders((current) => current.filter((entry) => entry.id !== item.id))} aria-label="Eliminar recordatorio" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/35"><Trash2 className="h-4 w-4"/></button></div>) : <div className="rounded-[18px] bg-[#25262a] px-4 py-7 text-center"><span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-[#30d158]/15 text-[#30d158]"><Check className="h-5 w-5"/></span><p className="mt-3 text-sm font-medium text-white/80">Todo al día</p><p className="mt-1 text-xs text-white/40">Los recordatorios de esta lista aparecerán aquí.</p></div>}</div>
+      </div>}
+      {active === 'calendar' && <div className="relative min-h-0 flex-1 overflow-hidden px-5 pt-1">
+        <div className="h-full overflow-y-auto overscroll-contain pb-32 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="mb-3 flex items-center justify-between"><p className="text-[11px] font-medium text-white/40">{new Intl.DateTimeFormat('es-MX', { month: 'long', year: 'numeric' }).format(selectedCalendarDate)}</p><div className="flex gap-1"><button type="button" aria-label="Semana anterior" onClick={() => { const date = new Date(selectedCalendarDate); date.setDate(date.getDate() - 7); selectCalendarDate(date); }} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[.06] text-white/55"><ChevronLeft className="h-4 w-4"/></button><button type="button" aria-label="Semana siguiente" onClick={() => { const date = new Date(selectedCalendarDate); date.setDate(date.getDate() + 7); selectCalendarDate(date); }} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[.06] text-white/55"><ChevronRight className="h-4 w-4"/></button></div></div>
+          <div className="mb-5 grid grid-cols-7 gap-1">{weekDates.map((date) => { const key = dayKey(date); const isSelected = key === selectedDay; const isToday = key === dayKey(new Date()); const hasEvents = reminders.some((item) => item.dueAt && dayKey(new Date(item.dueAt)) === key); return <button key={key} type="button" onClick={() => selectCalendarDate(date)} className={`flex min-w-0 flex-col items-center gap-1.5 rounded-[18px] py-2 transition-colors ${isSelected ? 'bg-[#292a2e]' : 'bg-transparent hover:bg-white/[.04]'}`}><span className="text-[9px] font-medium uppercase leading-none text-white/40">{new Intl.DateTimeFormat('es-MX', { weekday: 'short' }).format(date).replace('.', '')}</span><span className={`flex h-8 w-8 items-center justify-center rounded-full text-[13px] tabular-nums ${isSelected ? 'bg-[#3a3b40] font-semibold text-white' : 'text-white/75'}`}>{date.getDate()}</span><span className={`h-1 w-1 rounded-full ${hasEvents ? 'bg-[#ff9f0a]' : isToday ? 'bg-[#ff5b52]' : 'bg-transparent'}`}/></button>; })}</div>
+          <div className="mb-3 flex items-end justify-between"><div><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-white/35">Agenda</p><h3 className="mt-1 text-[17px] font-semibold leading-5">{new Intl.DateTimeFormat('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }).format(selectedCalendarDate)}</h3></div><span className="pb-0.5 text-[10px] text-white/35">{selectedReminders.length} {selectedReminders.length === 1 ? 'evento' : 'eventos'}</span></div>
+          <motion.div key={selectedDay} initial={{ opacity: .45, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .2 }} className="flex flex-col">{selectedReminders.length ? selectedReminders.map((item) => <div key={item.id} className="flex min-h-[52px] items-center gap-3 py-2"><button type="button" onClick={() => setReminders((current) => current.map((entry) => entry.id === item.id ? { ...entry, completed: !entry.completed } : entry))} aria-label={item.completed ? 'Reabrir evento' : 'Completar evento'} className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full ${item.completed ? 'bg-[#30d158] text-black' : 'bg-white/[.08] text-transparent'}`}>{item.completed && <Check className="h-3 w-3"/>}</button><div className="min-w-0 flex-1"><p className={`truncate text-[13px] leading-[18px] ${item.completed ? 'text-white/35 line-through' : 'font-medium text-white/85'}`}>{item.title}</p>{item.notes && <p className="mt-0.5 truncate text-[10px] text-white/35">{item.notes}</p>}</div><span className="shrink-0 pl-2 text-[10px] tabular-nums text-white/35">{new Date(item.dueAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</span></div>) : <div className="py-8 text-center"><p className="text-[13px] text-white/50">Sin eventos para este día</p><p className="mt-1 text-[11px] text-white/30">Añade uno con el botón +</p></div>}</motion.div>
+        </div>
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-32" style={{ background: 'linear-gradient(to top, rgba(17,18,20,.98) 0%, rgba(17,18,20,.72) 40%, rgba(17,18,20,0) 100%)', backdropFilter: 'blur(15px)', WebkitBackdropFilter: 'blur(15px)', maskImage: 'linear-gradient(to top, black 12%, rgba(0,0,0,.82) 48%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to top, black 12%, rgba(0,0,0,.82) 48%, transparent 100%)' }}/>
+        <div ref={calendarQuickAddRef} className="absolute bottom-[max(14px,env(safe-area-inset-bottom))] left-1/2 z-20 flex -translate-x-1/2 items-center justify-center">
+          <AnimatePresence mode="wait" initial={false}>{calendarQuickAddOpen ? <motion.div key="calendar-inline-add" initial={{ opacity: 0, scale: .88, width: 48 }} animate={{ opacity: 1, scale: 1, width: 'min(390px, calc(100vw - 70px))' }} exit={{ opacity: 0, scale: .9, width: 48 }} transition={{ type: 'spring', damping: 25, stiffness: 320 }} className="flex h-[50px] items-center gap-2 rounded-full bg-[#25262a] p-1.5 pl-4 shadow-[0_8px_28px_rgba(0,0,0,.4)]"><input autoFocus value={calendarQuickTitle} onChange={(event) => setCalendarQuickTitle(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') createCalendarEvent(); if (event.key === 'Escape') { setCalendarQuickAddOpen(false); setCalendarQuickTitle(''); } }} placeholder="Nuevo evento" aria-label="Nombre del evento" className="calendar-event-input min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-white/40"/><button type="button" disabled={!calendarQuickTitle.trim()} onClick={createCalendarEvent} aria-label="Guardar evento" className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-[#ff453a] text-white disabled:opacity-40"><Check className="h-[18px] w-[18px]"/></button></motion.div> : <motion.button key="calendar-add-button" type="button" initial={{ opacity: 0, scale: .75 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .75 }} transition={{ type: 'spring', damping: 22, stiffness: 340 }} onClick={() => setCalendarQuickAddOpen(true)} aria-label="Añadir evento" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#303136] text-white/75 shadow-[0_8px_28px_rgba(0,0,0,.4)]"><Plus className="h-[19px] w-[19px]"/></motion.button>}</AnimatePresence>
+        </div>
+      </div>}      {(ringingAlarm || dueReminder) && <div className="absolute inset-0 z-[150] grid place-items-center bg-black/60 p-5 backdrop-blur-sm"><div className="w-full max-w-sm rounded-[26px] bg-[#242528] p-6 text-center text-white shadow-2xl"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#ff9f0a]/15 text-[#ff9f0a]"><Bell className="h-6 w-6"/></span><h3 className="mt-4 text-xl font-bold">{ringingAlarm ? ringingAlarm.label : dueReminder.title}</h3><p className="mt-1 text-sm text-white/45">{ringingAlarm ? 'Es hora de tu alarma' : 'Recordatorio pendiente'}</p><div className="mt-5 flex gap-2">{ringingAlarm && <button type="button" onClick={() => { setAlarms((current) => current.map((item) => item.id === ringingAlarm.id ? { ...item, enabled: true, nextAt: Date.now()+5*60_000 } : item)); setRingingAlarm(null); }} className="h-11 flex-1 rounded-full bg-white/[.08] text-sm font-semibold text-[#ff9f0a]">Posponer 5 min</button>}<button type="button" onClick={() => { if (ringingAlarm) setRingingAlarm(null); if (dueReminder) { setReminders((current) => current.map((item) => item.id === dueReminder.id ? { ...item, completed: true } : item)); setDueReminder(null); } }} className="h-11 flex-1 rounded-full bg-[#ff9f0a] text-sm font-semibold text-black">Listo</button></div></div></div>}
+      {dueReminder && !ringingAlarm && <div className="sr-only" aria-live="assertive">Recordatorio: {dueReminder.title}</div>}
+    </motion.section>
+    <AnimatePresence>
+      {reminderComposer && (active === 'reminders' || active === 'calendar') && <motion.button type="button" aria-label="Salir de recordatorios" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeReminderComposer} className="fixed inset-0 z-[159] bg-black/55 backdrop-blur-[3px]"/>}
+      {reminderComposer && (active === 'reminders' || active === 'calendar') && <motion.section data-lgn-reminder-composer role="dialog" aria-modal="true" aria-labelledby="lgn-reminder-composer-title" initial={{ y: '100%', opacity: .8 }} animate={{ y: 0, opacity: 1 }} exit={{ y: '100%', opacity: .8 }} transition={{ type: 'spring', damping: 30, stiffness: 310 }} className="fixed inset-x-[10px] bottom-[10px] z-[160] mx-auto flex max-h-[min(70dvh,560px)] min-h-[280px] w-[calc(100%-20px)] max-w-[560px] flex-col overflow-hidden rounded-[30px] bg-[#1c1d20] p-5 text-white shadow-[0_20px_80px_rgba(0,0,0,.6)]">
+          <header className="relative z-10 mb-4 flex shrink-0 items-center justify-between"><div><button type="button" onClick={() => setReminderListMenuOpen((open) => !open)} aria-expanded={reminderListMenuOpen} className="flex items-center gap-1 text-[17px] font-semibold text-[#ff9f0a]"><span>Recordatorios</span><ChevronDown className={`h-4 w-4 transition-transform ${reminderListMenuOpen ? 'rotate-180' : ''}`}/></button><h2 id="lgn-reminder-composer-title" className="mt-1 text-[12px] text-white/45">Nuevo recordatorio</h2></div><button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); closeReminderComposer(); }} aria-label="Cerrar y salir" className="pointer-events-auto relative z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/[.12] text-white/80"><X className="h-4 w-4"/></button>
+            {reminderListMenuOpen && <div className="absolute left-0 top-[48px] z-20 w-56 overflow-hidden rounded-[18px] bg-[#303136] p-1 shadow-xl">{[{ id: 'none', label: 'Mis recordatorios' }, { id: 'today', label: 'Hoy' }, { id: 'scheduled', label: 'Programado' }].map((option) => <button key={option.id} type="button" onClick={() => selectReminderSchedule(option.id)} className="flex h-10 w-full items-center rounded-[13px] px-3 text-left text-sm text-white/85 hover:bg-white/[.08]">{option.label}</button>)}</div>}
+          </header>
+          <div ref={reminderComposerScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <div data-lgn-reminder-pill className="rounded-[23px] bg-[#292a2e] p-4"><div className="flex items-start gap-3"><span aria-hidden="true" className="mt-[9px] h-[18px] w-[18px] shrink-0 rounded-full bg-white/[.12]"/><div className="min-w-0 flex-1"><input autoFocus value={reminderTitle} onChange={(event) => setReminderTitle(event.target.value)} maxLength={100} placeholder="Nuevo recordatorio" className="reminder-composer-input h-9 w-full bg-transparent text-[15px] font-medium text-white outline-none placeholder:text-white/45"/><textarea value={reminderNotes} onChange={(event) => setReminderNotes(event.target.value)} maxLength={500} rows={2} placeholder="Notas" className="reminder-composer-input mt-1 w-full resize-none bg-transparent text-[13px] leading-5 text-white/65 outline-none placeholder:text-white/35"/></div></div></div>
+            {reminderDateVisible && <div className="mt-3 flex items-center gap-3 rounded-full bg-[#292a2e] px-4 py-2"><CalendarDays className="h-4 w-4 shrink-0 text-[#ff9f0a]"/><label className="min-w-0 flex-1"><span className="sr-only">Fecha límite</span><input type="date" value={reminderDueDate} onChange={(event) => setReminderDueDate(event.target.value)} className="reminder-composer-input h-9 w-full min-w-0 text-[13px] text-white/80 outline-none [color-scheme:dark]"/></label><button type="button" aria-label="Quitar fecha" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.preventDefault(); event.stopPropagation(); setReminderDueDate(''); setReminderDateVisible(false); }} className="relative z-10 flex h-8 w-8 shrink-0 touch-manipulation items-center justify-center rounded-full bg-white/[.08] text-white/65 pointer-events-auto"><X className="h-3.5 w-3.5"/></button></div>}
+            {reminderTimeVisible && <div className="mt-2 flex items-center gap-3 rounded-full bg-[#292a2e] px-4 py-2"><Clock3 className="h-4 w-4 shrink-0 text-[#ff9f0a]"/><label className="min-w-0 flex-1"><span className="sr-only">Hora límite</span><input type="time" value={reminderDueTime} onChange={(event) => setReminderDueTime(event.target.value)} className="reminder-composer-input h-9 w-full min-w-0 text-[13px] text-white/80 outline-none [color-scheme:dark]"/></label><button type="button" aria-label="Quitar hora" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.preventDefault(); event.stopPropagation(); setReminderDueTime(''); setReminderTimeVisible(false); }} className="relative z-10 flex h-8 w-8 shrink-0 touch-manipulation items-center justify-center rounded-full bg-white/[.08] text-white/65 pointer-events-auto"><X className="h-3.5 w-3.5"/></button></div>}
+          </div>
+          <footer className="relative z-20 mt-4 flex shrink-0 items-center justify-between gap-3"><div className="pointer-events-auto flex h-12 items-center gap-1 rounded-full bg-[#292a2e] px-2"><button type="button" onClick={() => { const opening = !reminderDateVisible; setReminderDateVisible(opening); if (opening && !reminderDueDate) setReminderDueDate(dayKey(new Date())); }} aria-label="Elegir fecha límite" aria-pressed={reminderDateVisible} title="Elegir fecha límite" className={`flex h-9 w-9 touch-manipulation items-center justify-center rounded-full ${reminderDateVisible ? 'bg-white/[.12] text-[#ff9f0a]' : 'text-white/65'}`}><CalendarDays className="h-[18px] w-[18px]"/></button><button type="button" onClick={() => { const opening = !reminderTimeVisible; setReminderTimeVisible(opening); if (opening) { if (!reminderDueDate) setReminderDueDate(dayKey(new Date())); if (!reminderDueTime) { const due = new Date(Date.now() + 60 * 60 * 1000); setReminderDueTime(`${String(due.getHours()).padStart(2, '0')}:${String(due.getMinutes()).padStart(2, '0')}`); } } }} aria-label="Elegir hora límite" aria-pressed={reminderTimeVisible} title="Elegir hora límite" className={`flex h-9 w-9 touch-manipulation items-center justify-center rounded-full ${reminderTimeVisible ? 'bg-white/[.12] text-[#ff9f0a]' : 'text-white/65'}`}><Clock3 className="h-[18px] w-[18px]"/></button><button type="button" onClick={() => setReminderPriority((value) => value === 'normal' ? 'high' : 'normal')} aria-label={reminderPriority === 'high' ? 'Quitar prioridad importante' : 'Marcar como importante'} aria-pressed={reminderPriority === 'high'} title={reminderPriority === 'high' ? 'Importante · pulsa para quitar' : 'Marcar como importante'} className={`flex h-9 w-9 touch-manipulation items-center justify-center rounded-full ${reminderPriority === 'high' ? 'bg-[#ff9f0a]/15 text-[#ff9f0a]' : 'text-white/65'}`}><Flag className="h-[18px] w-[18px]"/></button></div><button type="button" disabled={!reminderTitle.trim()} onClick={createReminder} aria-label="Guardar recordatorio" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#f2f2f7] text-[#25262a] shadow-sm disabled:opacity-35"><Check className="h-5 w-5"/></button></footer>
+        </motion.section>}
+    </AnimatePresence>
+  </>;
+}
+
+function QuickNotesSheet({ onClose }) {
+  const [notes, setNotes] = useState(readQuickNotes);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [draft, setDraft] = useState('');
+  const [color, setColor] = useState(NOTE_COLORS[0].value);
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    try { localStorage.setItem(QUICK_NOTES_KEY, JSON.stringify(notes)); } catch { /* Keep editing available if storage is full. */ }
+  }, [notes]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const cornerKit = new CornerKit();
+      cornerKit.applyAll('[data-lgn-notes-sheet]', { radius: 30, smoothing: 1 });
+      cornerKit.applyAll('[data-lgn-sticky-note]', { radius: 18, smoothing: 1 });
+    }, 40);
+    return () => window.clearTimeout(timer);
+  }, [notes.length]);
+
+  const beginNew = () => { setEditingId(null); setDraft(''); setColor(NOTE_COLORS[0].value); setComposerOpen(true); };
+  const editNote = (note) => { setEditingId(note.id); setDraft(note.text); setColor(note.color); setComposerOpen(true); };
+  const saveNote = () => {
+    const text = draft.trim();
+    if (!text) return;
+    if (editingId) setNotes((current) => current.map((note) => note.id === editingId ? { ...note, text, color, updatedAt: Date.now() } : note));
+    else {
+      const bounds = canvasRef.current;
+      const index = notes.length;
+      setNotes((current) => [...current, { id: (globalThis.crypto?.randomUUID?.() || `note-${Date.now()}`), text, color, x: (bounds?.scrollLeft || 0) + 28 + (index % 2) * 226, y: (bounds?.scrollTop || 0) + 28 + (index % 3) * 212, updatedAt: Date.now() }]);
+    }
+    setComposerOpen(false);
+  };
+
+  return <>
+    <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[139] bg-black/60 backdrop-blur-sm"/>
+    <motion.section data-lgn-notes-sheet role="dialog" aria-modal="false" aria-labelledby="lgn-notes-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }} className="pointer-events-auto fixed inset-x-[5px] bottom-[5px] z-[140] mx-auto flex h-[min(82dvh,760px)] max-w-[720px] flex-col overflow-hidden rounded-[30px] bg-[#1c1d20] text-white shadow-2xl">
+      <header className="relative z-10 flex shrink-0 items-center justify-between gap-3 border-b border-white/[.07] px-5 pb-3 pt-4"><div className="min-w-0"><h2 id="lgn-notes-title" className="text-lg font-bold">Cuaderno</h2><p className="mt-0.5 text-[11px] text-white/45">{notes.length} {notes.length === 1 ? 'nota adhesiva' : 'notas adhesivas'}</p></div><button type="button" onClick={onClose} aria-label="Cerrar cuaderno" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[.08] text-white/80 transition-colors hover:bg-white/[.14]"><X className="h-4 w-4"/></button></header>
+      <div ref={canvasRef} className="relative min-h-0 flex-1 touch-pan-x touch-pan-y overflow-auto overscroll-contain" style={{ backgroundColor: '#202124', backgroundImage: 'radial-gradient(rgba(255,255,255,.17) 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
+        <div className="relative min-h-[1500px] min-w-[1600px]" style={{ width: '1600px', height: '1500px' }}>
+          {!notes.length && <div className="absolute left-5 top-5 max-w-[240px] rounded-2xl bg-black/35 px-4 py-3 text-sm text-white/55 backdrop-blur-md">Tu lienzo está listo. Añade una nota para empezar tu cuaderno.</div>}
+          {notes.map((note) => <article key={note.id} data-lgn-sticky-note className="absolute h-[188px] w-[204px] overflow-hidden rounded-[18px] p-3 text-[#242326] shadow-[0_8px_24px_rgba(0,0,0,.25)]" style={{ left: note.x, top: note.y, backgroundColor: note.color }}>
+            <div className="mb-2 flex items-center justify-between"><span className="text-[9px] font-semibold uppercase tracking-[.12em] opacity-45">Apunte</span><button type="button" onClick={() => setNotes((current) => current.filter((item) => item.id !== note.id))} aria-label="Eliminar nota" className="flex h-7 w-7 items-center justify-center rounded-full bg-black/[.06] text-black/55 hover:bg-black/[.12]"><X className="h-3.5 w-3.5"/></button></div>
+            <button type="button" onClick={() => editNote(note)} className="h-[138px] w-full overflow-hidden whitespace-pre-wrap break-words text-left text-[14px] leading-relaxed text-[#242326]/90">{note.text}</button>
+          </article>)}
+        </div>
+      </div>
+      {!composerOpen && <><div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-36" style={{ background: 'linear-gradient(to top, rgba(28,29,32,.96) 0%, rgba(28,29,32,.68) 42%, rgba(28,29,32,0) 100%)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', maskImage: 'linear-gradient(to top, black 8%, rgba(0,0,0,.78) 42%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to top, black 8%, rgba(0,0,0,.78) 42%, transparent 100%)' }}/><button type="button" onClick={beginNew} className="quick-notes-add-pill absolute bottom-[max(16px,env(safe-area-inset-bottom))] left-1/2 z-20 flex h-11 min-w-[188px] -translate-x-1/2 items-center justify-center gap-2 rounded-full px-5 text-sm font-bold shadow-lg transition-transform active:scale-[.98]" style={{ background: '#ffffff', backgroundColor: '#ffffff', borderRadius: '9999px', color: '#111111', opacity: 1 }}><span className="material-symbols-rounded text-[19px] leading-none">add</span>Añadir nota</button></>}
+      {composerOpen && <footer className="z-20 shrink-0 border-t border-white/[.07] bg-[#1c1d20]/95 px-4 pb-[max(10px,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl">
+        <div className="mx-auto max-w-xl">
+          <div className="mb-2 flex items-center justify-between"><p className="text-sm font-semibold">{editingId ? 'Editar apunte' : 'Nueva nota'}</p><button type="button" onClick={() => setComposerOpen(false)} className="text-xs font-medium text-white/50">Cancelar</button></div>
+          <textarea autoFocus value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={1200} placeholder="Escribe una idea, recordatorio o pensamiento…" className="h-28 w-full resize-none rounded-2xl bg-white/[.07] p-3 text-sm leading-relaxed text-white outline-none placeholder:text-white/35 focus:ring-1 focus:ring-white/20"/>
+          <div className="mt-2 flex flex-col gap-2"><div className="flex max-w-full items-center gap-2 overflow-x-auto py-1" aria-label="Color de nota">{NOTE_COLORS.map((item) => <button key={item.value} type="button" onClick={() => setColor(item.value)} aria-label={item.name} aria-pressed={color === item.value} className="h-6 w-6 shrink-0 rounded-full transition-colors" style={{ backgroundColor: item.value, border: color === item.value ? '2px solid #fff' : '1px solid rgba(255,255,255,.18)', boxShadow: color === item.value ? 'inset 0 0 0 1px rgba(0,0,0,.45)' : 'none' }}/>)}</div><button type="button" disabled={!draft.trim()} onClick={saveNote} className="flex h-10 w-full items-center justify-center gap-2 rounded-full px-5 text-sm font-bold shadow-sm disabled:opacity-40" style={{ background: '#ffffff', backgroundColor: '#ffffff', color: '#111111', borderRadius: '9999px' }}><Check className="h-4 w-4"/>{editingId ? 'Guardar nota' : 'Añadir nota'}</button></div>
+        </div>
+      </footer>}
+    </motion.section>
+  </>;
+}
 
 const BAR_H = 46;
 const IDLE_W = 320;
@@ -263,7 +546,7 @@ const OPEN_W = 480;
 const SEARCH_IDLE_W = 62;
 
 /* ---------- The navbar ---------- */
-export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch, onOpenProfile, profilePicture, profileName }) {
+export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch, onOpenProfile, onSelectBusiness, profilePicture, profileName, timerEndAt, onStartTimer, onPauseTimer, onResumeTimer, onStopTimer }) {
   const onChange = (id) => onChangeTab(({ home: 'inicio', explore: 'explorar' })[id] || id);
   const onSearchOpenChange = (open) => open ? onOpenSearch() : onCloseSearch();
   const avatarSrc = profilePicture;
@@ -280,20 +563,78 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
-  // sliding hover highlight: i = hovered row (null when none), pos = where the glass sits,
-  // instant = jump there without sliding (first hover after the pointer was away)
-  const [hl, setHl] = useState({ i: null, pos: 0, instant: true });
-  const hoverRow = (i) => setHl((h) => ({ i, pos: i, instant: h.i === null }));
-  const leaveMenu = () => setHl((h) => ({ ...h, i: null }));
-
+  const [timerPickerOpen, setTimerPickerOpen] = useState(false);
+  const [timerNow, setTimerNow] = useState(Date.now());
+  const [pickedMinutes, setPickedMinutes] = useState(15);
+  const [timerPausedRemaining, setTimerPausedRemaining] = useState(null);
+  const [timerNoticeDismissed, setTimerNoticeDismissed] = useState(false);
+  const [stopwatchStartedAt, setStopwatchStartedAt] = useState(null);
+  const [stopwatchElapsedBeforeRun, setStopwatchElapsedBeforeRun] = useState(0);
+  const [stopwatchRunning, setStopwatchRunning] = useState(false);
+  const [stopwatchLaps, setStopwatchLaps] = useState([]);
+  const [stopwatchVisible, setStopwatchVisible] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [utilityOpen, setUtilityOpen] = useState(null);
+  const [voiceSearchOpen, setVoiceSearchOpen] = useState(false);
+  const [voiceSearchStatus, setVoiceSearchStatus] = useState('idle');
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [voiceSearchError, setVoiceSearchError] = useState('');
+  const [voiceSearchAnswer, setVoiceSearchAnswer] = useState('');
+  const voiceRecognitionRef = useRef(null);
+  const voiceSubmittedRef = useRef(false);
+  const voiceListeningRef = useRef(false);
+  const voiceSessionRef = useRef(0);
+  const voiceRestartTimerRef = useRef(null);
+  const timerTouchStart = useRef(null);
+  const timerRulerRef = useRef(null);
+  const timerRulerDrag = useRef(null);
+  const TIMER_TICK = 11;
+  const TIMER_MAX_MINUTES = 180;
   const keyboard = useKeyboardOffset(searching);
+  const timerActive = Number.isFinite(timerEndAt) || timerPausedRemaining !== null;
+  const timerRemaining = timerPausedRemaining !== null ? timerPausedRemaining : Math.max(0, (timerEndAt || 0) - timerNow);
+  const timerSeconds = Math.ceil(timerRemaining / 1000);
+  const timerDisplay = `${String(Math.floor(timerSeconds / 60)).padStart(2, '0')}:${String(timerSeconds % 60).padStart(2, '0')}`;
+  const timerVisible = timerActive && !timerNoticeDismissed;
+  const stopwatchElapsed = stopwatchElapsedBeforeRun + (stopwatchRunning && stopwatchStartedAt ? Math.max(0, timerNow - stopwatchStartedAt) : 0);
+  const stopwatchHasSession = stopwatchRunning || stopwatchElapsedBeforeRun > 0;
+  const stopwatchDisplay = `${String(Math.floor(stopwatchElapsed / 60000)).padStart(2, '0')}:${String(Math.floor((stopwatchElapsed % 60000) / 1000)).padStart(2, '0')},${String(Math.floor((stopwatchElapsed % 1000) / 10)).padStart(2, '0')}`;
   useEffect(() => setActive(appTab), [appTab]);
+  useEffect(() => {
+    if (!timerActive && !stopwatchRunning) return undefined;
+    const tick = window.setInterval(() => setTimerNow(Date.now()), 200);
+    return () => window.clearInterval(tick);
+  }, [timerActive, stopwatchRunning]);
+  useEffect(() => {
+    if (!timerVisible && !stopwatchVisible) return undefined;
+    const timer = window.setTimeout(() => new CornerKit().applyAll('[data-lgn-live-card]', { radius: 28, smoothing: 1 }), 40);
+    return () => window.clearTimeout(timer);
+  }, [timerVisible, stopwatchVisible]);
+  useEffect(() => {
+    if (timerActive) setTimerNoticeDismissed(false);
+  }, [timerEndAt, timerPausedRemaining !== null]);
+  useEffect(() => {
+    if (!timerPickerOpen) return undefined;
+    const timer = window.setTimeout(() => new CornerKit().applyAll('[data-lgn-timer-sheet]', { radius: 28, smoothing: 1 }), 40);
+    return () => window.clearTimeout(timer);
+  }, [timerPickerOpen]);
+  useEffect(() => {
+    if (!timerPickerOpen) return undefined;
+    const frame = window.requestAnimationFrame(() => { if (timerRulerRef.current) timerRulerRef.current.scrollLeft = pickedMinutes * TIMER_TICK; });
+    return () => window.cancelAnimationFrame(frame);
+  }, [timerPickerOpen]);
+  const updateTimerRuler = () => {
+    const ruler = timerRulerRef.current;
+    if (ruler) setPickedMinutes(Math.max(1, Math.min(TIMER_MAX_MINUTES, Math.round(ruler.scrollLeft / TIMER_TICK))));
+  };
   // while the menu is open the glass pill rests on the grid tab
   const visualActive = menuOpen ? "browse" : active;
   const index = TABS.findIndex((t) => t.id === visualActive);
 
   useEffect(() => {
-    if (!menuOpen) setHl({ i: null, pos: 0, instant: true });
+    if (!menuOpen) return undefined;
+    const timer = window.setTimeout(() => new CornerKit().applyAll('[data-lgn-menu-squircle]', { radius: 28, smoothing: 1 }), 40);
+    return () => window.clearTimeout(timer);
   }, [menuOpen]);
 
   // close the menu on outside tap or Escape
@@ -313,6 +654,132 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
       document.removeEventListener("keydown", onKey);
     };
   }, [menuOpen]);
+
+  const closeVoiceSearch = () => {
+    voiceListeningRef.current = false;
+    voiceSessionRef.current += 1;
+    voiceSubmittedRef.current = true;
+    if (voiceRestartTimerRef.current) window.clearTimeout(voiceRestartTimerRef.current);
+    voiceRestartTimerRef.current = null;
+    try { voiceRecognitionRef.current?.abort?.(); } catch { /* Recognition may already be stopped. */ }
+    voiceRecognitionRef.current = null;
+    setVoiceSearchOpen(false);
+    setVoiceSearchStatus('idle');
+    setVoiceSearchError('');
+  };
+  const searchVoiceQuery = async (rawQuery) => {
+    const text = String(rawQuery || '').trim();
+    if (!text) { setVoiceSearchError('Di qué lugar o servicio estás buscando.'); setVoiceSearchStatus('ready'); return; }
+    setVoiceTranscript(text);
+    setVoiceSearchStatus('processing');
+    setVoiceSearchError('');
+    setVoiceSearchAnswer('');
+    try {
+      const response = await fetch('/api/ask-nochi', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: text, history: [], searchMode: 'business' }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'No se pudo entender la búsqueda. Inténtalo de nuevo.');
+      const place = Array.isArray(data.places) ? data.places[0] : null;
+      if (place && onSelectBusiness) {
+        closeVoiceSearch();
+        onSelectBusiness(place);
+        return;
+      }
+      setVoiceSearchAnswer(String(data.answer || ''));
+      setVoiceSearchError(place ? 'No se pudo abrir este negocio.' : 'No encontré un negocio relacionado. Prueba con otro nombre o servicio.');
+      setVoiceSearchStatus('ready');
+    } catch (error) {
+      setVoiceSearchError(error instanceof Error ? error.message : 'No se pudo completar la búsqueda.');
+      setVoiceSearchStatus('error');
+    }
+  };
+  const startVoiceRecognition = (session) => {
+    if (!voiceListeningRef.current || voiceSessionRef.current !== session) return;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      voiceListeningRef.current = false;
+      setVoiceSearchStatus('error');
+      setVoiceSearchError('Este navegador no admite búsqueda por voz. Escribe tu búsqueda abajo.');
+      return;
+    }
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'es-MX';
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+      voiceRecognitionRef.current = recognition;
+      setVoiceSearchStatus('listening');
+      recognition.onresult = (event) => {
+        if (voiceSessionRef.current !== session || !voiceListeningRef.current) return;
+        let finalText = '';
+        let interimText = '';
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+          const result = event.results[index];
+          if (result.isFinal) finalText += result[0]?.transcript || '';
+          else interimText += result[0]?.transcript || '';
+        }
+        const heard = (finalText || interimText).trim();
+        if (heard) setVoiceTranscript(heard);
+        if (finalText.trim() && !voiceSubmittedRef.current) {
+          voiceSubmittedRef.current = true;
+          voiceListeningRef.current = false;
+          voiceSessionRef.current += 1;
+          voiceRecognitionRef.current = null;
+          void searchVoiceQuery(finalText);
+        }
+      };
+      recognition.onerror = (event) => {
+        if (voiceSessionRef.current !== session) return;
+        voiceRecognitionRef.current = null;
+        if (event.error === 'no-speech' || event.error === 'aborted') return;
+        voiceListeningRef.current = false;
+        setVoiceSearchStatus('error');
+        setVoiceSearchError(event.error === 'not-allowed' ? 'Permite el acceso al micrófono para buscar por voz.' : 'No se pudo iniciar el micrófono. Inténtalo de nuevo o escribe tu búsqueda.');
+      };
+      recognition.onend = () => {
+        if (voiceSessionRef.current !== session) return;
+        voiceRecognitionRef.current = null;
+        if (voiceListeningRef.current && !voiceSubmittedRef.current) {
+          setVoiceSearchStatus('listening');
+          voiceRestartTimerRef.current = window.setTimeout(() => startVoiceRecognition(session), 250);
+        }
+      };
+      recognition.start();
+    } catch {
+      if (voiceSessionRef.current !== session) return;
+      voiceRecognitionRef.current = null;
+      voiceListeningRef.current = false;
+      setVoiceSearchStatus('error');
+      setVoiceSearchError('No se pudo iniciar el micrófono. Escribe tu búsqueda o inténtalo de nuevo.');
+    }
+  };
+  const beginVoiceSearch = () => {
+    setMenuOpen(false);
+    setVoiceSearchOpen(true);
+    setVoiceTranscript('');
+    setVoiceSearchError('');
+    setVoiceSearchAnswer('');
+    voiceSubmittedRef.current = false;
+    voiceListeningRef.current = true;
+    const session = ++voiceSessionRef.current;
+    startVoiceRecognition(session);
+  };
+  const toggleVoiceRecognition = () => {
+    if (voiceListeningRef.current) {
+      const recognition = voiceRecognitionRef.current;
+      voiceListeningRef.current = false;
+      voiceSessionRef.current += 1;
+      voiceSubmittedRef.current = true;
+      if (voiceRestartTimerRef.current) window.clearTimeout(voiceRestartTimerRef.current);
+      voiceRestartTimerRef.current = null;
+      voiceRecognitionRef.current = null;
+      try { recognition?.stop?.(); } catch { /* Recognition may already have ended. */ }
+      if (voiceTranscript.trim()) void searchVoiceQuery(voiceTranscript);
+      else { setVoiceSearchStatus('ready'); setVoiceSearchError('No escuché una búsqueda. Inténtalo de nuevo o escríbela.'); }
+      return;
+    }
+    if (voiceSearchStatus !== 'processing') beginVoiceSearch();
+  };
 
   const pickItem = (item) => {
     setMenuOpen(false);
@@ -473,31 +940,36 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
                 color: "#fff",
               }}
             >
-              {avatar ? <Avatar src={avatarSrc} alt={label} /> : <Icon name={icon} />}
+              {avatar ? <Avatar src={avatarSrc} alt={label} timerActive={timerActive} /> : <Icon name={icon} />}
             </button>
           ))}
         </div>
 
-        {/* Dropdown menu: sibling of the tab bar (not inside it) so its glass can blur the page */}
+        {/* Floating glass shortcuts panel above the bar */}
         <div
           ref={menuRef}
           className="lgn-menu"
           role="menu"
-          aria-label="More"
+          aria-label="Accesos rápidos"
           aria-hidden={!menuOpen}
-          onPointerLeave={(e) => e.pointerType === "mouse" && leaveMenu()}
+          data-lgn-menu-squircle
           style={{
             ...darkGlass("rgba(38,32,28,0.34)"),
             backdropFilter: "blur(16px) saturate(190%) brightness(1.04)",
             WebkitBackdropFilter: "blur(16px) saturate(190%) brightness(1.04)",
-            position: "absolute",
-            zIndex: 3,
-            bottom: BAR_H + 10,
-            // centered over the grid tab, clamped so it never leaves the row
-            left: `clamp(0px, calc(3px + (100% - ${SEARCH_IDLE_W + 10 + 6}px) * 0.625 - ${MENU_W / 2}px), calc(100% - ${MENU_W}px))`,
-            width: MENU_W,
-            maxWidth: "100%",
-            padding: 8,
+            position: "fixed",
+            zIndex: 51,
+            left: 5,
+            right: 5,
+            bottom: keyboard
+              ? `${keyboard + 10 + BAR_H + 15}px`
+              : `calc(env(safe-area-inset-bottom, 0px) + ${14 + BAR_H + 15}px)`,
+            width: "auto",
+            maxWidth: 460,
+            maxHeight: "min(68dvh, 520px)",
+            overflowY: "auto",
+            marginInline: "auto",
+            padding: 12,
             borderRadius: 28,
             transformOrigin: "50% 100%",
             opacity: menuOpen && !searching ? 1 : 0,
@@ -506,56 +978,41 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
             transform:
               menuOpen && !searching
                 ? "translateZ(0) translateY(0) scale(1)"
-                : "translateZ(0) translateY(14px) scale(0.86)",
+                : "translateZ(0) translateY(14px) scale(0.96)",
             transition:
               menuOpen && !searching
                 ? `opacity 220ms ease, transform 480ms ${SPRING}, visibility 0s`
                 : `opacity 140ms ease, transform 220ms ease, visibility 0s linear 220ms`,
           }}
         >
-          {/* One glass highlight that glides between rows */}
-          <div
-            aria-hidden="true"
-            style={{
-              position: "absolute",
-              left: 8,
-              right: 8,
-              top: 8,
-              height: ITEM_H,
-              borderRadius: 20,
-              zIndex: 0,
-              pointerEvents: "none",
-              background:
-                "radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.22), rgba(255,255,255,0.08) 65%)",
-              boxShadow: "inset 0 0 14px rgba(255,255,255,0.06)",
-              opacity: hl.i === null ? 0 : 1,
-              transform: `translateY(${hl.pos * ITEM_H}px) scale(${hl.i === null ? 0.97 : 1})`,
-              transition: hl.instant
-                ? "opacity 200ms ease, transform 0s"
-                : `opacity 200ms ease, transform 360ms ${EASE_OUT}`,
-            }}
-          />
-          {menuItems.map((item, i) => (
-            <button
-              key={item.id}
-              className="lgn-item"
-              onPointerEnter={(e) => e.pointerType === "mouse" && hoverRow(i)}
-              onFocus={() => hoverRow(i)}
-              role="menuitem"
-              tabIndex={menuOpen ? 0 : -1}
-              onClick={() => pickItem(item)}
-              style={{
-                opacity: menuOpen ? 1 : 0,
-                transform: menuOpen ? "translateY(0)" : "translateY(8px)",
-                transition: menuOpen
-                  ? `opacity 260ms ease ${70 + i * 40}ms, transform 420ms ${EASE_OUT} ${70 + i * 40}ms, background 160ms ease`
-                  : "opacity 100ms ease, transform 100ms ease",
-              }}
-            >
-              <Icon name={item.icon} size={22} />
-              <span>{item.label}</span>
-            </button>
-          ))}
+          <section aria-label="Más usados">
+            <h2 className="mb-2 px-1 text-[10px] font-bold uppercase tracking-[.16em] text-white/45">Más usados</h2>
+            <div className="grid grid-cols-2 gap-2">
+              {menuItems.map((item) => <button key={item.id} className="flex min-h-[46px] items-center gap-2 px-2 py-1.5 rounded-[12px] bg-white/[.055] text-left text-white transition-colors hover:bg-white/[.11] active:bg-white/[.14]" role="menuitem" tabIndex={menuOpen ? 0 : -1} onClick={() => item.id === 'voice-search' ? beginVoiceSearch() : pickItem(item)}>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center"><span aria-hidden="true" className="material-symbols-rounded text-[18px] leading-none">{item.icon}</span></span>
+                <span className="text-[11px] font-semibold leading-tight">{item.label}</span>
+              </button>)}
+            </div>
+          </section>
+          <section aria-label="Organiza tu día" className="mt-4 pt-1">
+            <h2 className="mb-2 px-1 text-[10px] font-bold uppercase tracking-[.16em] text-white/45">Organiza tu día</h2>
+            <div className="grid grid-cols-2 gap-2">
+              {COMING_SOON.map(({ label, symbol }) => label === 'Temporizador' ? <button key={label} type="button" onClick={() => { setMenuOpen(false); setTimerPickerOpen(true); }} className="flex min-h-[42px] items-center gap-2 rounded-[11px] bg-white/[.055] px-2 py-1 text-left text-white transition-colors hover:bg-white/[.11] active:bg-white/[.14]">
+                <span aria-hidden="true" className={`material-symbols-rounded shrink-0 text-[15px] leading-none ${timerActive ? 'text-[#ffb347]' : 'text-white/70'}`}>{symbol}</span>
+                <span className="min-w-0 flex-1"><span className="block text-[10px] font-semibold leading-tight">Temporizador</span><span className={`mt-0.5 block font-mono text-[9px] ${timerActive ? 'text-[#ffbd66]' : 'text-white/40'}`}>{timerActive ? `${timerDisplay} restante` : 'Elegir duración'}</span></span>
+              </button> : label === 'Cronómetro' ? <button key={label} type="button" onClick={() => { setMenuOpen(false); setStopwatchVisible(true); if (!stopwatchHasSession) { setStopwatchElapsedBeforeRun(0); setStopwatchStartedAt(Date.now()); setStopwatchRunning(true); setStopwatchLaps([]); } }} className="flex min-h-[42px] items-center gap-2 rounded-[11px] bg-white/[.055] px-2 py-1 text-left text-white transition-colors hover:bg-white/[.11] active:bg-white/[.14]">
+                <span aria-hidden="true" className={`material-symbols-rounded shrink-0 text-[15px] leading-none ${stopwatchHasSession ? 'text-[#ffb347]' : 'text-white/70'}`}>{symbol}</span><span className="min-w-0 flex-1"><span className="block text-[10px] font-semibold leading-tight">Cronómetro</span><span className="mt-0.5 block font-mono text-[9px] text-white/40">{stopwatchHasSession ? stopwatchDisplay : 'Iniciar'}</span></span>
+              </button> : label === 'Notas rápidas' ? <button key={label} type="button" onClick={() => { setMenuOpen(false); setNotesOpen(true); }} className="flex min-h-[42px] items-center gap-2 rounded-[11px] bg-white/[.055] px-2 py-1 text-left text-white transition-colors hover:bg-white/[.11] active:bg-white/[.14]">
+                <span aria-hidden="true" className="material-symbols-rounded shrink-0 text-[15px] leading-none text-white/70">{symbol}</span><span className="min-w-0 flex-1"><span className="block text-[10px] font-semibold leading-tight">Notas rápidas</span><span className="mt-0.5 block text-[8px] font-medium uppercase tracking-wider text-white/40">{readQuickNotes().length} notas</span></span>
+              </button> : label === 'Alarmas' ? <button key={label} type="button" onClick={() => { setMenuOpen(false); setUtilityOpen('alarms'); }} className="flex min-h-[42px] items-center gap-2 rounded-[11px] bg-white/[.055] px-2 py-1 text-left text-white transition-colors hover:bg-white/[.11] active:bg-white/[.14]">
+                <span aria-hidden="true" className="material-symbols-rounded shrink-0 text-[15px] leading-none text-white/70">{symbol}</span><span className="min-w-0 flex-1"><span className="block text-[10px] font-semibold leading-tight">Alarmas</span><span className="mt-0.5 block text-[8px] text-white/40">{readSavedList(ALARMS_KEY).filter((item) => item.enabled).length ? `${readSavedList(ALARMS_KEY).filter((item) => item.enabled).length} activas` : 'Crear alarma'}</span></span>
+              </button> : label === 'Recordatorios' ? <button key={label} type="button" onClick={() => { setMenuOpen(false); setUtilityOpen('reminders'); }} className="flex min-h-[42px] items-center gap-2 rounded-[11px] bg-white/[.055] px-2 py-1 text-left text-white transition-colors hover:bg-white/[.11] active:bg-white/[.14]">
+                <span aria-hidden="true" className="material-symbols-rounded shrink-0 text-[15px] leading-none text-white/70">{symbol}</span><span className="min-w-0 flex-1"><span className="block text-[10px] font-semibold leading-tight">Recordatorios</span><span className="mt-0.5 block text-[8px] text-white/40">{readSavedList(REMINDERS_KEY).filter((item) => !item.completed).length ? `${readSavedList(REMINDERS_KEY).filter((item) => !item.completed).length} pendientes` : 'Organiza tus tareas'}</span></span>
+              </button> : label === 'Calendario' ? <button key={label} type="button" onClick={() => { setMenuOpen(false); setUtilityOpen('calendar'); }} className="flex min-h-[42px] items-center gap-2 rounded-[11px] bg-white/[.055] px-2 py-1 text-left text-white transition-colors hover:bg-white/[.11] active:bg-white/[.14]">
+                <span aria-hidden="true" className="material-symbols-rounded shrink-0 text-[15px] leading-none text-white/70">{symbol}</span><span className="min-w-0 flex-1"><span className="block text-[10px] font-semibold leading-tight">Calendario</span><span className="mt-0.5 block text-[8px] text-white/40">Ver mes y eventos</span></span>
+              </button> : null)}
+            </div>
+          </section>
         </div>
 
         {/* Search: oval pill that expands into the search bar */}
@@ -578,10 +1035,11 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
           <div
             style={{
               position: "absolute",
-              left: 46,
-              right: 50,
+              left: 48,
+              right: 48,
               top: 0,
               bottom: 0,
+              minWidth: 0,
               opacity: searching ? 1 : 0,
               pointerEvents: searching ? "auto" : "none",
               transition: searching ? "opacity 300ms ease 200ms" : "opacity 120ms ease",
@@ -589,7 +1047,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
           >
             <input
               ref={inputRef}
-              className="lgn-input"
+              className="lgn-input search-input-fix"
               type="text"
               value={query}
               placeholder="Search"
@@ -601,6 +1059,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck={false}
+              style={{ background: "transparent", backgroundColor: "transparent", boxShadow: "none", WebkitBoxShadow: "none", boxSizing: "border-box", minWidth: 0 }}
               onChange={(e) => { setQuery(e.target.value); onSearch(e.target.value); }}
               onKeyDown={onInputKey}
             />
@@ -684,6 +1143,55 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
           </div>
         </div>
       </div>
+
+      <AnimatePresence>
+        {(timerVisible || stopwatchVisible) && <motion.section data-lgn-live-card role="group" aria-label={stopwatchVisible ? 'Cronómetro' : `Temporizador, ${timerDisplay} restante`} initial={{ opacity: 0, y: -24, scale: .96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -18, scale: .97 }} transition={{ type: 'spring', damping: 24, stiffness: 340 }} onTouchStart={(event) => { timerTouchStart.current = event.touches[0]?.clientY ?? null; }} onTouchEnd={(event) => { const start = timerTouchStart.current; const end = event.changedTouches[0]?.clientY; if (start !== null && end !== undefined && start - end > 35) { setTimerNoticeDismissed(true); setStopwatchVisible(false); } timerTouchStart.current = null; }} className="pointer-events-auto fixed left-[5px] right-[5px] top-[max(5px,env(safe-area-inset-top))] z-[120] mx-auto flex h-[112px] max-w-[520px] flex-col justify-between overflow-hidden rounded-[28px] bg-black px-4 py-3 text-white shadow-[0_8px_30px_rgba(0,0,0,.28)]">
+          <div className="flex min-h-0 items-center justify-between gap-2"><button type="button" aria-label={stopwatchVisible ? 'Ocultar cronómetro' : 'Abrir temporizador'} onClick={() => stopwatchVisible ? setStopwatchVisible(false) : setTimerPickerOpen(true)} className="min-w-0 flex-1 text-left"><span className="block text-[11px] font-medium text-white/50">{stopwatchVisible ? 'Cronómetro' : 'Temporizador'}</span><motion.span key={stopwatchVisible ? stopwatchDisplay : timerDisplay} initial={{ opacity: .65, y: 3 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .18 }} className="block font-mono text-[29px] font-semibold leading-8 tabular-nums tracking-tight">{stopwatchVisible ? stopwatchDisplay : timerDisplay}</motion.span></button>
+            <button type="button" onClick={() => stopwatchVisible ? setStopwatchRunning((running) => { if (running) { setStopwatchElapsedBeforeRun(stopwatchElapsed); setStopwatchStartedAt(null); return false; } setStopwatchStartedAt(Date.now()); return true; }) : timerPausedRemaining !== null ? (onResumeTimer?.(), setTimerPausedRemaining(null)) : (setTimerPausedRemaining(Math.max(0, (timerEndAt || 0) - Date.now())), onPauseTimer?.())} aria-label={stopwatchVisible ? (stopwatchRunning ? 'Pausar cronómetro' : 'Reanudar cronómetro') : (timerPausedRemaining !== null ? 'Reanudar temporizador' : 'Pausar temporizador')} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#ff9f0a]/20 text-[#ffb347]">{stopwatchVisible ? (stopwatchRunning ? <Pause className="h-4 w-4"/> : <Play className="h-4 w-4"/>) : timerPausedRemaining !== null ? <Play className="h-4 w-4"/> : <Pause className="h-4 w-4"/>}</button>
+            <button type="button" onClick={() => stopwatchVisible ? (setStopwatchRunning(false), setStopwatchStartedAt(null), setStopwatchElapsedBeforeRun(0), setStopwatchLaps([]), setStopwatchVisible(false)) : (onStopTimer?.(), setTimerPausedRemaining(null), setTimerNoticeDismissed(true))} aria-label={stopwatchVisible ? 'Detener cronómetro' : 'Detener temporizador'} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#ff453a]/20 text-[#ff625a]"><X className="h-4 w-4"/></button>
+          </div>
+          {stopwatchVisible ? <div className="flex h-7 items-center gap-2"><div className="flex min-w-0 flex-1 gap-1 overflow-hidden">{stopwatchLaps.slice(-3).map((lap, index) => <span key={`${lap}-${index}`} className="truncate rounded-md bg-white/[.1] px-2 py-1 font-mono text-[10px] text-white/70">{lap}</span>)}</div><button type="button" disabled={!stopwatchRunning} onClick={() => setStopwatchLaps((laps) => [...laps, stopwatchDisplay])} className="flex h-7 items-center gap-1 rounded-md bg-white/[.12] px-3 text-[11px] font-medium disabled:opacity-40"><Flag className="h-3 w-3"/>Vuelta</button></div> : <div className="h-7" aria-hidden="true"/>}
+        </motion.section>}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {timerPickerOpen && <>
+          <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[129] bg-black/45 backdrop-blur-sm"/>
+          <motion.section data-lgn-timer-sheet role="dialog" aria-modal="false" aria-labelledby="lgn-timer-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }} className="pointer-events-auto fixed inset-x-[5px] bottom-[5px] z-[130] mx-auto w-[calc(100%-10px)] max-w-[520px] overflow-hidden rounded-[28px] bg-black p-5 pb-[max(20px,env(safe-area-inset-bottom))] text-white shadow-2xl backdrop-blur-2xl">
+            <div className="h-[env(safe-area-inset-top)]" aria-hidden="true"/><div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/25"/>
+            <div className="relative -mt-1 flex min-h-12 items-start justify-between pr-10"><div><h2 id="lgn-timer-title" className="text-xl font-bold">{timerActive ? 'Temporizador activo' : '¿Cuánto tiempo?'}</h2></div><button type="button" onClick={() => setTimerPickerOpen(false)} aria-label="Cerrar temporizador" className="absolute right-[-15px] top-[-15px] flex h-9 w-9 items-center justify-center rounded-full bg-white/[.1] p-2 text-white transition-colors hover:bg-white/[.16] active:bg-white/[.22]"><X className="h-4 w-4"/></button></div>
+            {timerActive ? <><div className="py-6 text-center"><span className="font-mono text-6xl font-semibold tabular-nums tracking-tight">{timerDisplay}</span><p className="mt-2 text-xs text-white/45">{timerPausedRemaining !== null ? 'En pausa' : 'Tiempo restante'}</p></div><div className="flex gap-2"><button type="button" onClick={() => { if (timerPausedRemaining !== null) { onResumeTimer?.(); setTimerPausedRemaining(null); } else { setTimerPausedRemaining(Math.max(0, (timerEndAt || 0) - Date.now())); onPauseTimer?.(); } }} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-white/[.1] text-sm font-semibold">{timerPausedRemaining !== null ? <Play className="h-4 w-4"/> : <Pause className="h-4 w-4"/>}{timerPausedRemaining !== null ? 'Reanudar' : 'Pausar'}</button><button type="button" onClick={() => { onStopTimer?.(); setTimerPausedRemaining(null); setTimerPickerOpen(false); setTimerNoticeDismissed(true); }} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-[#ff453a]/15 text-sm font-semibold text-[#ff6b63]"><X className="h-4 w-4"/>Detener</button></div></> : <><div className="relative mb-4 overflow-hidden rounded-[26px] bg-black px-3 pb-4 pt-3">
+                <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-black via-black/80 to-transparent"/><div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-black via-black/80 to-transparent"/>
+                <div ref={timerRulerRef} onScroll={updateTimerRuler} onWheel={(event) => { if (timerRulerRef.current) timerRulerRef.current.scrollLeft += Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX; }} onPointerDown={(event) => { if (event.pointerType === 'mouse') { timerRulerDrag.current = { x: event.clientX, left: timerRulerRef.current?.scrollLeft || 0 }; event.currentTarget.setPointerCapture(event.pointerId); } }} onPointerMove={(event) => { if (timerRulerDrag.current && timerRulerRef.current) { timerRulerRef.current.scrollLeft = timerRulerDrag.current.left - (event.clientX - timerRulerDrag.current.x); } }} onPointerUp={() => { timerRulerDrag.current = null; }} onPointerCancel={() => { timerRulerDrag.current = null; }} className="relative h-[91px] touch-pan-x select-none overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden cursor-ew-resize">
+                  <div className="flex h-full w-max items-end" style={{ paddingLeft: 'calc(50% - 5.5px)', paddingRight: 'calc(50% - 5.5px)' }}>{Array.from({ length: TIMER_MAX_MINUTES + 1 }, (_, minute) => <div key={minute} className="flex h-full w-[11px] shrink-0 flex-col items-center justify-end"><span className="flex h-7 items-end justify-center pb-2 text-[10px] font-semibold leading-none tabular-nums text-[#e49a56]">{minute % 5 === 0 ? minute : ''}</span><span className={`w-[3px] rounded-full ${minute % 5 === 0 ? 'h-9 bg-[#ed9b52]' : 'h-6 bg-[#b87842]/80'}`}/></div>)}</div>
+                </div>
+                <span aria-hidden="true" className="pointer-events-none absolute top-[101px] left-1/2 z-20 h-0 w-0 -translate-x-1/2 border-x-[7px] border-t-[11px] border-x-transparent border-t-[#ff9f0a]"/>
+                <div className="mt-4 flex items-center justify-between gap-3 px-1"><button type="button" onClick={() => { onStartTimer?.(pickedMinutes * 60_000); setTimerPausedRemaining(null); setTimerNoticeDismissed(false); setTimerPickerOpen(false); }} className="flex h-11 shrink-0 items-center justify-center rounded-full bg-[#392313] px-5 text-[14px] font-semibold text-[#f2a25a] transition-colors hover:bg-[#4b2c16] active:scale-[.98]">Start Timer</button><span className="min-w-0 text-right font-mono text-[42px] font-light leading-none tracking-[-.05em] tabular-nums text-[#f2a25a]">{pickedMinutes < 60 ? `${pickedMinutes}:00` : `${Math.floor(pickedMinutes / 60)}:${String(pickedMinutes % 60).padStart(2, '0')}:00`}</span></div>
+              </div></>}
+          </motion.section>
+        </>}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {voiceSearchOpen && <motion.div key="voice-search-sheet" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[180] overflow-hidden bg-black text-white">
+          <div className="absolute inset-x-0 top-0 flex items-center justify-between px-5 pt-[max(18px,env(safe-area-inset-top))]"><span className="text-[12px] font-medium text-white/40">PuntoNochi</span><span className="h-2 w-2 rounded-full bg-[#ff9f0a]"/></div>
+          <div className="absolute inset-x-5 top-[42%] -translate-y-1/2 text-center">
+            <div className="mx-auto flex h-28 items-center justify-center gap-[5px]" aria-hidden="true">
+              {[46, 72, 54, 82, 58, 74, 48].map((height, index) => <motion.span key={index} animate={voiceSearchStatus === 'listening' ? { height: [height * .45, height, height * .62, height * .82, height * .45], opacity: [0.72, 1, .82, 1, .72] } : { height: voiceSearchStatus === 'processing' ? [height * .5, height * .85, height * .5] : 12, opacity: .88 }} transition={{ duration: voiceSearchStatus === 'listening' ? .9 + index * .05 : .8, repeat: voiceSearchStatus === 'listening' || voiceSearchStatus === 'processing' ? Infinity : 0, ease: 'easeInOut', delay: index * .055 }} className="w-[15px] rounded-full bg-white"/>)}
+            </div>
+            <p className="mt-8 text-[20px] font-medium tracking-tight">{voiceSearchStatus === 'listening' ? 'Te escucho' : voiceSearchStatus === 'processing' ? 'Entendiendo tu búsqueda…' : voiceSearchStatus === 'ready' ? '¿Qué lugar buscas?' : voiceSearchStatus === 'error' ? 'No pude completar la búsqueda' : 'Búsqueda por voz'}</p>
+            {voiceTranscript && <p className="mx-auto mt-3 max-w-md text-[15px] leading-6 text-white/65">“{voiceTranscript}”</p>}
+            {voiceSearchAnswer && <p className="mx-auto mt-3 max-w-md text-[13px] leading-5 text-white/45">{voiceSearchAnswer}</p>}
+            {voiceSearchError && <p role="alert" className="mx-auto mt-3 max-w-md text-[13px] leading-5 text-white/50">{voiceSearchError}</p>}
+            {(voiceSearchStatus === 'ready' || voiceSearchStatus === 'error') && <form onSubmit={(event) => { event.preventDefault(); void searchVoiceQuery(voiceTranscript); }} className="mx-auto mt-6 flex max-w-md items-center gap-2 rounded-full bg-[#222326] p-1.5 pl-4"><input autoFocus value={voiceTranscript} onChange={(event) => setVoiceTranscript(event.target.value)} placeholder="O escribe lo que necesitas" aria-label="Escribir búsqueda" className="min-w-0 flex-1 bg-transparent py-2 text-left text-[14px] text-white outline-none placeholder:text-white/35"/><button type="submit" className="flex h-10 shrink-0 items-center justify-center rounded-full bg-white px-4 text-[12px] font-semibold text-black">Buscar</button></form>}
+          </div>
+          <p className="absolute inset-x-0 bottom-[max(28px,env(safe-area-inset-bottom))] text-center text-[14px] text-white/75">{voiceSearchStatus === 'listening' ? 'Toca el botón para terminar' : voiceSearchStatus === 'processing' ? 'Buscando en los negocios de Nochistlán' : voiceSearchStatus === 'ready' ? 'Di otra búsqueda o escríbela' : 'Busca un lugar, servicio o lo que necesitas'}</p>
+          <button type="button" onClick={toggleVoiceRecognition} disabled={voiceSearchStatus === 'processing'} aria-label={voiceSearchStatus === 'listening' ? 'Terminar grabación' : 'Iniciar búsqueda por voz'} className="pointer-events-auto absolute bottom-[max(20px,env(safe-area-inset-bottom))] left-5 z-10 flex h-[68px] w-[68px] touch-manipulation items-center justify-center rounded-full bg-[#252528] text-white shadow-xl transition-transform active:scale-95 disabled:opacity-40">{voiceSearchStatus === 'listening' ? <Square className="h-5 w-5 fill-white"/> : <Mic className="h-6 w-6"/>}</button>
+          <button type="button" onClick={closeVoiceSearch} aria-label="Cancelar búsqueda por voz" className="pointer-events-auto absolute bottom-[max(20px,env(safe-area-inset-bottom))] right-5 z-10 flex h-[68px] w-[68px] touch-manipulation items-center justify-center rounded-full bg-[#ff554d] text-white shadow-xl active:scale-95"><X className="h-8 w-8" strokeWidth={2.5}/></button>
+        </motion.div>}
+      </AnimatePresence>
+      <AnimatePresence>{notesOpen && <QuickNotesSheet onClose={() => setNotesOpen(false)} />}</AnimatePresence>
+      <AppleUtilitySheets active={utilityOpen} onClose={() => setUtilityOpen(null)} />
     </nav>
   );
 }

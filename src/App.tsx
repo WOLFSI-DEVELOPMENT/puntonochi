@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { categories, visits, mockPlaces } from './data';
-import { Bookmark, ChevronRight, Flame, Sparkles, MapPin, Star, Store } from 'lucide-react';
+import { Bookmark, ChevronRight, CloudSun, Flame, Instagram, Sparkles, MapPin, Star, Store, X, Timer } from 'lucide-react';
 import { BottomNav } from './components/BottomNav';
 import { ColoniasPage } from './components/ColoniasPage';
 const DiscoverPage = React.lazy(() => import('./components/DiscoverPage').then((module) => ({ default: module.DiscoverPage })));
@@ -192,13 +192,64 @@ export default function App() {
   const [selectedBusiness, setSelectedBusiness] = useState<Place | null>(init.initialBusiness);
   const [publicMenuId] = useState<string | null>(init.initialMenuId);
   const [activeTab, setActiveTab] = useState(init.initialTab);
+  const [timerEndAt, setTimerEndAt] = useState<number | null>(null);
+  const [timerPausedFor, setTimerPausedFor] = useState<number | null>(null);
+  const [timerRemainingDisplay, setTimerRemainingDisplay] = useState(0);
+  const timerAudioContext = useRef<AudioContext | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [dailyDropFlipped, setDailyDropFlipped] = useState(false);
-  const [customizingHome, setCustomizingHome] = useState(false);
-  const homeSectionOrderRef = useRef<string[]>([]);
+  const [homeHighlightIndex, setHomeHighlightIndex] = useState(0);
+  const [showSponsorSheet, setShowSponsorSheet] = useState(false);
+  const [weatherSummary, setWeatherSummary] = useState<{ high: number | null; low: number | null; precipitationChance: number | null } | null>(null);
+  const timerActive = timerEndAt !== null || timerPausedFor !== null;
+  const timerDisplay = `${String(Math.floor(Math.ceil(timerRemainingDisplay / 1000) / 60)).padStart(2, '0')}:${String(Math.ceil(timerRemainingDisplay / 1000) % 60).padStart(2, '0')}`;
+  const startTimer = (duration: number) => {
+    const AudioContextConstructor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (AudioContextConstructor && !timerAudioContext.current) timerAudioContext.current = new AudioContextConstructor();
+    if (timerAudioContext.current?.state === 'suspended') void timerAudioContext.current.resume();
+    setTimerPausedFor(null); setTimerEndAt(Date.now() + duration); setTimerRemainingDisplay(duration);
+  };
+  const stopTimer = () => { setTimerEndAt(null); setTimerPausedFor(null); setTimerRemainingDisplay(0); };
+  const pauseTimer = () => { if (timerEndAt !== null) { const remaining = Math.max(0, timerEndAt - Date.now()); setTimerPausedFor(remaining); setTimerRemainingDisplay(remaining); setTimerEndAt(null); } };
+  const resumeTimer = () => { if (timerPausedFor !== null) { setTimerEndAt(Date.now() + timerPausedFor); setTimerPausedFor(null); } };
+  const completeTimer = () => {
+    stopTimer();
+    try {
+      const navigatorWithVibrate = navigator as Navigator & { vibrate?: (pattern: number | number[]) => boolean };
+      navigatorWithVibrate.vibrate?.([180, 100, 180, 100, 360]);
+      const context = timerAudioContext.current;
+      if (context) {
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.type = 'sine'; oscillator.frequency.setValueAtTime(880, context.currentTime); oscillator.frequency.setValueAtTime(1174.66, context.currentTime + .16); oscillator.frequency.setValueAtTime(880, context.currentTime + .32);
+        gain.gain.setValueAtTime(.0001, context.currentTime); gain.gain.exponentialRampToValueAtTime(.18, context.currentTime + .025); gain.gain.exponentialRampToValueAtTime(.0001, context.currentTime + .62);
+        oscillator.connect(gain); gain.connect(context.destination); oscillator.start(); oscillator.stop(context.currentTime + .65);
+      }
+    } catch { /* Sound or vibration can be unavailable or blocked by the browser. */ }
+  };
+  useEffect(() => {
+    if (timerEndAt === null) return undefined;
+    const update = () => { const left = Math.max(0, timerEndAt - Date.now()); setTimerRemainingDisplay(left); if (left <= 0) completeTimer(); };
+    update(); const interval = window.setInterval(update, 200);
+    return () => window.clearInterval(interval);
+  }, [timerEndAt]);
   const dailyDropQuestion = getDailyDropQuestion();
   const dailyDropChoices = getDailyDropChoices(dailyDropQuestion);
+  useEffect(() => {
+    const interval = window.setInterval(() => setHomeHighlightIndex((index) => (index + 1) % 4), 10_000);
+    return () => window.clearInterval(interval);
+  }, []);
+  useEffect(() => {
+    let active = true;
+    void fetch('/api/weather').then(async (response) => {
+      if (!response.ok) throw new Error('Weather forecast unavailable');
+      const data = await response.json();
+      if (active && data.days?.[0]) setWeatherSummary(data.days[0]);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+  useEffect(() => setDailyDropFlipped(false), [homeHighlightIndex]);
   const loading = false;
   const [showWelcome, setShowWelcome] = useState(() => {
     if (!init.initShowWelcome) return false;
@@ -237,61 +288,6 @@ export default function App() {
   const previousPrimaryTab = useRef(activeTab);
   const [tabDirection, setTabDirection] = useState(1);
   const primaryTabs = ['inicio', 'explorar', 'videos', 'noticias', 'crear'] as const;
-
-  useEffect(() => {
-    if (activeTab !== 'inicio') return;
-    const container = document.querySelector<HTMLElement>('[data-home-sections]');
-    if (!container) return;
-    const sections = Array.from(container.querySelectorAll<HTMLElement>('[data-home-section]'));
-    const defaults = sections.map((section) => section.dataset.homeSection || '').filter(Boolean);
-    let saved: string[] = [];
-    try { saved = JSON.parse(localStorage.getItem('puntonochi-home-section-order-v1') || '[]'); } catch { /* use defaults */ }
-    const order = [...saved.filter((id) => defaults.includes(id)), ...defaults.filter((id) => !saved.includes(id))];
-    homeSectionOrderRef.current = order;
-    order.forEach((id, index) => {
-      const section = sections.find((item) => item.dataset.homeSection === id);
-      if (section) section.style.order = String(index);
-    });
-  }, [activeTab]);
-
-  const persistHomeSectionOrder = () => {
-    const container = document.querySelector<HTMLElement>('[data-home-sections]');
-    if (!container) return;
-    const order = Array.from(container.querySelectorAll<HTMLElement>('[data-home-section]'))
-      .sort((a, b) => Number(a.style.order || 0) - Number(b.style.order || 0))
-      .map((section) => section.dataset.homeSection || '').filter(Boolean);
-    homeSectionOrderRef.current = order;
-    try { localStorage.setItem('puntonochi-home-section-order-v1', JSON.stringify(order)); } catch { /* ordering still works for this session */ }
-  };
-
-  const resetHomeSectionOrder = () => {
-    const container = document.querySelector<HTMLElement>('[data-home-sections]');
-    if (!container) return;
-    const sections = Array.from(container.querySelectorAll<HTMLElement>('[data-home-section]'));
-    sections.forEach((section, index) => { section.style.order = String(index); });
-    homeSectionOrderRef.current = sections.map((section) => section.dataset.homeSection || '').filter(Boolean);
-    try { localStorage.removeItem('puntonochi-home-section-order-v1'); } catch { /* reset for this session */ }
-  };
-
-  const onHomeSectionDrop = (event: React.DragEvent<HTMLElement>) => {
-    event.preventDefault();
-    const target = (event.target as HTMLElement).closest<HTMLElement>('[data-home-section]');
-    const draggedId = event.dataTransfer.getData('text/plain');
-    const container = document.querySelector<HTMLElement>('[data-home-sections]');
-    const dragged = container?.querySelector<HTMLElement>(`[data-home-section="${draggedId}"]`);
-    if (!target || !dragged || target === dragged) return;
-    const order = homeSectionOrderRef.current;
-    const from = order.indexOf(draggedId);
-    const to = order.indexOf(target.dataset.homeSection || '');
-    if (from < 0 || to < 0) return;
-    order.splice(from, 1);
-    order.splice(to, 0, draggedId);
-    order.forEach((id, index) => {
-      const section = container?.querySelector<HTMLElement>(`[data-home-section="${id}"]`);
-      if (section) section.style.order = String(index);
-    });
-    persistHomeSectionOrder();
-  };
 
   useEffect(() => {
     const from = primaryTabs.indexOf(previousPrimaryTab.current as typeof primaryTabs[number]);
@@ -717,11 +713,12 @@ export default function App() {
       {/* Dynamic Main Content based on activeTab */}
       <AnimatePresence mode="wait" initial={false}>
       {activeTab === 'inicio' && (
-        <motion.main key="home-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }} className="pt-8">
+        <motion.main key="home-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }} className={`pt-8 ${timerActive ? 'pt-14' : ''}`}>
+          {timerActive && <motion.div layout initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="fixed left-[5px] right-[5px] top-[max(5px,env(safe-area-inset-top))] z-40 mx-auto flex max-w-[520px] items-center gap-2 rounded-full border border-[#ff9f0a] bg-[#171719]/85 px-3 py-2 text-white shadow-lg backdrop-blur-xl"><Timer className="h-3.5 w-3.5 text-[#ff9f0a]"/><span className="text-[9px] font-semibold uppercase tracking-wider text-white/55">Temporizador</span><motion.span key={timerDisplay} initial={{ opacity: .6, y: 2 }} animate={{ opacity: 1, y: 0 }} className="ml-auto font-mono text-sm font-bold tabular-nums text-[#ffb347]">{timerDisplay}</motion.span></motion.div>}
           {/* Header Section */}
           <section className="relative px-5 mb-8">
-            <div className="absolute right-5 top-[-4px] flex items-center gap-2">
-            <button type="button" onClick={() => setShowStreakPage(true)} aria-label={`${dailyUse.totalDays} días usando PuntoNochi. Racha actual de ${dailyUse.currentStreak} días. Ver actividad`} title={`${dailyUse.totalDays} días usando PuntoNochi · racha de ${dailyUse.currentStreak} días`} className="flex min-h-9 items-center gap-1.5 rounded-full bg-[#292a2d] px-2.5 py-1 text-left text-white shadow-sm transition-transform active:scale-95">
+            <div className="absolute right-5 top-[-4px] z-20 flex items-center gap-2">
+            <button type="button" onClick={() => setShowStreakPage(true)} aria-label={`${dailyUse.totalDays} días usando PuntoNochi. Racha actual de ${dailyUse.currentStreak} días. Ver actividad`} title={`${dailyUse.totalDays} días usando PuntoNochi · racha de ${dailyUse.currentStreak} días`} className="relative z-20 flex min-h-9 touch-manipulation items-center gap-1.5 rounded-full bg-[#292a2d] px-2.5 py-1 text-left text-white shadow-sm transition-transform active:scale-95">
               <Flame aria-hidden="true" className="h-4 w-4 shrink-0 fill-orange-400 text-orange-400" />
               <span className="leading-tight"><span className="block text-xs font-bold tabular-nums">{dailyUse.totalDays} días</span><span className="block text-[8px] font-medium text-white/55">racha {dailyUse.currentStreak}</span></span>
             </button>
@@ -736,31 +733,45 @@ export default function App() {
               </h1>
             </div>
             <p className="mt-2 max-w-[430px] pl-1 text-[17px] font-medium leading-[1.22] tracking-[-.02em] text-[#d8e7ff] sm:text-[19px]">Negocios, lugares, eventos y más...<br/>todo en un solo lugar.</p>
-            <div className="mt-3 flex gap-2">
-              <button type="button" onClick={() => setCustomizingHome((value) => !value)} aria-pressed={customizingHome} className="rounded-full bg-white/15 px-4 py-2 text-xs font-semibold text-white backdrop-blur-sm">{customizingHome ? 'Listo' : 'Personalizar inicio'}</button>
-              {customizingHome && <button type="button" onClick={resetHomeSectionOrder} className="rounded-full bg-white/15 px-4 py-2 text-xs font-semibold text-white backdrop-blur-sm">Restablecer</button>}
-            </div>
-            {customizingHome && <p className="mt-3 max-w-[430px] rounded-2xl bg-white/10 px-4 py-3 text-xs font-medium text-white/85">Mantén presionada una sección y arrástrala para cambiarla de lugar. Tu orden queda guardado en este dispositivo.</p>}
-            <div className="mt-4 [perspective:1200px]">
-              <motion.div role="group" aria-label="Pregunta del día" className="ck-home-daily-drop-card relative min-h-[156px] rounded-[24px] bg-[#292a2d] text-white">
-                <AnimatePresence mode="wait" initial={false}>
-                  {!dailyDropFlipped ? <motion.button key="daily-drop-question" type="button" onClick={() => setDailyDropFlipped(true)} aria-label="Voltear para ver la respuesta del día" initial={{ opacity: 0, scaleX: 0.94 }} animate={{ opacity: 1, scaleX: 1 }} exit={{ opacity: 0, scaleX: 0.94 }} transition={reduceMotion ? { duration: 0.01 } : { duration: 0.18, ease: 'easeInOut' }} className="absolute inset-0 flex w-full flex-col items-start justify-center rounded-[24px] px-6 py-5 text-left">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Pregunta del día</span>
-                    <span className="mt-2 text-[18px] font-semibold leading-snug">{dailyDropQuestion}</span>
-                    <span className="mt-3 text-[11px] font-medium text-white/40">Toca para ver la respuesta</span>
-                  </motion.button> : <motion.button key="daily-drop-answer" type="button" onClick={() => setDailyDropFlipped(false)} aria-label="Volver a la pregunta del día" initial={{ opacity: 0, scaleX: 0.94 }} animate={{ opacity: 1, scaleX: 1 }} exit={{ opacity: 0, scaleX: 0.94 }} transition={reduceMotion ? { duration: 0.01 } : { duration: 0.18, ease: 'easeInOut' }} className="absolute inset-0 flex w-full flex-col items-start justify-center rounded-[24px] px-6 py-5 text-left">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Respuesta del día</span>
-                    <span className="mt-2 text-sm font-semibold leading-snug">{dailyDropChoices.length ? 'Hoy se antoja:' : 'Nuestra recomendación de hoy:'}</span>
-                    <span aria-live="polite" className="mt-2 text-base font-semibold leading-snug text-white">{dailyDropChoices.length ? dailyDropChoices.join(' · ') : 'Algo rico, recién preparado y de un negocio local.'}</span>
-                    <span className="mt-3 text-[11px] font-medium text-white/40">Toca para volver</span>
-                  </motion.button>}
-                </AnimatePresence>
+            <div className="mt-4">
+              <motion.div role="group" aria-label="Pregunta del día, pronóstico, patrocinadores e Instagram" className="ck-home-daily-drop-card relative min-h-[156px] overflow-hidden rounded-[24px] bg-[#292a2d] text-white">
+                <div className={`absolute inset-0 flex transition-transform duration-500 ${reduceMotion ? 'transition-none' : '[transition-timing-function:cubic-bezier(.22,1,.36,1)]'}`} style={{ width: '400%', transform: `translateX(-${homeHighlightIndex * 25}%)` }}>
+                  <div className="h-full w-1/4 shrink-0">
+                    {!dailyDropFlipped ? <button type="button" onClick={() => setDailyDropFlipped(true)} aria-label="Voltear para ver la respuesta del día" className="flex h-full w-full flex-col items-start justify-center px-6 py-5 text-left">
+                      <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Pregunta del día</span>
+                      <span className="mt-2 text-[18px] font-semibold leading-snug">{dailyDropQuestion}</span>
+                      <span className="mt-3 text-[11px] font-medium text-white/40">Toca para ver la respuesta</span>
+                    </button> : <button type="button" onClick={() => setDailyDropFlipped(false)} aria-label="Volver a la pregunta del día" className="flex h-full w-full flex-col items-start justify-center px-6 py-5 text-left">
+                      <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Respuesta del día</span>
+                      <span className="mt-2 text-sm font-semibold leading-snug">{dailyDropChoices.length ? 'Hoy se antoja:' : 'Nuestra recomendación de hoy:'}</span>
+                      <span aria-live="polite" className="mt-2 text-base font-semibold leading-snug text-white">{dailyDropChoices.length ? dailyDropChoices.join(' · ') : 'Algo rico, recién preparado y de un negocio local.'}</span>
+                      <span className="mt-3 text-[11px] font-medium text-white/40">Toca para volver</span>
+                    </button>}
+                  </div>
+                  <div className="flex h-full w-1/4 shrink-0 items-center justify-between gap-4 px-6 py-5">
+                    <div><span className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Pronóstico de hoy</span><p className="mt-2 text-lg font-semibold">Nochistlán, Zacatecas</p><p className="mt-1 text-sm text-white/65">{weatherSummary?.high != null && weatherSummary?.low != null ? `${Math.round(weatherSummary.high)}° / ${Math.round(weatherSummary.low)}° · máxima y mínima` : 'Consulta el clima local de hoy'}</p>{weatherSummary?.precipitationChance != null && <p className="mt-1 text-xs text-white/40">Lluvia: {weatherSummary.precipitationChance}%</p>}</div>
+                    <CloudSun aria-hidden="true" className="h-12 w-12 shrink-0 text-amber-200" strokeWidth={1.5}/>
+                  </div>
+                  <div className="flex h-full w-1/4 shrink-0 flex-col items-start justify-center px-6 py-4">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Patrocinadores</span>
+                    <span className="mt-2 text-lg font-semibold">Haz crecer tu negocio en Nochistlán</span>
+                    <button type="button" onClick={() => setShowSponsorSheet(true)} className="mt-3 inline-flex h-10 items-center justify-center rounded-full bg-white px-5 text-xs font-bold text-[#202124] transition-transform active:scale-[.98]">Quiero ser patrocinador</button>
+                  </div>
+                  <a href="https://www.instagram.com/puntonochistlan/" target="_blank" rel="noopener noreferrer" className="flex h-full w-1/4 shrink-0 items-center gap-3 px-5 py-4 text-white">
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] bg-gradient-to-br from-[#ffb347] via-[#ee2a7b] to-[#6228d7] shadow-[0_6px_18px_rgba(238,42,123,.2)]"><Instagram aria-hidden="true" className="h-6 w-6"/></span>
+                    <span className="min-w-0 flex-1"><span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">PuntoNochi en</span><span className="mt-1 block text-[15px] font-bold leading-tight tracking-[-.02em]">Instagram</span><span className="mt-1.5 block truncate text-xs font-medium text-white/55">@puntonochistlan</span></span>
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.08]"><ChevronRight aria-hidden="true" className="h-4 w-4 text-white/70"/></span>
+                  </a>
+                </div>
               </motion.div>
+              <div role="tablist" aria-label="Contenido destacado" className="mt-2 flex justify-center gap-1.5">
+                {['Pregunta del día', 'Pronóstico', 'Patrocinadores', 'Instagram'].map((label, index) => <button key={label} type="button" role="tab" aria-label={`Mostrar ${label.toLocaleLowerCase('es-MX')}`} aria-selected={homeHighlightIndex === index} onClick={() => setHomeHighlightIndex(index)} className={`h-1.5 rounded-full transition-all ${homeHighlightIndex === index ? 'w-5 bg-white/75' : 'w-1.5 bg-white/25'}`}/>) }
+              </div>
             </div>
           </section>
-          <div data-home-sections="" className={`flex flex-col ${customizingHome ? 'home-customizing' : ''}`} onDragOver={customizingHome ? (event) => event.preventDefault() : undefined} onDrop={customizingHome ? onHomeSectionDrop : undefined}>
+          <div className="flex flex-col">
           {/* Personalized suggestions */}
-          <section data-home-section="suggested" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'suggested'); event.dataTransfer.effectAllowed = 'move'; } : undefined} className="mb-10">
+          <section className="mb-10">
             <div className="px-5 mb-4">
               <h2 className="text-2xl font-bold flex items-center gap-2"><Sparkles className="h-5 w-5 text-[#1a73e8]"/>{deviceLocation ? 'Cerca de ti' : 'Sugeridos'}</h2>
               <p className="text-[15px] text-neutral-500 font-medium mt-0.5">{deviceLocation ? 'Negocios ordenados por distancia a tu ubicación' : 'Negocios para ti, según lo que buscas y guardas'}</p>
@@ -786,7 +797,7 @@ export default function App() {
           </section>
 
           {/* By Category Section */}
-          <section data-home-section="categories" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'categories'); event.dataTransfer.effectAllowed = 'move'; } : undefined} className="mb-10">
+          <section className="mb-10">
             <div 
               className="px-5 mb-4 cursor-pointer active:opacity-70 transition-opacity"
               onClick={() => !loading && setShowAllCategories(true)}
@@ -845,7 +856,7 @@ export default function App() {
           </section>
 
           {/* Recently viewed businesses */}
-          <section data-home-section="recently-viewed" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'recently-viewed'); event.dataTransfer.effectAllowed = 'move'; } : undefined} className="mb-10">
+          <section className="mb-10">
             <div className="mb-4 px-5">
               <h2 className="text-2xl font-bold tracking-tight">Vistos recientemente</h2>
               <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Vuelve rápido a los negocios que visitaste</p>
@@ -861,7 +872,7 @@ export default function App() {
           </section>
 
           {/* Popular this week */}
-          {popularPlaces.length > 0 && <section data-home-section="popular" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'popular'); event.dataTransfer.effectAllowed = 'move'; } : undefined} className="mb-10">
+          {popularPlaces.length > 0 && <section className="mb-10">
             <div className="mb-4 px-5">
               <h2 className="text-2xl font-bold tracking-tight">Popular esta semana</h2>
               <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Lo que la comunidad está buscando y visitando</p>
@@ -876,10 +887,10 @@ export default function App() {
             </div>
           </section>}
 
-          <div data-home-section="articles" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'articles'); event.dataTransfer.effectAllowed = 'move'; } : undefined}><HomeArticlesSection onViewAll={() => setActiveTab('guias')} onOpenArticle={(slug) => { window.history.pushState({}, '', `/articulos/${encodeURIComponent(slug)}`); setActiveTab('guias'); }} /></div>
-          <div data-home-section="videos" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'videos'); event.dataTransfer.effectAllowed = 'move'; } : undefined}><HomeVideosSection onViewAll={() => setActiveTab('noticias')} /></div>
+          <div><HomeArticlesSection onViewAll={() => setActiveTab('guias')} onOpenArticle={(slug) => { window.history.pushState({}, '', `/articulos/${encodeURIComponent(slug)}`); setActiveTab('guias'); }} /></div>
+          <div><HomeVideosSection onViewAll={() => setActiveTab('noticias')} /></div>
 
-          <section data-home-section="new" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'new'); event.dataTransfer.effectAllowed = 'move'; } : undefined} className="mb-10">
+          <section className="mb-10">
             <div className="mb-4 px-5">
               <h2 className="text-2xl font-bold tracking-tight">Nuevo en Nochistlán</h2>
               <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Negocios agregados recientemente</p>
@@ -895,7 +906,7 @@ export default function App() {
           </section>
 
           {/* All saved businesses */}
-          <section data-home-section="favorites" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'favorites'); event.dataTransfer.effectAllowed = 'move'; } : undefined} className="mb-10">
+          <section className="mb-10">
             <div className="mb-4 px-5">
               <h2 className="flex items-center gap-2 text-2xl font-bold"><Bookmark className="h-5 w-5 fill-[#1a73e8] text-[#1a73e8]"/>Favoritos</h2>
               <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Tus negocios guardados</p>
@@ -911,7 +922,7 @@ export default function App() {
           </section>
 
           {/* All Visits Section */}
-          <section data-home-section="featured" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'featured'); event.dataTransfer.effectAllowed = 'move'; } : undefined} className="px-5">
+          <section className="px-5">
             <div 
               className="mb-4 cursor-pointer active:opacity-70 transition-opacity"
               onClick={() => setShowDestacados(true)}
@@ -1008,7 +1019,7 @@ export default function App() {
             </div>
           </section>
 
-          <section data-home-section="add-business" draggable={customizingHome} onDragStart={customizingHome ? (event) => { event.dataTransfer.setData('text/plain', 'add-business'); event.dataTransfer.effectAllowed = 'move'; } : undefined} className="mb-10 mt-10 px-5">
+          <section className="mb-10 mt-10 px-5">
             <div className="mb-4">
               <h2 className="text-2xl font-bold tracking-tight">Agrega tu negocio</h2>
               <p className="mt-1 text-[15px] font-medium text-neutral-500">Comparte tu negocio con la comunidad de Nochistlán.</p>
@@ -1062,11 +1073,21 @@ export default function App() {
       <AnimatePresence>
         {showStreakPage && <StreakPage key="streak-page" totalDays={dailyUse.totalDays} currentStreak={dailyUse.currentStreak} onClose={() => setShowStreakPage(false)} />}
       </AnimatePresence>
+      <AnimatePresence>
+        {showSponsorSheet && <>
+          <motion.button type="button" aria-label="Cerrar información para patrocinadores" onClick={() => setShowSponsorSheet(false)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[130] bg-black/65 backdrop-blur-sm"/>
+          <motion.section role="dialog" aria-modal="true" aria-labelledby="sponsor-sheet-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 34, stiffness: 280, mass: .9 }} className="fixed inset-x-0 bottom-0 z-[131] mx-auto w-full max-w-[560px] rounded-t-[30px] bg-[#202124] px-6 pb-[max(24px,env(safe-area-inset-bottom))] pt-3 text-white shadow-2xl">
+            <div aria-hidden="true" className="mx-auto h-1.5 w-12 rounded-full bg-white/25"/>
+            <button type="button" onClick={() => setShowSponsorSheet(false)} aria-label="Cerrar" className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.08]"><X className="h-4 w-4"/></button>
+            <div className="px-1 pb-1 pt-5"><span className="flex h-12 w-12 items-center justify-center rounded-[16px] bg-gradient-to-br from-[#ffb347] via-[#ee2a7b] to-[#6228d7]"><Instagram aria-hidden="true" className="h-6 w-6"/></span><h2 id="sponsor-sheet-title" className="mt-4 pr-10 text-xl font-bold">¿Quieres ser patrocinador?</h2><p className="mt-2 text-sm leading-relaxed text-white/60">Mándanos un mensaje por Instagram y cuéntanos sobre tu negocio. Te compartimos las opciones para aparecer en PuntoNochi.</p><a href="https://www.instagram.com/puntonochistlan/" target="_blank" rel="noopener noreferrer" className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-bold text-[#202124] transition-transform active:scale-[.99]"><Instagram aria-hidden="true" className="h-4 w-4"/>Escribir a @puntonochistlan</a></div>
+          </motion.section>
+        </>}
+      </AnimatePresence>
       <AnimatePresence>{streakBadgeCelebration && <StreakBadgeCelebration key={`streak-badge-${streakBadgeCelebration.days}`} days={streakBadgeCelebration.days} name={streakBadgeCelebration.name} onDone={() => setStreakBadgeCelebration(null)}/>}</AnimatePresence>
 
       {/* Bottom Navigation & Search */}
       {activeTab !== 'ask-nochi' && !showAdminPage && !showStreakPage && !(activeTab === 'videos' && marketplaceDetailOpen) && (
-        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => setShowSearch(false)} onOpenProfile={() => { if (signedInAccount) setPublicProfileId(signedInAccount.id); else setShowAccountAuth(true); }} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} />
+        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => setShowSearch(false)} onOpenProfile={() => { if (signedInAccount) setPublicProfileId(signedInAccount.id); else setShowAccountAuth(true); }} onSelectBusiness={(place) => setSelectedBusiness(place)} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} timerEndAt={timerEndAt} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onStopTimer={stopTimer} onTimerComplete={completeTimer} />
       )}
 
       {/* Pages & Overlays */}

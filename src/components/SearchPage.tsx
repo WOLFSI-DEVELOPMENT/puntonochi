@@ -120,7 +120,9 @@ export function AskNochiPage({ onSelectBusiness }: { onSelectBusiness: (place: P
     finally { setBusy(false); composerRef.current?.focus(); }
   };
 
-  return <main className="fixed inset-0 z-[40] overflow-hidden bg-[#1a1a1a] bg-[linear-gradient(to_top,rgba(255,255,255,0.25)_0%,rgba(255,255,255,0.15)_10%,rgba(255,255,255,0.08)_22%,rgba(255,255,255,0.03)_35%,rgba(255,255,255,0.01)_50%,rgba(255,255,255,0)_65%)] text-white">
+  return <>
+  <motion.div aria-hidden="true" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pointer-events-none fixed inset-0 z-[39] bg-black/55 backdrop-blur-sm" />
+  <motion.main initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 300 }} className="fixed inset-x-[5px] bottom-[5px] z-[40] mx-auto h-[min(92dvh,900px)] max-w-[900px] overflow-hidden rounded-[30px] bg-[#1a1a1a] bg-[linear-gradient(to_top,rgba(255,255,255,0.25)_0%,rgba(255,255,255,0.15)_10%,rgba(255,255,255,0.08)_22%,rgba(255,255,255,0.03)_35%,rgba(255,255,255,0.01)_50%,rgba(255,255,255,0)_65%)] text-white shadow-[0_-18px_70px_rgba(0,0,0,.4)]">
     <header className="absolute inset-x-0 top-0 z-10 flex items-center justify-between bg-transparent px-4 pt-[max(16px,env(safe-area-inset-top))]">
       <button type="button" aria-label="Volver al inicio" onClick={() => window.dispatchEvent(new CustomEvent('askNochiBack'))} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#303030] text-white/85 transition-colors hover:bg-[#3a3a3a]"><span className="material-symbols-rounded">arrow_back</span></button>
       <button type="button" onClick={() => { setMessages([]); setError(''); setInput(''); composerRef.current?.focus(); }} aria-label="Nueva conversación" className="flex h-10 w-10 items-center justify-center rounded-full bg-[#303030] text-white/85 transition-colors hover:bg-[#3a3a3a]"><span className="material-symbols-rounded">edit_square</span></button>
@@ -142,13 +144,15 @@ export function AskNochiPage({ onSelectBusiness }: { onSelectBusiness: (place: P
         <div ref={endRef}/>
       </div>
     </div>
-    <div className="absolute inset-x-0 bottom-0 z-10 px-4 pb-[max(18px,env(safe-area-inset-bottom))] pt-5">
+    <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-[9] h-[180px]" style={{ background: 'linear-gradient(to top, rgba(24,24,24,.82) 0%, rgba(24,24,24,.5) 40%, rgba(24,24,24,0) 100%)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', maskImage: 'linear-gradient(to top, black 4%, rgba(0,0,0,.82) 42%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to top, black 4%, rgba(0,0,0,.82) 42%, transparent 100%)' }} />
+    <div className="absolute inset-x-0 bottom-0 z-10 bg-transparent px-4 pb-[max(18px,env(safe-area-inset-bottom))] pt-5">
       <form onSubmit={(event) => { event.preventDefault(); void send(); }} className="mx-auto flex min-h-[52px] max-w-2xl items-center gap-2 rounded-full bg-[#303030] p-[5px] shadow-[0_-18px_50px_rgba(255,255,255,.12),0_12px_40px_rgba(0,0,0,.18)]">
         <textarea ref={composerRef} rows={1} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Pregunta lo que quieras…" aria-label="Mensaje para Ask Nochi" className="max-h-28 min-h-9 flex-1 resize-none self-center rounded-full bg-transparent px-4 py-2 text-[14px] leading-5 text-white outline-none placeholder:text-white/40" />
         <button type="submit" disabled={!input.trim() || busy} aria-label="Enviar mensaje" className="relative isolate flex h-[42px] min-w-[68px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/25 bg-[linear-gradient(180deg,#68bdff_0%,#1687ff_43%,#0861d7_100%)] px-6 text-white shadow-[inset_0_2px_2px_rgba(255,255,255,.55),inset_0_-3px_5px_rgba(0,43,130,.38),0_2px_5px_rgba(0,0,0,.28)] transition-[filter,transform] hover:brightness-110 active:translate-y-px active:brightness-95 disabled:cursor-not-allowed disabled:opacity-55 before:pointer-events-none before:absolute before:inset-0 before:-z-10 before:rounded-full before:bg-[url('data:image/svg+xml,%3Csvg_viewBox=%220_0_180_180%22_xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter_id=%22n%22%3E%3CfeTurbulence_type=%22fractalNoise%22_baseFrequency=%22.88%22_numOctaves=%223%22_stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect_width=%22100%25%22_height=%22100%25%22_filter=%22url(%23n)%22_opacity=%22.22%22/%3E%3C/svg%3E')] before:bg-cover before:opacity-30"><ArrowRight className="h-6 w-6 drop-shadow-[0_1px_1px_rgba(0,0,0,.22)]" strokeWidth={2.7}/></button>
       </form>
     </div>
-  </main>;
+  </motion.main>
+  </>;
 }
 
 export function AskNochiInline({ places, onSelectPlace, onClose }: { places: Place[]; onSelectPlace: (place: Place) => void; onClose: () => void }) {
