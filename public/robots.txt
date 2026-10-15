@@ -4,3 +4,4 @@ Disallow: /api/
 Disallow: /admin
 
 Sitemap: https://puntonochi.vercel.app/sitemap.xml
+Sitemap: https://puntonochi.vercel.app/sitemap-businesses.xml

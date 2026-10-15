@@ -635,7 +635,7 @@ export default function App() {
 
   useEffect(() => {
     let title = 'PuntoNochi | Lugares, negocios y noticias de Nochistlán';
-    let description = 'Descubre restaurantes, cafeterías, hoteles, servicios, videos y noticias de Nochistlán de Mejía, Zacatecas.';
+    let description = 'PuntoNochi es el directorio local de Nochistlán de Mejía, Zacatecas: descubre negocios, hoteles, restaurantes, eventos, videos y noticias de Nochistlán.';
     let noIndex = false;
     const routePath = window.location.pathname;
     const hotelClaimRoute = /^\/reclamar\/hotelnochistlan\/?$/.test(routePath);
