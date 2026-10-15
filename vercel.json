@@ -5,6 +5,7 @@
   "rewrites": [
     { "source": "/sitemap-businesses.xml", "destination": "/api/sitemap-businesses" },
     { "source": "/api/events/:id/image", "destination": "/api/places?__eventPath=:id/image" },
+    { "source": "/api/events/:id/photos/:photoId", "destination": "/api/places?__eventPath=:id/photos/:photoId" },
     { "source": "/api/events/:id", "destination": "/api/places?__eventPath=:id" },
     { "source": "/api/events", "destination": "/api/places?__eventList=1" },
     { "source": "/api/menus/analyze", "destination": "/api/places?__menuPath=analyze" },

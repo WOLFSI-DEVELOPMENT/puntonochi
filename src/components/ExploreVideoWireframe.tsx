@@ -1,9 +1,11 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { Building2, CalendarDays, Check, Copy, Film, ImagePlus, MessageCircle, Plus, Send, Share2, SmilePlus, ThumbsUp, Volume2, VolumeX, X } from 'lucide-react';
+import { Building2, CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Film, ImagePlus, MessageCircle, Plus, Send, Share2, SmilePlus, ThumbsUp, Volume2, VolumeX, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type TouchEvent, type WheelEvent } from 'react';
 import CornerKit from '@cornerkit/core';
 import { mockPlaces } from '../data';
 import { Place } from '../types';
+import { apiFetch } from '../api';
+import type { EventSummary } from './NewsPage';
 
 const FEED_VIDEOS = [
   { id: 'puntonochi-short-1', url: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1790910290/Untitled_video_4_edhg8f.mp4' },
@@ -39,7 +41,7 @@ const VIDEO_CAPTIONS = [
 ];
 type CreateAction = 'reel' | 'event' | 'image';
 const CREATE_ACTIONS: Array<{ id: CreateAction; label: string; icon: typeof Film }> = [
-  { id: 'reel', label: 'Crear reel', icon: Film },
+  { id: 'reel', label: 'Crear short', icon: Film },
   { id: 'event', label: 'Crear evento', icon: CalendarDays },
   { id: 'image', label: 'Publicar imagen', icon: ImagePlus },
 ];
@@ -67,13 +69,14 @@ function ProfileAction({ onClick, avatar = PUNTONOCHI_AVATAR, handle = '@puntono
   </button>;
 }
 
-export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccount }: { onClose: () => void; onOpenBusiness: (place: Place) => void; onRequireAccount?: () => void }) {
+export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccount, onCreateShort, onCreateEvent, onOpenEvent }: { onClose: () => void; onOpenBusiness: (place: Place) => void; onRequireAccount?: () => void; onCreateShort?: () => void; onCreateEvent?: () => void; onOpenEvent?: (id: string) => void }) {
   const frameRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const createMenuRef = useRef<HTMLDivElement>(null);
   const businessCardRef = useRef<HTMLDivElement>(null);
   const promoCardRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef<number | null>(null);
+  const eventPhotoTouchStartX = useRef<number | null>(null);
   const wheelLocked = useRef(false);
   const wheelTimer = useRef<number | null>(null);
   const edgeBounceTimer = useRef<number | null>(null);
@@ -85,6 +88,8 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
     return sharedIndex >= 0 ? sharedIndex : 0;
   });
   const [videoUrls, setVideoUrls] = useState(FEED_VIDEOS.map((video) => ({ id: video.id, url: video.url })));
+  const [feedEvents, setFeedEvents] = useState<EventSummary[]>([]);
+  const [eventPhotoIndex, setEventPhotoIndex] = useState(0);
   const [videoStats, setVideoStats] = useState<Record<string, ShortStats>>({});
   const [reactionBusy, setReactionBusy] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -103,12 +108,17 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
   const [createAction, setCreateAction] = useState<CreateAction>('reel');
   const [edgeBounce, setEdgeBounce] = useState(0);
   const [muted, setMuted] = useState(true);
+  const [videoPaused, setVideoPaused] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [controlsActive, setControlsActive] = useState(false);
   const [featuredBusiness] = useState<Place | null>(() => mockPlaces.length ? mockPlaces[Math.floor(Math.random() * mockPlaces.length)] : null);
   const videoProgress = duration > 0 ? Math.min(100, currentTime / duration * 100) : 0;
-  const currentVideo = videoUrls[videoIndex] || FEED_VIDEOS[videoIndex];
+  const isEventSlide = videoIndex >= videoUrls.length;
+  const currentEvent = isEventSlide ? feedEvents[videoIndex - videoUrls.length] : undefined;
+  const eventImages = currentEvent?.gallery?.length ? currentEvent.gallery : currentEvent?.imageUrl ? [{ id: 'cover', imageUrl: currentEvent.imageUrl }] : [];
+  const activeEventImage = eventImages[eventPhotoIndex] || eventImages[0];
+  const currentVideo = videoUrls[videoIndex] || FEED_VIDEOS[videoIndex] || videoUrls[0] || FEED_VIDEOS[0];
   const isAyuntamientoVideo = isAyuntamientoVideoId(currentVideo.id);
   const isHotelVideo = isHotelVideoId(currentVideo.id);
   const hotelBusiness = mockPlaces.find((place) => place.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es').includes('hotel nochistlan')) || null;
@@ -151,6 +161,20 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
   }, []);
 
   useEffect(() => { void refreshShorts(); }, [refreshShorts]);
+
+  const refreshEvents = useCallback(async () => {
+    try {
+      const response = await apiFetch('/api/events');
+      const rows = await response.json().catch(() => []);
+      if (response.ok && Array.isArray(rows)) setFeedEvents(rows as EventSummary[]);
+    } catch { /* Keep the video feed active when the events API is unavailable. */ }
+  }, []);
+  useEffect(() => {
+    void refreshEvents();
+    window.addEventListener('puntonochi:events-updated', refreshEvents);
+    return () => window.removeEventListener('puntonochi:events-updated', refreshEvents);
+  }, [refreshEvents]);
+  useEffect(() => { setEventPhotoIndex(0); }, [videoIndex]);
 
   const loadComments = useCallback(async () => {
     setCommentsLoading(true);
@@ -269,7 +293,7 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
 
   const stepVideo = useCallback((direction: 1 | -1) => {
     const nextIndex = videoIndex + direction;
-    if (nextIndex < 0 || nextIndex >= videoUrls.length) {
+    if (nextIndex < 0 || nextIndex >= videoUrls.length + feedEvents.length) {
       setEdgeBounce(direction);
       if (edgeBounceTimer.current !== null) window.clearTimeout(edgeBounceTimer.current);
       edgeBounceTimer.current = window.setTimeout(() => { setEdgeBounce(0); edgeBounceTimer.current = null; }, 150);
@@ -277,11 +301,12 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
     }
     setSwipeDirection(direction);
     setVideoIndex(nextIndex);
-  }, [videoIndex, videoUrls.length]);
+  }, [videoIndex, videoUrls.length, feedEvents.length]);
 
   useEffect(() => {
     setCurrentTime(0);
     setDuration(0);
+    setVideoPaused(false);
     const cornerKit = new CornerKit();
     let animationFrame = 0;
     const applyCorners = () => {
@@ -371,14 +396,27 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
     <AnimatePresence>{createMenuOpen && <>
       <motion.button type="button" aria-label="Cerrar menú de creación" onClick={() => setCreateMenuOpen(false)} className="fixed inset-0 z-30 cursor-default" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}/>
       <motion.div ref={createMenuRef} role="menu" aria-label="Opciones de creación" initial={{ opacity: 0, y: -8, scale: .96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: .97 }} transition={{ duration: .16 }} className="absolute right-4 top-[max(62px,calc(env(safe-area-inset-top)+58px))] z-40 w-max max-w-[calc(100vw-32px)] overflow-hidden rounded-[18px] bg-[#202124]/95 p-1 text-white shadow-[0_16px_48px_rgba(0,0,0,.45)] backdrop-blur-xl [corner-shape:squircle] md:right-6 md:top-[76px]">
-        {CREATE_ACTIONS.map(({ id, label, icon: Icon }) => <button key={id} type="button" role="menuitem" onClick={() => { setCreateMenuOpen(false); setCreateAction(id); setCreatorNoticeOpen(true); videoRef.current?.pause(); }} className="flex h-10 w-full items-center gap-2 rounded-[13px] px-2 text-left text-sm font-medium transition-colors hover:bg-white/[.08] active:bg-white/[.12] [corner-shape:squircle]"><Icon className="h-4 w-4 shrink-0 text-white/75"/>{label}</button>)}
+        {CREATE_ACTIONS.map(({ id, label, icon: Icon }) => <button key={id} type="button" role="menuitem" onClick={() => { setCreateMenuOpen(false); if (id === 'reel' && onCreateShort) { videoRef.current?.pause(); onCreateShort(); return; } if (id === 'event' && onCreateEvent) { videoRef.current?.pause(); onCreateEvent(); return; } setCreateAction(id); setCreatorNoticeOpen(true); videoRef.current?.pause(); }} className="flex h-10 w-full items-center gap-2 rounded-[13px] px-2 text-left text-sm font-medium transition-colors hover:bg-white/[.08] active:bg-white/[.12] [corner-shape:squircle]"><Icon className="h-4 w-4 shrink-0 text-white/75"/>{label}</button>)}
       </motion.div>
     </>}</AnimatePresence>
 
     <AnimatePresence initial={false} custom={swipeDirection} mode="sync">
     <motion.div key={videoIndex} custom={swipeDirection} variants={feedCardMotion} initial="enter" animate={edgeBounce ? { y: edgeBounce > 0 ? -16 : 16 } : 'center'} exit="exit" transition={edgeBounce ? { type: 'spring', stiffness: 460, damping: 17, mass: .48 } : { type: 'spring', stiffness: 190, damping: 29, mass: .86 }} className="absolute inset-0 flex items-center justify-center md:gap-4 md:px-12">
-      <section ref={frameRef} onWheel={onWheel} onTouchStart={(event) => { const target = event.target as HTMLElement; if (target.closest('[data-video-controls]')) { touchStartY.current = null; return; } touchStartY.current = event.touches[0]?.clientY ?? null; if (!target.closest('button, a')) startLongPressSpeed(); }} onTouchMove={(event) => { const y = event.touches[0]?.clientY; if (touchStartY.current !== null && y !== undefined && Math.abs(touchStartY.current - y) > 12) { if (longPressTimer.current !== null) { window.clearTimeout(longPressTimer.current); longPressTimer.current = null; } if (longPressActive.current) stopLongPressSpeed(); } }} onTouchEnd={(event) => { stopLongPressSpeed(); onTouchEnd(event); }} onTouchCancel={stopLongPressSpeed} onContextMenu={(event) => event.preventDefault()} aria-label="Feed de videos. Desliza verticalmente para cambiar de video." className="group relative h-[calc(100%-10px)] w-[calc(100%-10px)] touch-pan-x overflow-hidden rounded-[28px] bg-[#141519] [corner-shape:squircle] md:h-[min(86dvh,820px)] md:w-auto md:aspect-[9/16] md:rounded-[30px] md:shadow-[0_30px_120px_rgba(0,0,0,.55)]">
-        <video ref={videoRef} src={currentVideo.url} autoPlay muted={muted} playsInline preload="auto" aria-label="Video destacado de PuntoNochi" onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)} onLoadedMetadata={(event) => { setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0); keepVideoPlaying(event.currentTarget); }} onDurationChange={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)} onEnded={(event) => { event.currentTarget.currentTime = 0; keepVideoPlaying(event.currentTarget); }} className="absolute inset-0 h-full w-full object-cover"/>
+      <section ref={frameRef} onWheel={onWheel} onTouchStart={(event) => { const target = event.target as HTMLElement; if (target.closest('[data-video-controls]')) { touchStartY.current = null; return; } touchStartY.current = event.touches[0]?.clientY ?? null; if (!target.closest('button, a')) startLongPressSpeed(); }} onTouchMove={(event) => { const y = event.touches[0]?.clientY; if (touchStartY.current !== null && y !== undefined && Math.abs(touchStartY.current - y) > 12) { if (longPressTimer.current !== null) { window.clearTimeout(longPressTimer.current); longPressTimer.current = null; } if (longPressActive.current) stopLongPressSpeed(); } }} onTouchEnd={(event) => { stopLongPressSpeed(); onTouchEnd(event); }} onTouchCancel={stopLongPressSpeed} onContextMenu={(event) => event.preventDefault()} aria-label="Feed de videos y eventos. Desliza verticalmente para cambiar de publicación." className="group relative h-[calc(100%-10px)] w-[calc(100%-10px)] touch-pan-x overflow-hidden rounded-[28px] bg-[#141519] [corner-shape:squircle] md:h-[min(86dvh,820px)] md:w-auto md:aspect-[9/16] md:rounded-[30px] md:shadow-[0_30px_120px_rgba(0,0,0,.55)]">
+        {isEventSlide && currentEvent ? <div className="absolute inset-0 bg-[#17282c]" onTouchStart={(event) => { eventPhotoTouchStartX.current = event.touches[0]?.clientX ?? null; }} onTouchEnd={(event) => { const startX = eventPhotoTouchStartX.current; eventPhotoTouchStartX.current = null; const endX = event.changedTouches[0]?.clientX; if (startX === null || endX === undefined || Math.abs(endX - startX) < 32 || eventImages.length < 2) return; setEventPhotoIndex((index) => (index + (endX < startX ? 1 : eventImages.length - 1)) % eventImages.length); }}>
+          {activeEventImage && <img src={activeEventImage.imageUrl} alt={`Foto ${eventPhotoIndex + 1} de ${currentEvent.title}`} className="absolute inset-0 h-full w-full object-cover"/>}
+          <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/5 to-black/85"/>
+          <div className="absolute left-5 top-5 rounded-full bg-black/35 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[.14em] backdrop-blur-xl">Punto Events</div>
+          {eventImages.length > 1 && <><button type="button" aria-label="Foto anterior del evento" onClick={() => setEventPhotoIndex((index) => (index + eventImages.length - 1) % eventImages.length)} className="absolute left-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-xl"><ChevronLeft className="h-5 w-5"/></button><button type="button" aria-label="Foto siguiente del evento" onClick={() => setEventPhotoIndex((index) => (index + 1) % eventImages.length)} className="absolute right-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-xl"><ChevronRight className="h-5 w-5"/></button><div className="absolute inset-x-0 top-6 z-10 flex justify-center gap-1.5">{eventImages.map((photo, index) => <span key={photo.id} className={`h-1 rounded-full ${index === eventPhotoIndex ? 'w-5 bg-white' : 'w-2 bg-white/50'}`}/>)}</div></>}
+          <div className="absolute inset-x-5 bottom-8 z-10 md:bottom-10">
+            <p className="text-xs font-semibold text-white/75">{new Intl.DateTimeFormat('es-MX', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(`${currentEvent.date}T12:00:00Z`))}{currentEvent.time ? ` · ${currentEvent.time}` : ''}</p>
+            <h2 className="mt-2 text-3xl font-bold leading-tight">{currentEvent.title}</h2>
+            <p className="mt-2 flex items-center gap-2 text-sm text-white/80"><MapPin className="h-4 w-4 shrink-0"/>{currentEvent.location}</p>
+            <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-white/80">{currentEvent.description}</p>
+            <button type="button" onClick={() => onOpenEvent?.(currentEvent.id)} className="mt-5 flex h-12 w-full items-center justify-center rounded-full bg-white text-sm font-bold text-[#15191b]">Ver evento</button>
+          </div>
+        </div> : <>
+        <video ref={videoRef} src={currentVideo.url} autoPlay muted={muted} playsInline preload="auto" aria-label={videoPaused ? 'Video pausado. Toca para reproducir' : 'Video reproduciéndose. Toca para pausar'} onClick={(event) => { if ((event.target as HTMLElement).closest('[data-video-controls]')) return; const video = event.currentTarget; if (video.paused) { const playback = video.play(); if (playback) void playback.catch(() => undefined); setVideoPaused(false); } else { video.pause(); setVideoPaused(true); } }} onPlay={() => setVideoPaused(false)} onPause={() => setVideoPaused(true)} onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)} onLoadedMetadata={(event) => { setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0); keepVideoPlaying(event.currentTarget); }} onDurationChange={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)} onEnded={(event) => { event.currentTarget.currentTime = 0; keepVideoPlaying(event.currentTarget); }} className="absolute inset-0 h-full w-full cursor-pointer object-cover"/>
         <div className="absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-black/45 to-transparent md:hidden"/>
         <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-black/75 via-black/20 to-transparent"/>
 
@@ -406,14 +444,15 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
           </div>
           <button type="button" onClick={() => setMuted((value) => !value)} aria-label={muted ? 'Activar sonido' : 'Silenciar video'} aria-pressed={!muted} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white transition-colors hover:bg-white/15 active:scale-90">{muted ? <VolumeX className="h-[18px] w-[18px]"/> : <Volume2 className="h-[18px] w-[18px]"/>}</button>
         </div>
+        </>}
       </section>
 
-      <aside className="hidden w-[76px] shrink-0 flex-col items-center gap-5 md:flex">
+      {!isEventSlide && <aside className="hidden w-[76px] shrink-0 flex-col items-center gap-5 md:flex">
         <ProfileAction onClick={openProfile} avatar={activeProfile.avatar} handle={activeProfile.handle}/>
         <Action icon={ThumbsUp} label="Me gusta" count={formatCount(currentStats.likes)} onClick={() => void toggleReaction('like')} pressed={currentStats.myReaction === 'like'} disabled={reactionBusy}/>
         <Action icon={MessageCircle} label="Comentarios" count={formatCount(currentStats.commentCount)} onClick={openComments}/>
         <Action icon={Share2} label="Compartir" onClick={openShare}/>
-      </aside>
+      </aside>}
     </motion.div>
     </AnimatePresence>
     <AnimatePresence>{profileOpen && <motion.main role="dialog" aria-modal="true" aria-labelledby="puntonochi-profile-name" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ duration: .2 }} className="fixed inset-0 z-[100] overflow-y-auto bg-[#101113] text-white">

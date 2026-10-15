@@ -4,6 +4,7 @@ import { Bookmark, ChevronRight, CloudSun, Flame, Instagram, Sparkles, MapPin, S
 import { BottomNav } from './components/BottomNav';
 import { ColoniasPage } from './components/ColoniasPage';
 const ExploreVideoWireframe = React.lazy(() => import('./components/ExploreVideoWireframe').then((module) => ({ default: module.ExploreVideoWireframe })));
+const ReelCreatorPage = React.lazy(() => import('./components/ReelCreatorPage').then((module) => ({ default: module.ReelCreatorPage })));
 import { CategoryPage } from './components/CategoryPage';
 import { AllCategoriesPage } from './components/AllCategoriesPage';
 import { DestacadosPage } from './components/DestacadosPage';
@@ -13,10 +14,12 @@ import { FlipText } from './components/FlipText';
 import { VerifiedBusinessName } from './components/VerifiedBusinessName';
 const HomeVideosSection = React.lazy(() => import('./components/HomeVideosSection').then((module) => ({ default: module.HomeVideosSection })));
 const HomeArticlesSection = React.lazy(() => import('./components/HomeArticlesSection').then((module) => ({ default: module.HomeArticlesSection })));
+const HomeEventsSection = React.lazy(() => import('./components/HomeEventsSection').then((module) => ({ default: module.HomeEventsSection })));
 import { articleCatalog } from './data/articles-index';
 import { AutoLayoutRoot } from './layout/AutoLayout';
 const VideosPage = React.lazy(() => import('./components/VideosPage').then((module) => ({ default: module.VideosPage })));
 const NewsPage = React.lazy(() => import('./components/NewsPage').then((module) => ({ default: module.NewsPage })));
+const EventsPage = React.lazy(() => import('./components/EventsPage').then((module) => ({ default: module.EventsPage })));
 const ArticlesPage = React.lazy(() => import('./components/ArticlesPage').then((module) => ({ default: module.ArticlesPage })));
 import { SearchPage, AskNochiPage } from './components/SearchPage';
 import { BusinessPromotionSheet } from './components/BusinessPromotionSheet';
@@ -34,6 +37,7 @@ import { ProfileSheet } from './components/ProfileSheet';
 import { AccountAuthSheet } from './components/AccountSheets';
 import { getStreakMilestone, StreakBadgeCelebration, StreakPage } from './components/StreakPage';
 import { PublicMenuPage } from './components/PublicMenuPage';
+import { HotelProfileClaimPage } from './components/HotelProfileClaimPage';
 import { LegalPage, type LegalDocument } from './components/LegalPage';
 import { PageLoadingSkeleton } from './components/PageLoadingSkeleton';
 import { Analytics } from '@vercel/analytics/react';
@@ -161,7 +165,7 @@ export default function App() {
       } else if (parts[0] === 'colonias') {
         initShowColonias = true;
       } else if (parts[0] === 'eventos') {
-        initialTab = 'noticias';
+        initialTab = 'eventos';
       } else if (parts[0] === 'ask-nochi') {
         initialTab = 'ask-nochi';
       } else if (parts[0] === 'explorar' || parts[0] === 'guardados' || parts[0] === 'videos' || parts[0] === 'mercado' || parts[0] === 'noticias' || parts[0] === 'mapa' || parts[0] === 'guias' || parts[0] === 'articulos') {
@@ -207,6 +211,8 @@ export default function App() {
   const [selectedBusiness, setSelectedBusiness] = useState<Place | null>(init.initialBusiness);
   const [publicMenuId] = useState<string | null>(init.initialMenuId);
   const [activeTab, setActiveTab] = useState(init.initialTab);
+  const [openEventCreatorOnPage, setOpenEventCreatorOnPage] = useState(false);
+  const [showReelCreator, setShowReelCreator] = useState(false);
   useEffect(() => {
     if (!('IntersectionObserver' in window)) { setArticlesNearView(true); setVideosNearView(true); return undefined; }
     const observers = [
@@ -321,7 +327,7 @@ export default function App() {
   const tabSwipeStart = useRef<{ x: number; y: number } | null>(null);
   const previousPrimaryTab = useRef(activeTab);
   const [tabDirection, setTabDirection] = useState(1);
-  const primaryTabs = ['inicio', 'explorar', 'videos', 'noticias'] as const;
+  const primaryTabs = ['inicio', 'explorar', 'videos', 'noticias', 'eventos'] as const;
 
   useEffect(() => {
     const from = primaryTabs.indexOf(previousPrimaryTab.current as typeof primaryTabs[number]);
@@ -615,7 +621,7 @@ export default function App() {
       path = `/categories`;
     } else if (showColonias) {
       path = `/colonias`;
-    } else if ((activeTab === 'noticias' && /^\/eventos\/[^/]+\/?$/.test(window.location.pathname)) || (activeTab === 'guias' && /^\/articulos\/[^/]+\/?$/.test(window.location.pathname))) {
+    } else if (((activeTab === 'noticias' || activeTab === 'eventos') && /^\/eventos\/[^/]+\/?$/.test(window.location.pathname)) || (activeTab === 'guias' && /^\/articulos\/[^/]+\/?$/.test(window.location.pathname))) {
       path = window.location.pathname;
     } else if (activeTab !== 'inicio') {
       path = activeTab === 'videos' ? '/mercado' : activeTab === 'guias' ? '/articulos' : `/${activeTab}`;
@@ -688,6 +694,9 @@ export default function App() {
     } else if (activeTab === 'guias') {
       title = routeArticle ? `${routeArticle.title} | Artículos de Nochistlán | PuntoNochi` : 'Artículos de Nochistlán | PuntoNochi';
       description = routeArticle?.summary || 'Historias, cultura y lugares para conocer mejor Nochistlán de Mejía.';
+    } else if (activeTab === 'eventos') {
+      title = /^\/eventos\/[^/]+\/?$/.test(routePath) ? 'Evento en Nochistlán | PuntoNochi' : 'Eventos en Nochistlán | Punto Events | PuntoNochi';
+      description = /^\/eventos\/[^/]+\/?$/.test(routePath) ? 'Consulta fecha, horario, ubicación, fotos y detalles de este evento en Nochistlán.' : 'Descubre eventos, actividades y planes para hacer en Nochistlán de Mejía, Zacatecas.';
     } else if (activeTab === 'noticias') {
       if (/^\/eventos\/[^/]+\/?$/.test(routePath)) {
         title = 'Evento en Nochistlán | PuntoNochi';
@@ -826,6 +835,7 @@ export default function App() {
   }, []);
 
   if (publicMenuId) return <PublicMenuPage id={publicMenuId}/>;
+  if (window.location.pathname === '/reclamar/hotelnochistlan') return <><HotelProfileClaimPage onRequireAccount={() => setShowAccountAuth(true)} onClose={() => { window.history.pushState({}, '', '/explorar'); setActiveTab('explorar'); }} />{showAccountAuth && <AccountAuthSheet onClose={() => setShowAccountAuth(false)}/>}</>;
 
   return (
     <AutoLayoutRoot id="app-root" className={`auto-layout-root relative min-h-screen bg-[#f8f9fa] lg:pt-16 ${activeTab === 'explorar' || activeTab === 'inicio' ? 'pb-0' : 'pb-36'} font-sans text-neutral-900 selection:bg-blue-100`} style={{ fontFamily: "'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif" }}>
@@ -889,6 +899,7 @@ export default function App() {
             </div>
           </section>
           <div className="flex flex-col">
+          <React.Suspense fallback={<div className="mx-5 mb-10 h-[190px] animate-pulse rounded-[24px] bg-white/[.04]"/>}><HomeEventsSection onViewAll={() => setActiveTab('eventos')} onOpenEvent={(id) => { window.history.pushState({}, '', `/eventos/${encodeURIComponent(id)}`); setActiveTab('eventos'); }} /></React.Suspense>
           {/* Personalized suggestions */}
           <section className="mb-10">
             <div className="px-5 mb-4">
@@ -1168,17 +1179,21 @@ export default function App() {
 
         {activeTab === 'explorar' && (
           <React.Suspense fallback={<div className="fixed inset-0 z-[80] bg-[#08090b]"/>}>
-            <ExploreVideoWireframe onClose={() => setActiveTab('inicio')} onRequireAccount={() => setShowAccountAuth(true)} onOpenBusiness={(business) => {
+            <ExploreVideoWireframe onClose={() => setActiveTab('inicio')} onRequireAccount={() => setShowAccountAuth(true)} onCreateShort={async () => { const response = await fetch('/api/account/session', { cache: 'no-store', credentials: 'same-origin' }); const session = await response.json().catch(() => ({})); if (session.authenticated) setShowReelCreator(true); else setShowAccountAuth(true); }} onCreateEvent={async () => { const response = await fetch('/api/account/session', { cache: 'no-store', credentials: 'same-origin' }); const session = await response.json().catch(() => ({})); if (session.authenticated) { setOpenEventCreatorOnPage(true); setActiveTab('eventos'); } else setShowAccountAuth(true); }} onOpenEvent={(id) => { window.history.pushState({}, '', `/eventos/${encodeURIComponent(id)}`); setActiveTab('eventos'); }} onOpenBusiness={(business) => {
               setActiveTab('inicio');
               setSelectedBusiness(business);
             }}/>
           </React.Suspense>
         )}
+        {showReelCreator && <React.Suspense fallback={<div className="fixed inset-0 z-[110] bg-black"/>}><ReelCreatorPage onClose={() => setShowReelCreator(false)} /></React.Suspense>}
         {activeTab === 'videos' && (
           <motion.div key="videos-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<PageLoadingSkeleton page="market"/>}><VideosPage key="videos" onSelectBusiness={(place) => setSelectedBusiness(place)} /></React.Suspense></motion.div>
         )}
         {activeTab === 'noticias' && (
-          <motion.div key="news-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<PageLoadingSkeleton page="news"/>}><NewsPage key="noticias" /></React.Suspense></motion.div>
+          <motion.div key="news-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<PageLoadingSkeleton page="news"/>}><NewsPage key="noticias" onOpenEvents={() => setActiveTab('eventos')} /></React.Suspense></motion.div>
+        )}
+        {activeTab === 'eventos' && (
+          <motion.div key="events-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<PageLoadingSkeleton page="news"/>}><EventsPage key="events" autoCreate={openEventCreatorOnPage} onAutoCreateHandled={() => setOpenEventCreatorOnPage(false)} /></React.Suspense></motion.div>
         )}
         {activeTab === 'guias' && <motion.div key="articles-page" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .18 }}><React.Suspense fallback={<div className="min-h-screen bg-[#111214]"/>}><ArticlesPage /></React.Suspense></motion.div>}
       </AnimatePresence>
@@ -1186,6 +1201,7 @@ export default function App() {
       <AnimatePresence>
         {showStreakPage && <StreakPage key="streak-page" totalDays={dailyUse.totalDays} currentStreak={dailyUse.currentStreak} onClose={() => setShowStreakPage(false)} />}
       </AnimatePresence>
+      <AnimatePresence>{activeTab === 'explorar' && openEventCreatorOnPage && <React.Suspense fallback={null}><EventsPage embedded autoCreate onClose={() => setOpenEventCreatorOnPage(false)} /></React.Suspense>}</AnimatePresence>
       <AnimatePresence>
         {showSponsorSheet && <>
           <motion.button type="button" aria-label="Cerrar información para patrocinadores" onClick={() => setShowSponsorSheet(false)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[130] bg-black/65 backdrop-blur-sm"/>
@@ -1282,7 +1298,7 @@ export default function App() {
         <InstallAppPrompt enabled={!loading} />
         <SmartOnboarding enabled={!loading && !showWelcome && welcomeTransitionDone && !showAdminPage} onLocation={setDeviceLocation} />
         {showWelcome && !showAdminPage && <WelcomePage onContinue={finishWelcome} />}
-        {publicProfileId && <PublicProfileSheet profileId={publicProfileId} onClose={() => setPublicProfileId(null)} />}
+        {publicProfileId && <PublicProfileSheet profileId={publicProfileId} onClose={() => setPublicProfileId(null)} onCreateShort={() => { setPublicProfileId(null); setShowReelCreator(true); }} />}
         {showProfileSheet && <ProfileSheet onClose={() => setShowProfileSheet(false)} onSelectBusiness={(place) => setSelectedBusiness(place)} />}
         {showAccountAuth && <AccountAuthSheet onClose={() => setShowAccountAuth(false)}/>}
         {showProfileSettings && <ProfileSheet settingsOnly onClose={() => setShowProfileSettings(false)} onSelectBusiness={(place) => setSelectedBusiness(place)} />}

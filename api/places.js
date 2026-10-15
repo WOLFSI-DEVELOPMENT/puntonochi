@@ -22,6 +22,7 @@ export default function placesHandler(req, res) {
     req.url = `/api/places/${encodeURIComponent(reviewPlaceId)}/reviews${requestUrl.search}`;
   } else if (eventPath) {
     requestUrl.searchParams.delete('__eventPath');
+    if (!/^[A-Za-z0-9-]+(?:\/photos\/[A-Za-z0-9-]+|\/image)?$/.test(eventPath)) return res.status(404).json({ error: 'Event route not found.' });
     req.url = `/api/events/${eventPath}${requestUrl.search}`;
   } else if (eventList) {
     requestUrl.searchParams.delete('__eventList');

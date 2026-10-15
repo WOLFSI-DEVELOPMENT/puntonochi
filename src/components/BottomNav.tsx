@@ -278,6 +278,7 @@ const TABS = [
 
 const MENU_W = 236;
 const DEFAULT_MENU = [
+  { id: "eventos", label: "Eventos", icon: "event" },
   { id: "videos", label: "Mercado", icon: "storefront" },
   { id: "noticias", label: "Noticias", icon: "newspaper" },
   { id: "guias", label: "Artículos", icon: "menu_book" },

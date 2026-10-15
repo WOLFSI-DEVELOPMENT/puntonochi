@@ -8,7 +8,8 @@ type Profile = { id: string; name: string; picture: string | null; bio: string; 
 type Activity = {
   posts: { id: string; imageUrl: string; caption: string; createdAt: string; postType: string; placeName?: string | null }[];
   reviews: { id: string; placeName: string; rating: number; text: string; createdAt: string }[];
-  events: { id: string; title: string; date: string; location: string; imageUrl: string }[];
+  events: { id: string; title: string; date: string; location: string; imageUrl: string; description?: string; time?: string | null }[];
+  shorts: { id: string; videoUrl: string; title: string; description: string; createdAt: string }[];
   marketplaceListings: { id: string; category: string; title: string; price: string; location: string; description: string; images: { id: string; url: string; sortOrder: number }[] }[];
 };
 async function readApiJson<T>(response: Response): Promise<T> {
@@ -17,9 +18,9 @@ async function readApiJson<T>(response: Response): Promise<T> {
   catch { throw new Error(response.ok ? 'El servidor devolvió una respuesta inesperada.' : `No se pudo cargar el perfil (HTTP ${response.status}).`); }
 }
 
-export function PublicProfileSheet({ profileId, onClose }: { profileId: string; onClose: () => void }) {
+export function PublicProfileSheet({ profileId, onClose, onCreateShort }: { profileId: string; onClose: () => void; onCreateShort?: () => void }) {
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [activity, setActivity] = useState<Activity>({ posts: [], reviews: [], events: [], marketplaceListings: [] });
+  const [activity, setActivity] = useState<Activity>({ posts: [], reviews: [], events: [], shorts: [], marketplaceListings: [] });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -107,14 +108,19 @@ export function PublicProfileSheet({ profileId, onClose }: { profileId: string; 
             </div>
           </div>
           {profile.bio && <p className="mt-5 max-w-2xl whitespace-pre-wrap text-[13px] leading-relaxed text-white/80 sm:text-sm">{profile.bio}</p>}
-          <div className="mt-5 max-w-sm">
-            {profile.isSelf ? <button type="button" onClick={() => { setEditName(profile.name); setEditBio(profile.bio); setPhotoData(''); setEditing(true); }} className="flex h-10 w-full items-center justify-center gap-2 rounded-full bg-white/[0.1] px-4 text-xs font-semibold text-white"><Pencil className="h-3.5 w-3.5"/>Editar perfil</button> : <button type="button" disabled={busy} onClick={() => void toggleFollow()} className={`flex h-10 w-full items-center justify-center rounded-full text-xs font-bold disabled:opacity-60 ${profile.isFollowing ? 'bg-white/[0.1] text-white' : 'bg-white text-black'}`}>{busy ? 'Un momento…' : profile.isFollowing ? 'Siguiendo' : 'Seguir'}</button>}
+          <div className="mt-5 flex max-w-sm gap-2">
+            {profile.isSelf ? <><button type="button" onClick={() => { setEditName(profile.name); setEditBio(profile.bio); setPhotoData(''); setEditing(true); }} className="flex h-10 flex-1 items-center justify-center gap-2 rounded-full bg-white/[0.1] px-4 text-xs font-semibold text-white"><Pencil className="h-3.5 w-3.5"/>Editar perfil</button>{onCreateShort && <button type="button" onClick={onCreateShort} className="flex h-10 flex-1 items-center justify-center rounded-full bg-white px-4 text-xs font-bold text-black">+ Nuevo video</button>}</> : <button type="button" disabled={busy} onClick={() => void toggleFollow()} className={`flex h-10 w-full items-center justify-center rounded-full text-xs font-bold disabled:opacity-60 ${profile.isFollowing ? 'bg-white/[0.1] text-white' : 'bg-white text-black'}`}>{busy ? 'Un momento…' : profile.isFollowing ? 'Siguiendo' : 'Seguir'}</button>}
           </div>
           {error && <p role="alert" className="mt-3 text-xs text-rose-300">{error}</p>}
         </section>
         <section className="mx-auto min-h-[45vh] w-full max-w-5xl flex-1 px-5 pb-12 sm:px-8">
           <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[.16em] text-white/45">Publicaciones</h2>
           {activity.posts.length ? <div className="grid grid-cols-3 gap-1.5 sm:gap-2">{activity.posts.map((post) => <article key={post.id} className="relative aspect-square overflow-hidden rounded-[4px] bg-[#1b1c1f]">{post.imageUrl && <img src={post.imageUrl} alt={post.caption || 'Publicación'} loading="lazy" className="h-full w-full object-cover"/>}{post.caption && <span className="absolute inset-x-0 bottom-0 line-clamp-2 bg-gradient-to-t from-black/80 to-transparent p-2 pt-6 text-[10px]">{post.caption}</span>}</article>)}</div> : <Empty label="Todavía no hay publicaciones"/>}
+          <div className="mt-9">
+            <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[.16em] text-white/45">Eventos creados</h2>
+            {activity.events.length ? <div className="grid gap-3 sm:grid-cols-2">{activity.events.map((event) => <article key={event.id} className="overflow-hidden rounded-[22px] bg-[#1b1c1f]"><div className="relative aspect-[1.7] bg-[#24262a]">{event.imageUrl && <img src={event.imageUrl} alt={event.title} loading="lazy" className="h-full w-full object-cover"/>}<div className="absolute inset-0 bg-gradient-to-t from-black/65 to-transparent"/><h3 className="absolute inset-x-4 bottom-3 text-lg font-bold leading-tight">{event.title}</h3></div><div className="p-4"><p className="text-xs text-white/60">{new Intl.DateTimeFormat('es-MX', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(`${event.date}T12:00:00Z`))}{event.time ? ` · ${event.time}` : ''}</p><p className="mt-1 text-xs text-white/50">{event.location}</p></div></article>)}</div> : <Empty label="Todavía no hay eventos creados"/>}
+          </div>
+          <div className="mt-9"><h2 className="mb-3 text-[11px] font-bold uppercase tracking-[.16em] text-white/45">PuntoShorts</h2>{activity.shorts.length ? <div className="grid grid-cols-3 gap-1.5 sm:gap-2">{activity.shorts.map((short) => <article key={short.id} className="relative aspect-[9/16] overflow-hidden rounded-[8px] bg-[#1b1c1f]"><video src={short.videoUrl} muted playsInline preload="metadata" className="h-full w-full object-cover"/><span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-8 text-[10px] font-semibold">{short.title}</span></article>)}</div> : <Empty label="Todavía no hay PuntoShorts"/>}</div>
         </section>
       </>}
     </motion.main>

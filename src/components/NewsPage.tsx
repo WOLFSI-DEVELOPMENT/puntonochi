@@ -5,7 +5,6 @@ import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { YouTubeVideoOverlay } from './YouTubeVideoOverlay';
 import { apiFetch } from '../api';
-import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 import { AccountRequiredPrompt } from './AccountSheets';
 
 const cornerKit = new CornerKit();
@@ -17,7 +16,7 @@ type Article = { title: string; description: string; content: string; url: strin
 type WeatherDay = { date: string; weatherCode: number; high: number | null; low: number | null; precipitationChance: number | null };
 type WeatherHour = { dateTime: string; temperature: number | null; weatherCode: number; precipitationChance: number | null };
 type NewsVideo = { id: string; title: string; channel: string; publishedAt: string; thumbnail: string; isShort: boolean };
-export type EventSummary = { id: string; title: string; date: string; endDate: string | null; time: string | null; location: string; description: string; imageUrl: string; createdAt?: string; profileId?: string | null; authorName?: string | null; authorPicture?: string | null };
+export type EventSummary = { id: string; title: string; date: string; endDate: string | null; time: string | null; location: string; description: string; imageUrl: string; gallery?: Array<{ id: string; imageUrl: string }>; createdAt?: string; profileId?: string | null; authorName?: string | null; authorPicture?: string | null };
 type PublicEvent = EventSummary;
 
 function eventDateLabel(event: PublicEvent) {
@@ -51,7 +50,7 @@ async function compressEventImage(file: File) {
   if (!file.type.startsWith('image/')) throw new Error('Elige un archivo de imagen válido.');
   if (file.size > 10 * 1024 * 1024) throw new Error('La imagen original debe pesar 10 MB o menos.');
   const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+  const scale = Math.min(1, 1400 / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(bitmap.width * scale));
   canvas.height = Math.max(1, Math.round(bitmap.height * scale));
@@ -59,8 +58,9 @@ async function compressEventImage(file: File) {
   if (!context) throw new Error('No se pudo procesar la imagen.');
   context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close();
-  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((image) => image ? resolve(image) : reject(new Error('No se pudo procesar la portada.')), 'image/webp', 0.84));
-  if (blob.size > 5 * 1024 * 1024) throw new Error('La portada debe pesar 5 MB o menos después de optimizarla.');
+  let blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((image) => image ? resolve(image) : reject(new Error('No se pudo procesar la imagen.')), 'image/webp', 0.74));
+  if (blob.size > 900 * 1024) blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((image) => image ? resolve(image) : reject(new Error('No se pudo optimizar la imagen.')), 'image/webp', 0.56));
+  if (blob.size > 5 * 1024 * 1024) throw new Error('La imagen debe pesar 5 MB o menos después de optimizarla.');
   const dataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ''));
@@ -111,7 +111,6 @@ function WeatherSkeleton() {
 }
 
 export function EventCreateSheet({ onClose, onCreated }: { onClose: () => void; onCreated: (event: PublicEvent) => void }) {
-  const sheetDrag = useSheetDrag(onClose);
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -119,8 +118,12 @@ export function EventCreateSheet({ onClose, onCreated }: { onClose: () => void; 
   const [location, setLocation] = useState('');
   const [description, setDescription] = useState('');
   const [cover, setCover] = useState<{ dataUrl: string; fileName: string } | null>(null);
+  const [gallery, setGallery] = useState<Array<{ dataUrl: string; fileName: string; mimeType: string }>>([]);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [previewMode, setPreviewMode] = useState(false);
+  const [albumView, setAlbumView] = useState(false);
+  const [editorSheet, setEditorSheet] = useState<'date' | 'location' | null>(null);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -128,20 +131,37 @@ export function EventCreateSheet({ onClose, onCreated }: { onClose: () => void; 
     return () => { document.body.style.overflow = previousOverflow; };
   }, []);
 
-  const selectCover = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const selectCover = async (event: ChangeEvent<HTMLInputElement>, replaceCover = false) => {
+    const files: File[] = event.target.files ? Array.from(event.target.files) : [];
     event.target.value = '';
-    if (!file) return;
+    if (!files.length) return;
     try {
       setError('');
-      setCover(await compressEventImage(file));
+      const remaining = Math.max(0, 8 - gallery.length);
+      if (remaining === 0 && !replaceCover) { setError('La galería admite hasta 8 imágenes.'); return; }
+      const selected = await Promise.all(files.slice(0, replaceCover ? 1 : remaining).map(async (file) => {
+        const image = await compressEventImage(file);
+        return { ...image, mimeType: image.dataUrl.slice(5, image.dataUrl.indexOf(';')) };
+      }));
+      const replaceIndex = cover ? gallery.findIndex((photo) => photo.dataUrl === cover.dataUrl) : -1;
+      const nextGallery = replaceCover && remaining === 0 && replaceIndex >= 0
+        ? gallery.map((photo, index) => index === replaceIndex ? selected[0] || photo : photo)
+        : [...gallery, ...selected];
+      const resultingCover = replaceCover ? selected[0] || cover || nextGallery[0] : cover || nextGallery[0];
+      const estimatedRequestSize = nextGallery.reduce((size, image) => size + image.dataUrl.length, 0) + (resultingCover?.dataUrl.length || 0);
+      if (estimatedRequestSize > 6_500_000) throw new Error('La galería es muy pesada. Prueba con menos fotos para poder subirla.');
+      setGallery(nextGallery);
+      if (replaceCover && selected[0]) setCover(selected[0]);
+      else if (!cover && nextGallery[0]) setCover(nextGallery[0]);
+      if (!replaceCover && files.length > remaining) setError('Se agregaron las primeras imágenes disponibles. La galería admite hasta 8.');
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'No se pudo procesar la portada.');
+      setError(reason instanceof Error ? reason.message : 'No se pudieron procesar las imágenes.');
     }
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!title.trim() || !date || !location.trim() || !description.trim()) { setError('Completa el nombre, la fecha, el lugar y la descripción.'); setPreviewMode(false); return; }
     if (!cover) { setError('Agrega una imagen de portada para tu evento.'); return; }
     if (endDate && endDate < date) { setError('La fecha final debe ser igual o posterior a la fecha de inicio.'); return; }
     const comma = cover.dataUrl.indexOf(',');
@@ -151,10 +171,11 @@ export function EventCreateSheet({ onClose, onCreated }: { onClose: () => void; 
     try {
       const response = await apiFetch('/api/events', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, date, endDate: endDate || null, time: time || null, location, description, fileName: cover.fileName, mimeType: cover.dataUrl.slice(5, cover.dataUrl.indexOf(';')), base64: cover.dataUrl.slice(comma + 1) }),
+        body: JSON.stringify({ title, date, endDate: endDate || null, time: time || null, location, description, fileName: cover.fileName, mimeType: cover.dataUrl.slice(5, cover.dataUrl.indexOf(';')), base64: cover.dataUrl.slice(comma + 1), gallery: gallery.map((photo) => ({ fileName: photo.fileName, mimeType: photo.mimeType, base64: photo.dataUrl.slice(photo.dataUrl.indexOf(',') + 1) })) }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || 'No se pudo publicar el evento.');
+      window.dispatchEvent(new Event('puntonochi:events-updated'));
       onCreated(result as PublicEvent);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'No se pudo publicar el evento.');
@@ -163,25 +184,53 @@ export function EventCreateSheet({ onClose, onCreated }: { onClose: () => void; 
     }
   };
 
-  return <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/65" onClick={onClose}>
-    <motion.section {...sheetDrag} data-desktop-sheet="popup" role="dialog" aria-modal="true" aria-labelledby="create-event-title" onClick={(event) => event.stopPropagation()} initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360, mass: 0.82 }} className="flex max-h-[94dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[30px] bg-[#202124] text-white shadow-2xl">
-      <div className="relative shrink-0 border-b border-white/[0.08] px-5 pb-4 pt-1"><SheetDragHandle controls={sheetDrag.dragControls}/><div className="flex items-center justify-between"><div><p className="text-[11px] font-semibold tracking-[0.16em] text-white/45">PUNTONOCHI · COMUNIDAD</p><h2 id="create-event-title" className="mt-1 text-xl font-bold">Publica un evento</h2></div><button type="button" data-sheet-close aria-label="Cerrar" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.06] text-white/80"><X className="h-5 w-5"/></button></div></div>
-      <form onSubmit={submit} className="min-h-0 space-y-4 overflow-y-auto overscroll-contain px-5 py-5 [touch-action:pan-y]">
-        <label className="block"><span className="mb-2 block text-sm font-semibold">Nombre del evento</span><input required maxLength={140} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ej. Feria de Nochistlán" className="w-full rounded-2xl bg-[#303134] px-4 py-3.5 text-sm outline-none placeholder:text-white/35 focus:ring-2 focus:ring-white/20"/></label>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><label className="block"><span className="mb-2 block text-sm font-semibold">Fecha</span><input required type="date" value={date} onChange={(event) => setDate(event.target.value)} className="w-full rounded-2xl bg-[#303134] px-4 py-3.5 text-sm [color-scheme:dark] outline-none focus:ring-2 focus:ring-white/20"/></label><label className="block"><span className="mb-2 block text-sm font-semibold">Fecha final <span className="font-normal text-white/40">(opcional)</span></span><input type="date" min={date || undefined} value={endDate} onChange={(event) => setEndDate(event.target.value)} className="w-full rounded-2xl bg-[#303134] px-4 py-3.5 text-sm [color-scheme:dark] outline-none focus:ring-2 focus:ring-white/20"/></label></div>
-        <label className="block"><span className="mb-2 block text-sm font-semibold">Hora <span className="font-normal text-white/40">(opcional)</span></span><input type="time" value={time} onChange={(event) => setTime(event.target.value)} className="w-full rounded-2xl bg-[#303134] px-4 py-3.5 text-sm [color-scheme:dark] outline-none focus:ring-2 focus:ring-white/20"/></label>
-        <label className="block"><span className="mb-2 block text-sm font-semibold">Dirección o lugar</span><input required maxLength={240} value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Plaza principal, Nochistlán" className="w-full rounded-2xl bg-[#303134] px-4 py-3.5 text-sm outline-none placeholder:text-white/35 focus:ring-2 focus:ring-white/20"/></label>
-        <label className="block"><span className="mb-2 block text-sm font-semibold">Descripción</span><textarea required maxLength={4000} rows={4} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Cuéntale a la comunidad de qué trata..." className="w-full resize-y rounded-2xl bg-[#303134] px-4 py-3.5 text-sm outline-none placeholder:text-white/35 focus:ring-2 focus:ring-white/20"/></label>
-        <div><span className="mb-2 block text-sm font-semibold">Imagen de portada</span><label className="flex min-h-32 cursor-pointer items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/15 bg-[#303134] text-center">{cover ? <img src={cover.dataUrl} alt="Vista previa de portada" className="h-44 w-full object-cover"/> : <span className="flex flex-col items-center gap-2 p-5 text-sm text-white/55"><ImagePlus className="h-7 w-7"/>Toca para elegir una imagen<span className="text-xs text-white/35">JPG, PNG o WebP · se optimiza al subir</span></span>}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={selectCover} className="sr-only"/></label></div>
-        {error && <p role="alert" className="rounded-xl bg-red-500/10 px-3 py-2.5 text-sm text-red-200">{error}</p>}
-        <button type="submit" disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-full bg-white px-5 py-3.5 text-sm font-bold text-black disabled:opacity-50">{saving ? <><LoaderCircle className="h-4 w-4 animate-spin"/>Publicando...</> : 'Publicar evento'}</button>
-        <p className="pb-2 text-center text-xs text-white/40">El evento quedará visible para toda la comunidad.</p>
+  return <div className="pn-event-editor fixed inset-0 z-[100] overflow-y-auto bg-[#33382f] text-white">
+    {cover && <img src={cover.dataUrl} alt="" className="pointer-events-none fixed inset-0 h-full w-full scale-110 object-cover opacity-60 blur-3xl"/>}
+    <style>{`
+      .pn-event-editor{background:linear-gradient(160deg,#1d3841 0%,#172c33 54%,#12232a 100%)!important}
+      .pn-event-editor>section{position:relative;max-width:560px}
+      .pn-event-editor form>header{position:absolute;inset:0 0 auto;background:transparent;backdrop-filter:none}
+      .pn-event-editor form>header>div{visibility:hidden}
+      .pn-event-editor form>header>button:last-child{background:white;color:#171717}
+      .pn-event-editor form>div{padding-left:3px;padding-right:3px;gap:6px}
+      .pn-event-editor form>div>section{margin-top:8px;background:rgba(255,255,255,.08)!important;backdrop-filter:blur(24px) saturate(150%);-webkit-backdrop-filter:blur(24px) saturate(150%);border:0;border-radius:26px}
+      .pn-event-editor form>div>section:first-child{height:58dvh;min-height:430px;margin-top:0;border:0;border-radius:0;background:linear-gradient(160deg,#294853,#1b343d 56%,#142a32)!important;backdrop-filter:none}
+      .pn-event-editor form>div>section:first-child>img{z-index:0}
+      .pn-event-editor form>div>section:first-child>div[aria-hidden]{z-index:1;background:linear-gradient(to bottom,transparent 34%,rgba(16,42,50,.12) 62%,rgba(10,28,34,.54))}
+      .pn-event-editor form>div>section:first-child>label{display:none}
+      .pn-event-editor form>div>section:first-child input[aria-label="Título del evento"]{background:transparent!important;background-color:transparent!important;background-image:none!important;box-shadow:none!important;-webkit-box-shadow:none!important;appearance:none!important;-webkit-appearance:none!important}
+      .pn-event-editor form>div>section:first-child>div:last-child{z-index:2;left:50%!important;right:auto!important;bottom:8px!important;width:calc(100% - 24px);transform:translateX(-50%);margin:0;background:rgba(255,255,255,.08);backdrop-filter:blur(24px) saturate(150%);-webkit-backdrop-filter:blur(24px) saturate(150%);border:0;border-radius:26px;padding:14px 16px}
+      .pn-event-editor input,.pn-event-editor textarea{background:transparent!important;background-color:transparent!important;border:0!important;box-shadow:none!important;color:white}
+      .pn-event-editor input[aria-label="Título del evento"],.pn-event-editor input[aria-label="Título del evento"]:focus,.pn-event-editor input[aria-label="Título del evento"]:-webkit-autofill,.pn-event-editor input[aria-label="Título del evento"]:-webkit-autofill:focus{appearance:none!important;-webkit-appearance:none!important;background:transparent!important;background-color:transparent!important;background-image:none!important;-webkit-box-shadow:0 0 0 1000px rgba(0,0,0,0) inset!important;box-shadow:none!important;outline:0!important}
+      .pn-event-editor form>div>section:nth-child(2){text-align:center}
+      .pn-event-editor form>div>section:nth-child(2) label>span{font-size:12px;text-align:center}
+      .pn-event-editor form>div>section:nth-child(2) input{text-align:center}
+      .pn-event-editor form>div>section:nth-child(3){text-align:center}
+      .pn-event-editor>div.fixed>section{border:0!important;border-radius:30px 30px 0 0!important;background:linear-gradient(145deg,rgba(255,255,255,.24),rgba(255,255,255,.09))!important;backdrop-filter:blur(48px) saturate(160%)!important;-webkit-backdrop-filter:blur(48px) saturate(160%)!important}
+    `}</style>
+    <motion.section role="dialog" aria-modal="true" aria-labelledby="create-event-title" initial={{ y: 28, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 24, opacity: 0 }} transition={{ type: 'spring', damping: 30, stiffness: 300 }} className="mx-auto min-h-full w-full max-w-3xl">
+      <form onSubmit={submit} className="pb-10">
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between bg-[#111214]/85 px-4 backdrop-blur-xl sm:px-6"><button type="button" data-sheet-close aria-label="Cerrar" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.08] text-white/85"><X className="h-5 w-5"/></button>{!previewMode && <label className="flex cursor-pointer items-center gap-1.5 rounded-full bg-white/[.14] px-2.5 py-2 text-[11px] font-bold text-white backdrop-blur-xl"><ImagePlus className="h-4 w-4"/>Editar fondo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void selectCover(event, true)} className="sr-only"/></label>}<div className="text-center"><p className="text-[10px] font-semibold tracking-[.15em] text-white/45">PUNTO EVENTS</p><h2 id="create-event-title" className="text-sm font-bold">Crear evento</h2></div><button type="button" onClick={() => setPreviewMode((current) => !current)} className="rounded-full bg-white/[0.1] px-4 py-2 text-xs font-bold text-white/90">{previewMode ? 'Editar' : 'Preview'}</button></header>
+        {previewMode ? <div className="space-y-4 px-3 pb-12 pt-16 sm:px-6">
+          <div className="relative min-h-[min(62dvh,620px)] overflow-hidden rounded-[28px] bg-transparent">{cover && <img src={cover.dataUrl} alt="Vista previa de portada" className="absolute inset-0 h-full w-full object-cover"/>}<div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-[#12232a] via-[#12232a]/35 to-transparent"/><div className="absolute inset-x-0 bottom-0 p-6"><p className="text-sm font-semibold text-white/75">{date ? new Intl.DateTimeFormat('es-MX', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`)) : 'Fecha y hora'}{time ? ` · ${time}` : ''}</p><h3 className="mt-2 text-3xl font-bold">{title || 'Nombre del evento'}</h3><p className="mt-2 flex items-center gap-2 text-sm text-white/75"><MapPin className="h-4 w-4"/>{location || 'Lugar'}</p></div></div>
+          <div className="rounded-[24px] bg-white/[.08] p-5 backdrop-blur-xl"><p className="whitespace-pre-wrap text-sm leading-6 text-white/75">{description || 'Agrega una descripción para que la comunidad conozca el evento.'}</p>{gallery.length > 0 && <div className="mt-4 grid grid-cols-4 gap-2">{gallery.slice(0, 4).map((photo, index) => <img key={`${photo.fileName}-${index}`} src={photo.dataUrl} alt="" className="aspect-square w-full rounded-xl object-cover"/>)}</div>}</div>
+          {error && <p role="alert" className="rounded-xl bg-red-500/10 px-3 py-2.5 text-sm text-red-200">{error}</p>}
+          <button type="submit" disabled={saving} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-bold text-black disabled:opacity-50">{saving ? <><LoaderCircle className="h-4 w-4 animate-spin"/>Publicando...</> : 'Publicar evento'}</button>
+        </div> : <div className="space-y-5 px-3 pb-8 sm:px-6">
+          <section className="relative isolate min-h-[320px] overflow-hidden rounded-[28px] bg-[radial-gradient(ellipse_at_28%_22%,rgba(90,135,154,.45),transparent_42%),linear-gradient(145deg,#29343c,#17191c_65%,#52372f)] sm:min-h-[430px]">{cover && <img src={cover.dataUrl} alt="Fondo del evento" className="absolute inset-0 -z-10 h-full w-full object-cover"/>}<div aria-hidden="true" className="absolute inset-0 -z-10"/><label className="absolute left-1/2 top-[38%] flex -translate-x-1/2 cursor-pointer items-center gap-2 rounded-full bg-white/[.18] px-4 py-2.5 text-xs font-bold backdrop-blur-xl"><ImagePlus className="h-4 w-4"/>Editar fondo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void selectCover(event, true)} className="sr-only"/></label><div className="absolute inset-x-0 bottom-0 space-y-0"><div className="px-5 pt-5"><input required maxLength={140} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Título del evento" aria-label="Título del evento" className="w-full border-0 bg-transparent text-center text-3xl font-bold text-white outline-none placeholder:text-white/85 focus:bg-transparent focus:ring-0 sm:text-4xl"/></div><button type="button" onClick={() => setEditorSheet('date')} className="flex w-full items-center justify-center gap-3 border-t border-white/35 px-5 py-4 text-center"><CalendarDays className="h-4 w-4 text-white/70"/><span><span className="block text-[10px] font-semibold text-white/55">FECHA Y HORA</span><span className="mt-1 block text-sm font-semibold">{date ? new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`)) : 'Agregar fecha y hora'}{time ? ` · ${time}` : ''}</span></span></button><button type="button" onClick={() => setEditorSheet('location')} className="flex w-full items-center justify-center gap-3 border-t border-white/35 px-5 py-4 text-center"><MapPin className="h-4 w-4 text-white/70"/><span><span className="block text-[10px] font-semibold text-white/55">UBICACIÓN</span><span className="mt-1 block text-sm font-semibold">{location || 'Agregar ubicación'}</span></span></button></div></section>
+          <section className="rounded-[26px] bg-white/[.055] p-4 sm:p-5"><label className="block"><span className="mb-2 block text-sm font-semibold">Descripción</span><textarea required maxLength={4000} rows={3} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Cuéntale a la comunidad de qué trata..." className="w-full resize-y rounded-[17px] bg-white/[.08] px-4 py-3.5 text-sm outline-none placeholder:text-white/35 focus:ring-1 focus:ring-white/25"/></label></section>
+          <section className={albumView ? "!fixed !inset-0 !z-[130] !m-0 overflow-y-auto !rounded-none !bg-[#141414] p-3 pt-20 !backdrop-blur-none" : "rounded-[26px] bg-white/[.055] p-4 sm:p-5"}>{albumView && <button type="button" aria-label="Cerrar álbum" onClick={() => setAlbumView(false)} className="absolute left-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/10"><X className="h-5 w-5"/></button>}<div className="mb-3 flex items-end justify-between gap-3"><div><button type="button" onClick={() => setAlbumView(true)} className="text-sm font-semibold">{albumView ? title || "Álbum del evento" : "Álbum compartido"}</button><p className="mt-1 text-xs text-white/45">Elige las fotos que acompañarán la invitación.</p></div><span className="text-xs text-white/45">{gallery.length}/8</span></div><div className="grid grid-cols-3 gap-2">{gallery.map((photo, index) => <div key={`${photo.fileName}-${index}`} className="group relative aspect-square overflow-hidden rounded-[18px] bg-[#303134]"><button type="button" aria-label="Usar como portada" onClick={() => setCover(photo)} className="absolute inset-0 z-[1]"/><img src={photo.dataUrl} alt={`Foto ${index + 1} del evento`} className="h-full w-full object-cover"/><button type="button" aria-label={`Quitar foto ${index + 1}`} onClick={() => { const next = gallery.filter((_, itemIndex) => itemIndex !== index); setGallery(next); if (cover?.dataUrl === photo.dataUrl) setCover(next[0] || null); }} className="absolute right-1.5 top-1.5 z-[2] flex h-7 w-7 items-center justify-center rounded-full bg-black/65 text-white"><X className="h-4 w-4"/></button>{cover?.dataUrl === photo.dataUrl && <span className="pointer-events-none absolute bottom-1.5 left-1.5 z-[2] rounded-full bg-black/65 px-2 py-1 text-[10px] font-semibold">Portada</span>}</div>)}{gallery.length < 8 && <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-2 rounded-[18px] border border-dashed border-white/15 bg-white/[.035] text-xs text-white/55"><ImagePlus className="h-6 w-6"/>Agregar fotos<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => void selectCover(event)} className="sr-only"/></label>}</div></section>
+          {error && <p role="alert" className="rounded-xl bg-red-500/10 px-3 py-2.5 text-sm text-red-200">{error}</p>}
+          <button type="submit" disabled={saving} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-bold text-black disabled:opacity-50">{saving ? <><LoaderCircle className="h-4 w-4 animate-spin"/>Publicando...</> : 'Publicar evento'}</button>
+          <p className="pb-2 text-center text-xs text-white/40">El evento quedará visible para toda la comunidad.</p>
+        </div>}
       </form>
-      </motion.section>
+    </motion.section>
+    {editorSheet && <div className="fixed inset-0 z-[145] flex items-end bg-black/25 backdrop-blur-sm" onClick={() => setEditorSheet(null)}><motion.section onClick={(event) => event.stopPropagation()} initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 340 }} className="w-full rounded-t-[30px] border-t border-white/20 bg-[rgba(255,255,255,.14)] px-5 pb-[max(28px,env(safe-area-inset-bottom))] pt-3 text-white backdrop-blur-3xl"><div className="mx-auto mb-5 h-1.5 w-11 rounded-full bg-white/45"/><div className="flex items-center justify-between"><h3 className="text-lg font-bold">{editorSheet === 'date' ? 'Fecha y hora' : 'Ubicación'}</h3><button type="button" aria-label="Cerrar" onClick={() => setEditorSheet(null)} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15"><X className="h-4 w-4"/></button></div>{editorSheet === 'date' ? <div className="mt-5 space-y-3"><label className="block rounded-[20px] bg-transparent px-4 py-3"><span className="flex items-center gap-2 text-xs font-semibold text-white/70"><CalendarDays className="h-4 w-4 text-white/70"/>Fecha</span><input required type="date" lang="es-MX" value={date} onChange={(event) => setDate(event.target.value)} className="mt-1 w-full bg-transparent text-base text-white [color-scheme:dark] outline-none"/></label><label className="block rounded-[20px] bg-transparent px-4 py-3"><span className="flex items-center gap-2 text-xs font-semibold text-white/70"><Clock3 className="h-4 w-4 text-white/70"/>Hora <span className="text-white/45">24 h</span></span><input type="text" inputMode="numeric" autoComplete="off" maxLength={5} pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" title="Usa el formato HH:MM, por ejemplo 18:30" placeholder="HH:MM" aria-label="Hora en formato de 24 horas" value={time} onChange={(event) => { const digits = event.target.value.replace(/\D/g, '').slice(0, 4); setTime(digits.length > 2 ? `${digits.slice(0, 2)}:${digits.slice(2)}` : digits); }} className="mt-1 w-full bg-transparent text-base text-white outline-none placeholder:text-white/40"/></label><label className="block rounded-[20px] bg-transparent px-4 py-3"><span className="flex items-center gap-2 text-xs font-semibold text-white/70"><CalendarDays className="h-4 w-4 text-white/70"/>Fecha final</span><input type="date" lang="es-MX" min={date || undefined} value={endDate} onChange={(event) => setEndDate(event.target.value)} className="mt-1 w-full bg-transparent text-base text-white [color-scheme:dark] outline-none"/></label></div> : <div className="mt-5"><label className="block rounded-[20px] bg-transparent px-4 py-3"><span className="block text-xs font-semibold text-white/70">Lugar del evento</span><input autoFocus required maxLength={240} value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Plaza principal, Nochistlán" className="mt-1 w-full bg-transparent text-base outline-none placeholder:text-white/35"/></label></div>}<button type="button" onClick={() => setEditorSheet(null)} className="mt-5 flex h-12 w-full items-center justify-center rounded-full bg-white text-sm font-bold text-[#202124]">Listo</button></motion.section></div>}
   </div>;
 }
 
-export function NewsPage() {
+export function NewsPage({ onOpenEvents }: { onOpenEvents?: () => void } = {}) {
   const [weather, setWeather] = useState<WeatherDay[]>([]);
   const [weatherHours, setWeatherHours] = useState<WeatherHour[]>([]);
   const [selectedForecastDate, setSelectedForecastDate] = useState('');
@@ -533,7 +582,7 @@ export function NewsPage() {
         </section>
 
         <section aria-label="Eventos de la comunidad" className="mt-8">
-          <div className="mb-4 flex items-end justify-between gap-3"><div><h2 className="text-lg font-semibold">Eventos</h2><p className="mt-1 text-xs text-white/45">Qué hacer en Nochistlán</p></div><button type="button" onClick={() => void requestCreateEvent()} className="flex shrink-0 items-center gap-1.5 rounded-full bg-white px-3.5 py-2.5 text-sm font-bold text-black"><Plus className="h-4 w-4"/>Crear</button></div>
+          <div className="mb-4 flex items-end justify-between gap-3"><div><h2 className="text-lg font-semibold">Eventos</h2><p className="mt-1 text-xs text-white/45">Qué hacer en Nochistlán</p></div><div className="flex shrink-0 items-center gap-2"><button type="button" onClick={onOpenEvents} className="rounded-full bg-white/[.08] px-3.5 py-2.5 text-sm font-semibold text-white/85">Punto Events</button><button type="button" onClick={() => void requestCreateEvent()} className="flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2.5 text-sm font-bold text-black"><Plus className="h-4 w-4"/>Crear</button></div></div>
           {eventsLoading ? <div className="space-y-3">{[0, 1].map((item) => <EventSkeleton key={item}/>)}</div> : eventsError ? <div className="rounded-[24px] bg-[#202124] p-4"><p role="alert" className="text-sm text-white/65">{eventsError}</p><button type="button" onClick={loadEvents} className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black">Reintentar</button></div> : events.length ? <div className="space-y-2">{events.map((event) => { const date = eventDateParts(event.date); return <button data-news-squircle key={event.id} type="button" onClick={() => openEvent(event)} className="group flex w-full items-center gap-3 overflow-hidden rounded-[24px] bg-[#252629] p-3 text-left transition-colors hover:bg-[#2d2e31]">
             <span className="flex w-11 shrink-0 flex-col items-center text-center"><span className="text-[9px] font-bold tracking-wide text-[#f08a69]">{date.weekday}</span><span className="text-2xl font-bold leading-tight text-white">{date.day}</span><span className="text-[9px] font-medium tracking-wide text-white/45">{date.month}</span></span>
             <span data-news-squircle className="h-[76px] w-[88px] shrink-0 overflow-hidden rounded-[18px] bg-[#35363a]">{event.imageUrl ? <img src={event.imageUrl} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"/> : <CalendarDays className="m-auto h-6 w-6 text-white/35"/>}</span>

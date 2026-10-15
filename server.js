@@ -19,7 +19,7 @@ app.set('trust proxy', 1);
 const port = 3001;
 
 app.use(cors());
-app.use(express.json({ limit: '8mb' }));
+app.use(express.json({ limit: '100mb' }));
 
 const sql = process.env.DATABASE_URL ? neon(process.env.DATABASE_URL) : null;
 const storageSettings = {
@@ -700,12 +700,57 @@ app.get('/api/account/session', async (req, res) => {
   }
 });
 
+let hotelClaimSchemaReady;
+const ensureHotelClaimSchema = () => {
+  if (!hotelClaimSchemaReady) hotelClaimSchemaReady = (async () => {
+    await ensureAccountSchema();
+    await sql`CREATE TABLE IF NOT EXISTS profile_claim_links (
+      slug TEXT PRIMARY KEY,
+      business_name TEXT NOT NULL,
+      logo_url TEXT NOT NULL,
+      claimed_by_google_sub TEXT REFERENCES user_accounts(google_sub) ON DELETE SET NULL,
+      claimed_at TIMESTAMPTZ
+    )`;
+    await sql`INSERT INTO profile_claim_links (slug, business_name, logo_url)
+      VALUES ('hotelnochistlan', 'Hotel Nochistlán', '/hotel-nochistlan-avatar.jpg')
+      ON CONFLICT (slug) DO UPDATE SET business_name = EXCLUDED.business_name, logo_url = EXCLUDED.logo_url`;
+  })().catch((error) => { hotelClaimSchemaReady = undefined; throw error; });
+  return hotelClaimSchemaReady;
+};
+
+app.get('/api/profile-claims/hotelnochistlan', requireNeon, async (req, res) => {
+  try {
+    await ensureHotelClaimSchema();
+    const [claim] = await sql`SELECT slug, business_name AS "businessName", logo_url AS "logoUrl", claimed_by_google_sub IS NOT NULL AS claimed FROM profile_claim_links WHERE slug = 'hotelnochistlan'`;
+    const account = await getAccountSession(req);
+    res.set('Cache-Control', 'no-store');
+    res.json({ ...claim, signedIn: Boolean(account), access: ['Perfil público verificado', 'Publicar y administrar PuntoShorts', 'Aparecer en el feed de Explora', 'Usar el logo de Hotel Nochistlán', 'Gestionar la información pública del perfil'] });
+  } catch (error) { console.error('Could not load hotel claim page:', error); res.status(500).json({ error: 'No se pudo cargar esta página.' }); }
+});
+
+app.post('/api/profile-claims/hotelnochistlan/claim', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    await ensureHotelClaimSchema();
+    const [claim] = await sql`SELECT claimed_by_google_sub AS owner FROM profile_claim_links WHERE slug = 'hotelnochistlan'`;
+    if (!claim) return res.status(404).json({ error: 'Perfil no disponible.' });
+    if (claim.owner && claim.owner !== req.account.id) return res.status(409).json({ error: 'Este perfil ya fue reclamado.' });
+    const picture = `${req.protocol}://${req.get('host')}/hotel-nochistlan-avatar.jpg`;
+    await sql`UPDATE profile_claim_links SET claimed_by_google_sub = ${req.account.id}, claimed_at = COALESCE(claimed_at, NOW()) WHERE slug = 'hotelnochistlan'`;
+    await sql`UPDATE user_accounts SET display_name = 'Hotel Nochistlán', picture_url = ${picture}, bio = 'Perfil oficial de Hotel Nochistlán.' , updated_at = NOW() WHERE google_sub = ${req.account.id}`;
+    await ensureShortsSchema();
+    await sql`UPDATE short_videos SET author_google_sub = ${req.account.id} WHERE id LIKE 'hotel-nochistlan-short-%' AND author_google_sub IS NULL`;
+    res.json({ id: req.account.id, name: 'Hotel Nochistlán', picture, claimed: true });
+  } catch (error) { console.error('Could not claim hotel profile:', error); res.status(500).json({ error: 'No se pudo reclamar el perfil.' }); }
+});
+
 app.get('/api/account/content', requireNeon, requireAccount, async (req, res) => {
   try {
     await ensureSubmissionSchema();
+    await ensureShortsSchema();
     const sub = req.account.id;
     const base = `${req.protocol}://${req.get('host')}`;
-    const [reviews, posts, events, marketplaceListings] = await Promise.all([
+    const [reviews, posts, events, marketplaceListings, shorts] = await Promise.all([
       sql`SELECT review.id, review.place_id AS "placeId", place.name AS "placeName", review.rating,
         review.review_text AS text, review.created_at AS "createdAt"
         FROM community_reviews AS review JOIN places AS place ON place.id = review.place_id
@@ -723,6 +768,7 @@ app.get('/api/account/content', requireNeon, requireAccount, async (req, res) =>
           FROM marketplace_listing_images AS photo WHERE photo.listing_id = listing.id), '[]'::json) AS images
         FROM marketplace_listings AS listing WHERE listing.author_google_sub = ${sub} AND listing.status = 'published'
         ORDER BY listing.published_at DESC LIMIT 100`,
+      sql`SELECT id, video_url AS "videoUrl", title, description, created_at AS "createdAt" FROM short_videos WHERE author_google_sub = ${sub} ORDER BY created_at DESC LIMIT 100`,
     ]);
     res.set('Cache-Control', 'no-store');
     res.json({
@@ -730,6 +776,7 @@ app.get('/api/account/content', requireNeon, requireAccount, async (req, res) =>
       posts: posts.map((post) => ({ ...post, imageUrl: `${base}/api/community-posts/${post.id}/image`, coverUrl: `${base}/api/community-posts/${post.id}/cover` })),
       events: events.map((event) => eventResponse(req, event)),
       marketplaceListings,
+      shorts,
     });
   } catch (error) {
     console.error('Could not load account activity:', error);
@@ -813,9 +860,10 @@ app.get('/api/profiles/:id', requireNeon, async (req, res) => {
 app.get('/api/profiles/:id/activity', requireNeon, async (req, res) => {
   try {
     await ensureSubmissionSchema();
+    await ensureShortsSchema();
     const profileId = String(req.params.id).slice(0, 200);
     const base = `${req.protocol}://${req.get('host')}`;
-    const [posts, reviews, events, marketplaceListings] = await Promise.all([
+    const [posts, reviews, events, marketplaceListings, shorts] = await Promise.all([
       sql`SELECT id, post_type AS "postType", place_id AS "placeId", place_name AS "placeName", caption,
         created_at AS "createdAt" FROM community_posts WHERE author_google_sub = ${profileId} AND status = 'published'
         ORDER BY created_at DESC LIMIT 100`,
@@ -824,7 +872,7 @@ app.get('/api/profiles/:id/activity', requireNeon, async (req, res) => {
         JOIN places AS place ON place.id = review.place_id WHERE review.author_google_sub = ${profileId}
         ORDER BY review.created_at DESC LIMIT 100`,
       sql`SELECT id, title, event_date::text AS date, end_date::text AS "endDate", event_time AS time,
-        location, description, created_at AS "createdAt" FROM public_events WHERE author_google_sub = ${profileId}
+        location, description, created_at AS "createdAt", author_google_sub AS "profileId" FROM public_events WHERE author_google_sub = ${profileId}
         ORDER BY created_at DESC LIMIT 100`,
       sql`SELECT listing.id, listing.category, listing.title, listing.price, listing.location, listing.description,
         listing.details, listing.created_at AS "createdAt", listing.published_at AS "publishedAt",
@@ -833,6 +881,8 @@ app.get('/api/profiles/:id/activity', requireNeon, async (req, res) => {
           FROM marketplace_listing_images AS photo WHERE photo.listing_id = listing.id), '[]'::json) AS images
         FROM marketplace_listings AS listing WHERE listing.author_google_sub = ${profileId} AND listing.status = 'published'
         ORDER BY listing.published_at DESC LIMIT 100`,
+      sql`SELECT id, video_url AS "videoUrl", title, description, created_at AS "createdAt"
+        FROM short_videos WHERE author_google_sub = ${profileId} ORDER BY created_at DESC LIMIT 100`,
     ]);
     res.set('Cache-Control', 'public, max-age=15, stale-while-revalidate=60');
     res.json({
@@ -840,6 +890,7 @@ app.get('/api/profiles/:id/activity', requireNeon, async (req, res) => {
       reviews,
       events: events.map((event) => eventResponse(req, event)),
       marketplaceListings,
+      shorts,
     });
   } catch (error) {
     console.error('Could not load public profile activity:', error);
@@ -1241,8 +1292,18 @@ const ensureSubmissionSchema = () => {
       image_mime_type TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
+    await sql`ALTER TABLE public_events ADD COLUMN IF NOT EXISTS image_url TEXT`;
     await sql`ALTER TABLE public_events ADD COLUMN IF NOT EXISTS author_google_sub TEXT REFERENCES user_accounts(google_sub) ON DELETE SET NULL`;
     await sql`CREATE INDEX IF NOT EXISTS public_events_author_idx ON public_events (author_google_sub, created_at DESC)`;
+    await sql`CREATE TABLE IF NOT EXISTS public_event_photos (
+      id TEXT PRIMARY KEY,
+      event_id TEXT NOT NULL REFERENCES public_events(id) ON DELETE CASCADE,
+      image_key TEXT NOT NULL,
+      image_mime_type TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+    await sql`ALTER TABLE public_event_photos ADD COLUMN IF NOT EXISTS image_url TEXT`;
+    await sql`CREATE INDEX IF NOT EXISTS public_event_photos_event_idx ON public_event_photos (event_id, created_at)`;
     await sql`CREATE TABLE IF NOT EXISTS public_menus (
       id TEXT PRIMARY KEY,
       owner_google_sub TEXT NOT NULL REFERENCES user_accounts(google_sub) ON DELETE CASCADE,
@@ -1924,7 +1985,20 @@ app.post('/api/promotions', requireNeon, async (req, res) => {
 });
 
 const eventImageUrl = (req, id) => `${req.protocol}://${req.get('host')}/api/events/${encodeURIComponent(id)}/image`;
-const eventResponse = (req, event) => ({
+const uploadEventImageToFreeimage = async (bytes, apiKey) => {
+  const body = new URLSearchParams({ key: apiKey, action: 'upload', source: bytes.toString('base64'), format: 'json' });
+  const response = await fetch('https://freeimage.host/api/1/upload/', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+  const result = await response.json().catch(() => ({}));
+  const imageUrl = typeof result?.image?.url === 'string' ? result.image.url : '';
+  if (!response.ok || Number(result?.status_code) !== 200 || !imageUrl) {
+    throw new Error(typeof result?.error?.message === 'string' ? result.error.message : `Freeimage.host upload failed (${response.status}).`);
+  }
+  const parsed = new URL(imageUrl);
+  if (!['freeimage.host', 'iili.io'].some((host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`))) throw new Error('Freeimage.host returned an unexpected image URL.');
+  parsed.protocol = 'https:';
+  return parsed.toString();
+};
+const eventResponse = (req, event, photos = []) => ({
   id: event.id,
   title: event.title,
   date: String(event.date),
@@ -1932,25 +2006,37 @@ const eventResponse = (req, event) => ({
   time: event.time || null,
   location: event.location,
   description: event.description,
-  imageUrl: eventImageUrl(req, event.id),
+  imageUrl: event.imageUrl || event.image_url || eventImageUrl(req, event.id),
   createdAt: event.createdAt,
   profileId: event.profileId || null,
   authorName: event.authorName || req.account?.name || null,
   authorPicture: event.authorPicture || req.account?.picture || null,
+  gallery: photos.map((photo) => ({ id: photo.id, imageUrl: photo.imageUrl || photo.image_url || `${req.protocol}://${req.get('host')}/api/events/${encodeURIComponent(event.id)}/photos/${encodeURIComponent(photo.id)}` })),
 });
 
 app.get('/api/events', requireNeon, async (req, res) => {
   try {
     await ensureSubmissionSchema();
     const events = await sql`SELECT event.id, event.title, event.event_date::text AS date, event.end_date::text AS "endDate",
-      event.event_time AS time, event.location, event.description, event.created_at AS "createdAt",
+      event.event_time AS time, event.location, event.description, event.image_url AS "imageUrl", event.created_at AS "createdAt",
       event.author_google_sub AS "profileId", account.display_name AS "authorName", account.picture_url AS "authorPicture"
       FROM public_events AS event LEFT JOIN user_accounts AS account ON account.google_sub = event.author_google_sub
       ORDER BY CASE WHEN event.event_date >= CURRENT_DATE THEN 0 ELSE 1 END,
         CASE WHEN event.event_date >= CURRENT_DATE THEN event.event_date END ASC,
         CASE WHEN event.event_date < CURRENT_DATE THEN event.event_date END DESC, event.created_at DESC LIMIT 100`;
-    res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=120');
-    res.json(events.map((event) => eventResponse(req, event)));
+    const galleryRows = await sql`SELECT photo.id, photo.event_id AS "eventId", photo.image_url AS "imageUrl"
+      FROM public_event_photos AS photo
+      JOIN (SELECT id FROM public_events ORDER BY CASE WHEN event_date >= CURRENT_DATE THEN 0 ELSE 1 END,
+        CASE WHEN event_date >= CURRENT_DATE THEN event_date END ASC,
+        CASE WHEN event_date < CURRENT_DATE THEN event_date END DESC, created_at DESC LIMIT 100) AS visible_events
+      ON visible_events.id = photo.event_id ORDER BY photo.created_at ASC`;
+    const galleries = new Map();
+    for (const photo of galleryRows) {
+      if (!galleries.has(photo.eventId)) galleries.set(photo.eventId, []);
+      galleries.get(photo.eventId).push(photo);
+    }
+    res.set('Cache-Control', 'no-store');
+    res.json(events.map((event) => eventResponse(req, event, galleries.get(event.id) || [])));
   } catch (error) {
     console.error('Public events load failed:', error);
     res.status(500).json({ error: 'No se pudieron cargar los eventos.' });
@@ -1969,6 +2055,7 @@ app.post('/api/events', requireNeon, requireAccount, async (req, res) => {
     const time = typeof body.time === 'string' && body.time ? body.time : null;
     const mimeType = typeof body.mimeType === 'string' ? body.mimeType : '';
     const base64 = typeof body.base64 === 'string' ? body.base64 : '';
+    const gallery = Array.isArray(body.gallery) ? body.gallery.slice(0, 8) : [];
     const validDate = (value) => {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
       const parsed = new Date(`${value}T00:00:00Z`);
@@ -1977,35 +2064,63 @@ app.post('/api/events', requireNeon, requireAccount, async (req, res) => {
     if (!title || !description || !location || !validDate(date) || (endDate && (!validDate(endDate) || endDate < date)) || (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time))) {
       return res.status(400).json({ error: 'Revisa el nombre, descripción, lugar, fecha y horario del evento.' });
     }
-    if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
+    const freeimageApiKey = process.env.FREEIMAGE_HOST_API_KEY;
+    if (!freeimageApiKey) return res.status(503).json({ error: 'Freeimage.host no está configurado. Agrega FREEIMAGE_HOST_API_KEY en las variables del servidor.' });
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType) || !base64) return res.status(400).json({ error: 'Agrega una portada JPG, PNG o WebP.' });
     const bytes = Buffer.from(base64, 'base64');
     if (!bytes.length || bytes.length > 5 * 1024 * 1024) return res.status(413).json({ error: 'La portada debe pesar 5 MB o menos.' });
+    const galleryImages = gallery.map((photo) => ({
+      mimeType: typeof photo?.mimeType === 'string' ? photo.mimeType : '',
+      bytes: typeof photo?.base64 === 'string' ? Buffer.from(photo.base64, 'base64') : Buffer.alloc(0),
+    }));
+    if (galleryImages.some((photo) => !['image/jpeg', 'image/png', 'image/webp'].includes(photo.mimeType) || !photo.bytes.length || photo.bytes.length > 5 * 1024 * 1024)) {
+      return res.status(400).json({ error: 'Una de las fotos de la galería no es válida.' });
+    }
     await ensureSubmissionSchema();
     const id = randomUUID();
-    const objectKey = `events/${id}/cover-${randomUUID()}`;
-    await s3.send(new PutObjectCommand({ Bucket: 'uploads', Key: objectKey, Body: bytes, ContentType: mimeType }));
-    try {
-      const [event] = await sql`INSERT INTO public_events (id, title, event_date, end_date, event_time, location, description, image_key, image_mime_type, author_google_sub)
-        VALUES (${id}, ${title}, ${date}::date, ${endDate}::date, ${time}, ${location}, ${description}, ${objectKey}, ${mimeType}, ${req.account.id})
-        RETURNING id, title, event_date::text AS date, end_date::text AS "endDate", event_time AS time, location, description, created_at AS "createdAt", author_google_sub AS "profileId"`;
-      res.status(201).json(eventResponse(req, event));
-    } catch (error) {
-      await s3.send(new DeleteObjectCommand({ Bucket: 'uploads', Key: objectKey })).catch(() => undefined);
-      throw error;
+    const coverUrl = await uploadEventImageToFreeimage(bytes, freeimageApiKey);
+    const uploadedGallery = await Promise.all(galleryImages.map(async (photo) => ({
+      id: randomUUID(), imageUrl: await uploadEventImageToFreeimage(photo.bytes, freeimageApiKey), mimeType: photo.mimeType,
+    })));
+    const [event] = await sql`INSERT INTO public_events (id, title, event_date, end_date, event_time, location, description, image_key, image_mime_type, image_url, author_google_sub)
+      VALUES (${id}, ${title}, ${date}::date, ${endDate}::date, ${time}, ${location}, ${description}, ${''}, ${mimeType}, ${coverUrl}, ${req.account.id})
+      RETURNING id, title, event_date::text AS date, end_date::text AS "endDate", event_time AS time, location, description, image_url AS "imageUrl", created_at AS "createdAt", author_google_sub AS "profileId"`;
+    for (const photo of uploadedGallery) {
+      await sql`INSERT INTO public_event_photos (id, event_id, image_key, image_mime_type, image_url) VALUES (${photo.id}, ${id}, ${''}, ${photo.mimeType}, ${photo.imageUrl})`;
     }
+    res.status(201).json(eventResponse(req, event, uploadedGallery));
   } catch (error) {
     console.error('Public event create failed:', error);
     res.status(500).json({ error: 'No se pudo publicar el evento.' });
   }
 });
 
+app.get('/api/events/:id/photos/:photoId', requireNeon, async (req, res) => {
+  try {
+    await ensureSubmissionSchema();
+    const [photo] = await sql`SELECT image_key, image_mime_type, image_url AS "imageUrl" FROM public_event_photos WHERE event_id = ${req.params.id} AND id = ${req.params.photoId}`;
+    if (!photo) return res.status(404).json({ error: 'No encontramos esta foto del evento.' });
+    if (photo.imageUrl) return res.redirect(302, photo.imageUrl);
+    if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
+    const object = await s3.send(new GetObjectCommand({ Bucket: 'uploads', Key: String(photo.image_key) }));
+    const photoBytes = await object.Body?.transformToByteArray();
+    if (!photoBytes) return res.status(502).json({ error: 'No se pudo leer esta foto.' });
+    res.set('Content-Type', String(photo.image_mime_type));
+    res.set('Cache-Control', 'public, max-age=86400, immutable');
+    res.send(Buffer.from(photoBytes));
+  } catch (error) {
+    console.error('Public event photo load failed:', error);
+    res.status(500).json({ error: 'No se pudo cargar esta foto.' });
+  }
+});
+
 app.get('/api/events/:id/image', requireNeon, async (req, res) => {
   try {
-    if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
     await ensureSubmissionSchema();
-    const [event] = await sql`SELECT image_key, image_mime_type FROM public_events WHERE id = ${req.params.id}`;
+    const [event] = await sql`SELECT image_key, image_mime_type, image_url AS "imageUrl" FROM public_events WHERE id = ${req.params.id}`;
     if (!event) return res.status(404).json({ error: 'No encontramos la portada del evento.' });
+    if (event.imageUrl) return res.redirect(302, event.imageUrl);
+    if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
     const object = await s3.send(new GetObjectCommand({ Bucket: 'uploads', Key: String(event.image_key) }));
     const bytes = await object.Body?.transformToByteArray();
     if (!bytes) return res.status(502).json({ error: 'No se pudo leer la portada.' });
@@ -2022,13 +2137,14 @@ app.get('/api/events/:id', requireNeon, async (req, res) => {
   try {
     await ensureSubmissionSchema();
     const [event] = await sql`SELECT event.id, event.title, event.event_date::text AS date, event.end_date::text AS "endDate",
-      event.event_time AS time, event.location, event.description, event.created_at AS "createdAt",
+      event.event_time AS time, event.location, event.description, event.image_url AS "imageUrl", event.created_at AS "createdAt",
       event.author_google_sub AS "profileId", account.display_name AS "authorName", account.picture_url AS "authorPicture"
       FROM public_events AS event LEFT JOIN user_accounts AS account ON account.google_sub = event.author_google_sub
       WHERE event.id = ${req.params.id}`;
     if (!event) return res.status(404).json({ error: 'No encontramos este evento.' });
+    const photos = await sql`SELECT id, image_url AS "imageUrl" FROM public_event_photos WHERE event_id = ${req.params.id} ORDER BY created_at ASC`;
     res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=120');
-    res.json(eventResponse(req, event));
+    res.json(eventResponse(req, event, photos));
   } catch (error) {
     console.error('Public event detail load failed:', error);
     res.status(500).json({ error: 'No se pudo cargar el evento.' });
@@ -2068,11 +2184,17 @@ const ensureShortsSchema = () => {
     await sql`CREATE TABLE IF NOT EXISTS short_videos (
       id TEXT PRIMARY KEY,
       video_url TEXT NOT NULL,
+      title TEXT NOT NULL DEFAULT 'PuntoShort',
+      description TEXT NOT NULL DEFAULT '',
+      author_google_sub TEXT REFERENCES user_accounts(google_sub) ON DELETE SET NULL,
       total_likes INTEGER NOT NULL DEFAULT 0 CHECK (total_likes >= 0),
       total_dislikes INTEGER NOT NULL DEFAULT 0 CHECK (total_dislikes >= 0),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
+    await sql`ALTER TABLE short_videos ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT 'PuntoShort'`;
+    await sql`ALTER TABLE short_videos ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE short_videos ADD COLUMN IF NOT EXISTS author_google_sub TEXT REFERENCES user_accounts(google_sub) ON DELETE SET NULL`;
     await sql`CREATE TABLE IF NOT EXISTS short_video_reactions (
       video_id TEXT NOT NULL REFERENCES short_videos(id) ON DELETE CASCADE,
       user_google_sub TEXT NOT NULL REFERENCES user_accounts(google_sub) ON DELETE CASCADE,
@@ -2102,7 +2224,8 @@ app.get('/api/shorts', requireNeon, async (req, res) => {
   try {
     await ensureShortsSchema();
     const account = await getAccountSession(req);
-    const videos = await sql`SELECT video.id, video.video_url AS "videoUrl", video.total_likes AS likes,
+    const videos = await sql`SELECT video.id, video.video_url AS "videoUrl", video.title, video.description,
+      video.author_google_sub AS "profileId", account.display_name AS "authorName", account.picture_url AS "authorPicture", video.total_likes AS likes,
       video.total_dislikes AS dislikes,
       (SELECT COUNT(*)::INTEGER FROM short_video_comments AS comment WHERE comment.video_id = video.id) AS "commentCount",
       (SELECT reaction FROM short_video_reactions AS own_reaction WHERE own_reaction.video_id = video.id AND own_reaction.user_google_sub = ${account?.id || ''}) AS "myReaction"
@@ -2112,6 +2235,32 @@ app.get('/api/shorts', requireNeon, async (req, res) => {
   } catch (error) {
     console.error('Could not load PuntoShorts:', error);
     res.status(500).json({ error: 'No se pudieron cargar las interacciones de los videos.' });
+  }
+});
+
+app.post('/api/shorts/publish', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    await ensureShortsSchema();
+    const base64 = typeof req.body?.base64 === 'string' ? req.body.base64 : '';
+    const mimeType = typeof req.body?.mimeType === 'string' ? req.body.mimeType : 'video/webm';
+    if (!base64 || !mimeType.startsWith('video/')) return res.status(400).json({ error: 'Agrega un video válido.' });
+    const bytes = Buffer.from(base64, 'base64');
+    if (!bytes.length || bytes.length > 70 * 1024 * 1024) return res.status(413).json({ error: 'El video debe pesar 70 MB o menos.' });
+    const form = new FormData();
+    form.append('reqtype', 'fileupload');
+    form.append('fileToUpload', new Blob([bytes], { type: mimeType }), 'puntonochi-short.webm');
+    const upload = await fetch('https://catbox.moe/user/api.php', { method: 'POST', body: form });
+    const videoUrl = (await upload.text()).trim();
+    if (!upload.ok || !/^https:\/\/files\.catbox\.moe\//.test(videoUrl)) return res.status(502).json({ error: 'Catbox no pudo alojar el video.' });
+    const id = randomUUID();
+    const title = typeof req.body?.title === 'string' && req.body.title.trim() ? req.body.title.trim().slice(0, 140) : 'Un momento de Nochistlán';
+    const description = typeof req.body?.description === 'string' ? req.body.description.trim().slice(0, 500) : 'Un video compartido en PuntoNochi.';
+    const [video] = await sql`INSERT INTO short_videos (id, video_url, title, description, author_google_sub) VALUES (${id}, ${videoUrl}, ${title}, ${description}, ${req.account.id}) RETURNING id, video_url AS "videoUrl", title, description, author_google_sub AS "profileId"`;
+    res.status(201).json({ ...video, authorName: req.account.name, authorPicture: req.account.picture });
+  } catch (error) {
+    console.error('Could not publish PuntoShort:', error);
+    res.status(500).json({ error: 'No se pudo publicar el video.' });
   }
 });
 
