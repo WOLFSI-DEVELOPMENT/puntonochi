@@ -281,6 +281,42 @@ const useExperimentalCatalog = async (req) => {
     return false;
   }
 };
+const normalizeBusinessMatchName = (value) => String(value || '')
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es')
+  .replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+const safeCatalogLink = (value) => {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return '';
+  const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const parsed = new URL(candidate);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : '';
+  } catch { return ''; }
+};
+const getPublicCatalogBusinessProfiles = async () => {
+  await ensureExperimentalCatalog();
+  const rows = await sql`SELECT name, website, instagram, facebook, source_data
+    FROM experimental_business_catalog ORDER BY name`;
+  const byName = new Map();
+  for (const row of rows) {
+    const key = normalizeBusinessMatchName(row.name);
+    if (!key || byName.has(key)) continue;
+    const source = row.source_data && typeof row.source_data === 'object' ? row.source_data : {};
+    // Prefer an explicit profile/avatar field; otherwise use the first non-cover image.
+    const profileImage = [source.img_perfil, source.foto_perfil, source.profile_image, source.profile_picture,
+      source.logo, source.avatar, source.img_inst1, source.img_inst2, source.img_inst3,
+      source.img_inst4, source.img_inst5, source.img_inst6]
+      .find((value) => typeof value === 'string' && /^https?:\/\//i.test(value.trim()));
+    byName.set(key, {
+      ...(profileImage ? { logo: profileImage.trim() } : {}),
+      ...(safeCatalogLink(row.website || source.web) ? { websiteUrl: safeCatalogLink(row.website || source.web) } : {}),
+      ...(safeCatalogLink(row.instagram || source.instagram) ? { instagramUrl: safeCatalogLink(row.instagram || source.instagram) } : {}),
+      ...(safeCatalogLink(row.facebook || source.facebook) ? { facebookUrl: safeCatalogLink(row.facebook || source.facebook) } : {}),
+      ...(safeCatalogLink(source.tiktok) ? { tiktokUrl: safeCatalogLink(source.tiktok) } : {}),
+    });
+  }
+  return byName;
+};
 app.post('/api/account/phone/signup', async (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (!ensureSameOrigin(req, res)) return;
@@ -2697,13 +2733,22 @@ app.get('/api/places', requireNeon, async (req, res) => {
       communityPosts.push({ id: post.id, imageUrl, caption: post.caption, createdAt: post.createdAt, profileId: post.profileId, authorName: post.authorName, authorPicture: post.authorPicture });
       communityPostsByPlace.set(post.place_id, communityPosts);
     }
-    res.json(places.map((place) => ({
-      ...place,
-      logo: /\boxxo\b/i.test(place.name) ? 'https://soybacalar.com/img_logos/616c7c7e89651.png' : place.logo,
-      images: [...(Array.isArray(place.images) ? place.images : []), ...(postImagesByPlace.get(place.id) || [])],
-      communityPosts: communityPostsByPlace.get(place.id) || [],
-      goodToKnow: Array.isArray(place.goodToKnow) ? place.goodToKnow : [],
-    })));
+    const publicBusinessProfiles = await getPublicCatalogBusinessProfiles();
+    res.set('Cache-Control', 'private, no-store');
+    res.json(places.map((place) => {
+      const profile = publicBusinessProfiles.get(normalizeBusinessMatchName(place.name));
+      return {
+        ...place,
+        logo: /\boxxo\b/i.test(place.name) ? 'https://soybacalar.com/img_logos/616c7c7e89651.png' : profile?.logo || place.logo,
+        websiteUrl: profile?.websiteUrl || place.websiteUrl,
+        instagramUrl: profile?.instagramUrl || place.instagramUrl,
+        facebookUrl: profile?.facebookUrl || place.facebookUrl,
+        tiktokUrl: profile?.tiktokUrl || place.tiktokUrl,
+        images: [...(Array.isArray(place.images) ? place.images : []), ...(postImagesByPlace.get(place.id) || [])],
+        communityPosts: communityPostsByPlace.get(place.id) || [],
+        goodToKnow: Array.isArray(place.goodToKnow) ? place.goodToKnow : [],
+      };
+    }));
   } catch (error) {
     console.error('Could not load places from Neon:', error);
     res.status(500).json({ error: 'No se pudieron cargar los negocios.' });

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { AlarmClock, Bell, BookOpen, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Compass, Flag, Home, LayoutGrid, Mic, Newspaper, Pause, Play, Plus, Search, Square, Store, Timer, Trash2, UserRound, X } from "lucide-react";
 import CornerKit from '@cornerkit/core';
 import { AnimatePresence, motion } from 'motion/react';
+import { getNavDesign, type NavDesign } from '../profileStorage';
 
 /* ------------------------------------------------------------------
    Liquid Glass Navbar — dark, thin, single file React
@@ -166,6 +167,10 @@ const CSS_TEXT = `
 @media (max-width: 1023px) {
   .pn-desktop-topbar { display: none !important; }
 }
+.pn-progressive-nav { isolation: isolate; background: transparent !important; border: 0 !important; box-shadow: none !important; }
+.pn-progressive-nav::before { content: ""; position: absolute; inset: 0 -24px -34px; z-index: -1; pointer-events: none; background: linear-gradient(to bottom, rgba(27,28,30,.8), rgba(27,28,30,.42) 64%, transparent); -webkit-backdrop-filter: blur(18px) saturate(145%); backdrop-filter: blur(18px) saturate(145%); -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 50%, transparent 100%); mask-image: linear-gradient(to bottom, #000 0%, #000 50%, transparent 100%); }
+.pn-progressive-mobile::before { content: ""; position: absolute; inset: -32px 0 0; z-index: 0; pointer-events: none; background: linear-gradient(to top, rgba(27,28,30,.88), rgba(27,28,30,.4) 58%, transparent); -webkit-backdrop-filter: blur(18px) saturate(145%); backdrop-filter: blur(18px) saturate(145%); -webkit-mask-image: linear-gradient(to top, #000 0%, #000 50%, transparent 100%); mask-image: linear-gradient(to top, #000 0%, #000 50%, transparent 100%); }
+@media (min-width: 1024px) { .pn-progressive-mobile::before { display: none; } }
 `;
 
 const PATHS = {
@@ -555,7 +560,7 @@ const OPEN_W = 480;
 const SEARCH_IDLE_W = 62;
 
 /* ---------- The navbar ---------- */
-export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch, onOpenProfile, onSelectBusiness, profilePicture, profileName, timerEndAt, onStartTimer, onPauseTimer, onResumeTimer, onStopTimer, searchQuery: externalSearchQuery, searchOpen: externalSearchOpen }) {
+export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch, onOpenProfile, onSelectBusiness, profilePicture, profileName, profileEmail, timerEndAt, onStartTimer, onPauseTimer, onResumeTimer, onStopTimer, searchQuery: externalSearchQuery, searchOpen: externalSearchOpen }) {
   const onChange = (id) => onChangeTab(({ home: 'inicio', explore: 'explorar' })[id] || id);
   const onSearchOpenChange = (open) => open ? onOpenSearch() : onCloseSearch();
   const avatarSrc = profilePicture;
@@ -569,6 +574,12 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
   const desktopActionsRef = useRef(null);
 
   const [active, setActive] = useState(appTab);
+  const [navDesign, setCurrentNavDesign] = useState<NavDesign>(getNavDesign);
+  const isExperimentalAccount = profileEmail?.trim().toLocaleLowerCase('en-US') === 'survivalcreativeminecraftadven@gmail.com';
+  const experimentalNav = isExperimentalAccount && navDesign === 'experimental';
+  const visibleTabs = experimentalNav
+    ? [...TABS.slice(0, -1), { id: 'search', label: 'Search', icon: 'search' }, TABS[TABS.length - 1]]
+    : TABS;
   const [moves, setMoves] = useState(0); // bumps on each tab switch to replay the stretch
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
@@ -610,6 +621,15 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
   const stopwatchDisplay = `${String(Math.floor(stopwatchElapsed / 60000)).padStart(2, '0')}:${String(Math.floor((stopwatchElapsed % 60000) / 1000)).padStart(2, '0')},${String(Math.floor((stopwatchElapsed % 1000) / 10)).padStart(2, '0')}`;
   useEffect(() => setActive(appTab), [appTab]);
   useEffect(() => {
+    const refreshNavDesign = () => setCurrentNavDesign(getNavDesign());
+    window.addEventListener('puntonochi-nav-design-updated', refreshNavDesign);
+    window.addEventListener('storage', refreshNavDesign);
+    return () => {
+      window.removeEventListener('puntonochi-nav-design-updated', refreshNavDesign);
+      window.removeEventListener('storage', refreshNavDesign);
+    };
+  }, []);
+  useEffect(() => {
     if (externalSearchQuery !== undefined) setQuery(externalSearchQuery);
   }, [externalSearchQuery]);
   useEffect(() => {
@@ -643,8 +663,8 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
     if (ruler) setPickedMinutes(Math.max(1, Math.min(TIMER_MAX_MINUTES, Math.round(ruler.scrollLeft / TIMER_TICK))));
   };
   // while the menu is open the glass pill rests on the grid tab
-  const visualActive = menuOpen ? "browse" : active;
-  const rawActiveIndex = TABS.findIndex((t) => t.id === visualActive);
+  const visualActive = menuOpen ? "browse" : searching && experimentalNav ? "search" : active;
+  const rawActiveIndex = visibleTabs.findIndex((t) => t.id === visualActive);
   const primaryTabSelected = rawActiveIndex >= 0;
   const index = Math.max(0, rawActiveIndex);
 
@@ -790,6 +810,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
 
   const select = (id) => {
     if (id === 'profile') { setMenuOpen(false); onOpenProfile(); return; }
+    if (id === 'search') { setMenuOpen(false); onSearchOpenChange(true); return; }
     setMenuOpen(false);
     if (id === active) return;
     setActive(id);
@@ -825,28 +846,32 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
   return (
     <nav
       aria-label="Primary"
+      className={experimentalNav && !searching ? 'pn-progressive-mobile' : undefined}
       style={{
         position: "fixed",
         left: 0,
         right: 0,
-        bottom: keyboard
+        bottom: experimentalNav ? 0 : keyboard
           ? `${keyboard + 10}px`
           : "calc(env(safe-area-inset-bottom, 0px) + 14px)",
-        transition: "bottom 250ms ease-out",
-        display: "flex",
-        justifyContent: "center",
-        padding: "0 14px",
+        height: experimentalNav ? 'calc(62px + env(safe-area-inset-bottom, 0px))' : undefined,
+        transition: experimentalNav ? 'none' : "bottom 250ms ease-out",
+        display: experimentalNav ? 'block' : "flex",
+        justifyContent: experimentalNav ? undefined : "center",
+        padding: experimentalNav ? 0 : "0 14px",
         zIndex: 50,
+        isolation: experimentalNav ? 'isolate' : undefined,
+        overflow: 'visible',
         pointerEvents: "none",
       }}
     >
       <style>{CSS_TEXT}</style>
-      <header className="pn-desktop-topbar" aria-label="Navegación de PuntoNochi" style={{ position: 'fixed', inset: '0 0 auto', zIndex: 60, height: 64, alignItems: 'center', gap: 20, padding: '0 18px', background: '#242526', borderBottom: '1px solid rgba(255,255,255,.08)', boxShadow: '0 2px 12px rgba(0,0,0,.18)', pointerEvents: 'auto' }}>
+      <header className={`pn-desktop-topbar${experimentalNav ? ' pn-progressive-nav' : ''}`} aria-label="Navegación de PuntoNochi" style={{ position: 'fixed', inset: '0 0 auto', zIndex: 60, height: 64, alignItems: 'center', gap: 20, padding: '0 18px', background: experimentalNav ? 'transparent' : '#242526', borderBottom: experimentalNav ? 0 : '1px solid rgba(255,255,255,.08)', boxShadow: experimentalNav ? 'none' : '0 2px 12px rgba(0,0,0,.18)', pointerEvents: 'auto' }}>
         <div className="flex min-w-0 flex-[1.1] items-center gap-3">
           <button type="button" aria-label="Ir al inicio" title="Inicio" onClick={() => select('home')} className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#17181a] transition-transform active:scale-95">
             <img src="/pwa-192.png" alt="PuntoNochi" className="h-full w-full object-cover" />
           </button>
-          <form role="search" onSubmit={(event) => event.preventDefault()} className="flex h-10 min-w-0 w-full max-w-[280px] items-center gap-2.5 rounded-full bg-[#3a3b3c] px-3.5 text-sm text-white/55 transition-colors focus-within:bg-[#454648]">
+          <form role="search" onSubmit={(event) => event.preventDefault()} style={{ display: experimentalNav ? 'none' : undefined }} className="flex h-10 min-w-0 w-full max-w-[280px] items-center gap-2.5 rounded-full bg-[#3a3b3c] px-3.5 text-sm text-white/55 transition-colors focus-within:bg-[#454648]">
             <Search aria-hidden="true" className="h-[17px] w-[17px] shrink-0"/>
             <input
               type="search"
@@ -881,16 +906,17 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
             { id: 'guias', tab: 'guias', label: 'Artículos', Icon: BookOpen },
           ] as const).map(({ id, tab, label, Icon }) => {
             const selected = activeTab === tab;
-            return <button key={id} type="button" aria-label={label} aria-current={selected ? 'page' : undefined} title={label} onClick={() => select(id)} className={`relative flex min-w-[56px] max-w-[112px] flex-1 items-center justify-center text-white/60 transition-colors hover:text-white ${selected ? 'text-white' : ''}`}>
+            return <button key={id} type="button" aria-label={label} aria-current={selected ? 'page' : undefined} title={label} onClick={() => select(id)} className={`relative flex min-w-[56px] max-w-[112px] flex-1 items-center justify-center text-white/60 transition-colors hover:text-white ${experimentalNav ? 'rounded-full bg-white/[.055] backdrop-blur-xl hover:bg-white/[.1]' : ''} ${selected ? 'text-white' : ''}`}>
               <Icon aria-hidden="true" className="h-[23px] w-[23px]" strokeWidth={selected ? 2.25 : 1.8}/>
-              {selected && <span className="absolute inset-x-1 bottom-0 h-[3px] rounded-t-full bg-[#6aa7ff]"/>}
+              {selected && !experimentalNav && <span className="absolute inset-x-1 bottom-0 h-[3px] rounded-t-full bg-[#6aa7ff]"/>}
             </button>;
           })}
         </div>
         <div className="flex flex-[1.1] items-center justify-end gap-2.5">
           <button type="button" onClick={() => select('crear')} aria-label="Crear publicación" title="Crear" className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3a3b3c] text-white/80 transition-colors hover:bg-[#4b4c4d]"><Plus className="h-5 w-5"/></button>
           <button ref={desktopActionsRef} type="button" onClick={() => setMenuOpen((open) => !open)} aria-label="Acciones rápidas" aria-haspopup="menu" aria-expanded={menuOpen} title="Acciones rápidas" className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${menuOpen ? 'bg-[#4b4c4d] text-white' : 'bg-[#3a3b3c] text-white/80 hover:bg-[#4b4c4d]'}`}><LayoutGrid className="h-[19px] w-[19px]"/></button>
-          <button type="button" onClick={onOpenProfile} aria-label="Abrir perfil" title="Perfil" className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#3a3b3c] text-white/80 ring-2 ring-transparent transition-colors hover:ring-white/20">
+          {experimentalNav && <button type="button" onClick={() => onSearchOpenChange(true)} aria-label="Abrir búsqueda" title="Buscar" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[.08] text-white/85 backdrop-blur-xl transition-colors hover:bg-white/[.14]"><Search className="h-[19px] w-[19px]"/></button>}
+          <button type="button" onClick={onOpenProfile} aria-label="Abrir perfil" title="Perfil" className={`flex h-10 w-10 items-center justify-center overflow-hidden rounded-full text-white/80 transition-colors ${experimentalNav ? 'bg-white/[.08] backdrop-blur-xl hover:bg-white/[.14]' : 'bg-[#3a3b3c] ring-2 ring-transparent hover:ring-white/20'}`}>
             {avatarSrc ? <img src={avatarSrc} alt={profileName || 'Perfil'} referrerPolicy="no-referrer" className="h-full w-full object-cover"/> : <UserRound aria-hidden="true" className="h-[21px] w-[21px]"/>}
           </button>
         </div>
@@ -909,10 +935,12 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
         className="lgn-row"
         style={{
           position: "relative",
-          width: searching ? OPEN_W : IDLE_W,
-          maxWidth: "100%",
-          height: BAR_H,
-          transition: `width 560ms ${EASE_OUT}`,
+          zIndex: experimentalNav ? 1 : undefined,
+          width: experimentalNav ? '100%' : searching ? OPEN_W : IDLE_W,
+          maxWidth: experimentalNav ? 720 : "100%",
+          height: experimentalNav ? '100%' : BAR_H,
+          marginInline: experimentalNav ? 'auto' : undefined,
+          transition: experimentalNav ? 'none' : `width 560ms ${EASE_OUT}`,
         }}
       >
         {/* Tab bar */}
@@ -921,15 +949,17 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
           role="tablist"
           aria-hidden={searching}
           style={{
-            ...darkGlass("rgba(58,50,46,0.20)"),
+            ...(experimentalNav ? { background: 'transparent', backdropFilter: 'none', WebkitBackdropFilter: 'none', boxShadow: 'none', isolation: 'auto', transform: 'none' } : darkGlass("rgba(58,50,46,0.20)")),
             position: "absolute",
             left: 0,
             top: 0,
+            bottom: 0,
             zIndex: 1,
-            width: `calc(100% - ${SEARCH_IDLE_W + 10}px)`,
-            height: BAR_H,
-            padding: 3,
-            borderRadius: 999,
+            width: experimentalNav ? '100%' : `calc(100% - ${SEARCH_IDLE_W + 10}px)`,
+            height: experimentalNav ? '100%' : BAR_H,
+            padding: experimentalNav ? '7px 14px calc(7px + env(safe-area-inset-bottom, 0px))' : 3,
+            gap: experimentalNav ? 5 : 0,
+            borderRadius: experimentalNav ? 0 : 999,
             display: "flex",
             alignItems: "center",
             pointerEvents: searching ? "none" : "auto",
@@ -937,7 +967,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
             visibility: searching ? "hidden" : "visible",
             transform: searching ? "translateZ(0) scale(0.9)" : "translateZ(0) scale(1)",
             transformOrigin: "left center",
-            transition: searching
+            transition: experimentalNav ? 'opacity 180ms ease' : searching
               ? `opacity 200ms ease, transform 420ms ${EASE_OUT}, visibility 0s linear 200ms`
               : `opacity 320ms ease 180ms, transform 520ms ${EASE_OUT} 120ms, visibility 0s`,
           }}
@@ -951,9 +981,10 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
               top: 3,
               bottom: 3,
               left: 3,
-              width: `calc((100% - 6px) / ${TABS.length})`,
+              width: `calc((100% - 6px) / ${visibleTabs.length})`,
               transform: `translateX(${index * 100}%)`,
               opacity: primaryTabSelected ? 1 : 0,
+              display: experimentalNav ? 'none' : undefined,
               transition: `opacity 180ms ease, transform 520ms ${EASE_OUT}`,
               pointerEvents: "none",
             }}
@@ -972,7 +1003,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
             />
           </div>
 
-          {TABS.map(({ id, label, icon, avatar, menu }) => (
+          {visibleTabs.map(({ id, label, icon, avatar, menu }) => (
             <button
               key={id}
               className="lgn-tab"
@@ -995,6 +1026,10 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
                 display: "grid",
                 placeItems: "center",
                 borderRadius: 999,
+                marginInline: experimentalNav ? 2 : 0,
+                background: experimentalNav ? (visualActive === id ? 'rgba(255,255,255,.17)' : 'rgba(255,255,255,.055)') : 'transparent',
+                backdropFilter: experimentalNav ? 'blur(14px) saturate(145%)' : undefined,
+                WebkitBackdropFilter: experimentalNav ? 'blur(14px) saturate(145%)' : undefined,
                 color: "#fff",
               }}
             >
@@ -1079,6 +1114,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
           role="search"
           style={{
             ...darkGlass("rgba(38,32,28,0.30)"),
+            display: experimentalNav ? 'none' : undefined,
             position: "absolute",
             right: 0,
             top: 0,

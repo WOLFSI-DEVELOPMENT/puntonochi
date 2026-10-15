@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Share, Phone, Globe, ShoppingBag, MoreHorizontal, Navigation, BookOpen, Link, MapPin, Map as MapIcon, MessageCircle, Twitter, Facebook, QrCode, Star, Instagram, Sparkles, HeartHandshake, CreditCard, Download, RotateCw } from 'lucide-react';
+import { X, Share, Phone, Globe, ShoppingBag, MoreHorizontal, Navigation, BookOpen, Link, MapPin, Map as MapIcon, MessageCircle, Twitter, Facebook, QrCode, Star, Instagram, Music2, Sparkles, HeartHandshake, CreditCard, Download, RotateCw } from 'lucide-react';
 import QRCode from 'qrcode';
 import { Place, Review } from '../types';
 import { mockPlaces } from '../data';
@@ -387,6 +387,14 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
               {place.instagramUrl && <a href={place.instagramUrl} target="_blank" rel="noopener noreferrer" className="flex min-w-[62px] flex-1 snap-start flex-col items-center gap-2 text-white" aria-label="Abrir Instagram del negocio">
                 <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#292a2d]"><Instagram className="h-5 w-5" strokeWidth={1.8}/></span>
                 <span className="whitespace-nowrap text-[11px] font-semibold">Instagram</span>
+              </a>}
+              {place.facebookUrl && <a href={place.facebookUrl} target="_blank" rel="noopener noreferrer" className="flex min-w-[62px] flex-1 snap-start flex-col items-center gap-2 text-white" aria-label="Abrir Facebook del negocio">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#292a2d]"><Facebook className="h-5 w-5" strokeWidth={1.8}/></span>
+                <span className="whitespace-nowrap text-[11px] font-semibold">Facebook</span>
+              </a>}
+              {place.tiktokUrl && <a href={place.tiktokUrl} target="_blank" rel="noopener noreferrer" className="flex min-w-[62px] flex-1 snap-start flex-col items-center gap-2 text-white" aria-label="Abrir TikTok del negocio">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#292a2d]"><Music2 className="h-5 w-5" strokeWidth={1.8}/></span>
+                <span className="whitespace-nowrap text-[11px] font-semibold">TikTok</span>
               </a>}
               <button type="button" onClick={() => { setCommunityReviewMode('menu'); setShowCommunityActions(true); }} className="flex min-w-[62px] flex-1 snap-start flex-col items-center gap-2 text-white" aria-label="Más opciones">
                 <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#292a2d]"><MoreHorizontal className="h-5 w-5" strokeWidth={1.8}/></span>

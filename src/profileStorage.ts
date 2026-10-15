@@ -2,10 +2,13 @@ export const DAILY_USE_KEY = 'puntonochi-daily-use-v1';
 export const PROFILE_ACTIVITY_KEY = 'puntonochi-profile-activity-v1';
 export const BOOKMARKS_KEY = 'puntonochi-bookmarks-v1';
 export const NAV_DESIGN_KEY = 'puntonochi-nav-design-v1';
-export type NavDesign = 'dynamic' | 'simple';
+export type NavDesign = 'dynamic' | 'simple' | 'experimental';
 
 export function getNavDesign(): NavDesign {
-  try { return localStorage.getItem(NAV_DESIGN_KEY) === 'dynamic' ? 'dynamic' : 'simple'; }
+  try {
+    const value = localStorage.getItem(NAV_DESIGN_KEY);
+    return value === 'dynamic' || value === 'experimental' ? value : 'simple';
+  }
   catch { return 'simple'; }
 }
 

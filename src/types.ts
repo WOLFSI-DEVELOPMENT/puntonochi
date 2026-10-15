@@ -8,6 +8,8 @@ export interface Place {
   mapUrl?: string;
   websiteUrl?: string;
   instagramUrl?: string;
+  facebookUrl?: string;
+  tiktokUrl?: string;
   images: string[];
   logo?: string;
   rating: number;
