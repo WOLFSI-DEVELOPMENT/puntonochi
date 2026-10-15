@@ -8,6 +8,11 @@ export let mockPlaces: Place[] = [];
 export let mockGuides: Guide[] = [];
 export let feedData: FeedItem[] = [];
 
+export function replaceDirectoryData(nextCategories: Category[], nextPlaces: Place[]) {
+  categories = nextCategories;
+  mockPlaces = nextPlaces;
+}
+
 const requestedCategoryCatalog: Category[] = [
   ['comida', 'Comida', '🍽️', 'bg-card-orange'],
   ['vinos-licores', 'Vinos y Licores', '🍷', 'bg-card-purple'],
@@ -36,7 +41,7 @@ const requestedCategoryCatalog: Category[] = [
   ['eventos', 'Eventos', '🎟️', 'bg-card-orange'],
 ].map(([id, name, emoji, gradient]) => ({ id: `catalog-${id}`, name, emoji, gradient, visits: 0 }));
 
-function mergeRequestedCategories(apiCategories: Category[] = []) {
+export function mergeRequestedCategories(apiCategories: Category[] = []) {
   const merged = [...apiCategories];
   for (const requested of requestedCategoryCatalog) {
     const existing = merged.find((category) => category.name.trim().toLocaleLowerCase('es') === requested.name.toLocaleLowerCase('es'));
@@ -65,10 +70,10 @@ try {
     fetchJson('/api/places')
   ]);
 
-  categories = mergeRequestedCategories(categoriesRes);
+  categories = categoriesRes?.experimentalCatalog ? categoriesRes.categories : mergeRequestedCategories(categoriesRes);
   allColonias = coloniasRes;
   colonias = allColonias;
-  mockPlaces = placesRes;
+  mockPlaces = Array.isArray(placesRes) ? placesRes : placesRes.places;
 } catch (e) {
   console.error('Failed to load directory data from the API.', e);
   categories = mergeRequestedCategories();

@@ -4,6 +4,7 @@ import 'dotenv/config';
 import dotenv from 'dotenv';
 import { createHash, randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
+import { readFile } from 'node:fs/promises';
 import { neon } from '@neondatabase/serverless';
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse } from '@simplewebauthn/server';
 import { OAuth2Client } from 'google-auth-library';
@@ -162,6 +163,122 @@ const requireAccount = async (req, res, next) => {
   } catch (error) {
     console.error('Account authorization check failed:', error);
     res.status(503).json({ error: 'No se pudo comprobar tu cuenta.' });
+  }
+};
+const EXPERIMENTAL_CATALOG_EMAIL = 'survivalcreativeminecraftadven@gmail.com';
+const requireExperimentalCatalogAccess = (req, res, next) => {
+  if (req.account?.email?.trim().toLocaleLowerCase('en-US') !== EXPERIMENTAL_CATALOG_EMAIL) {
+    return res.status(403).json({ error: 'Este catálogo experimental no está habilitado para esta cuenta.' });
+  }
+  next();
+};
+const experimentalCatalogLabels = {
+  agropecuaria: 'Agropecuaria', ayuntamiento: 'Ayuntamiento', belleza: 'Belleza', comida: 'Comida',
+  construccion: 'Construcción', educacion: 'Educación', emergencias: 'Emergencias', entretenimiento: 'Entretenimiento',
+  estilo_vida: 'Estilo de Vida', farmacia: 'Farmacia', fiestas: 'Fiestas', hogar: 'Hogar', hoteles: 'Hoteles y Rentas',
+  mecanica: 'Mecánica', moda: 'Moda y Regalos', musica_audio: 'Música y Audio', oficios: 'Oficios',
+  salud_especializada: 'Salud Especializada', servicios_pro: 'Servicios Profesionales', supermercados: 'Supermercados',
+  tecnologia: 'Tecnología', viajes_transportes: 'Viajes y Transportes', vinos_licores: 'Vinos y Licores',
+};
+let experimentalCatalogReady;
+const ensureExperimentalCatalog = () => {
+  if (!sql) throw new Error('DATABASE_URL is not configured.');
+  if (!experimentalCatalogReady) experimentalCatalogReady = (async () => {
+    await sql`CREATE TABLE IF NOT EXISTS experimental_business_catalog (
+      source_id TEXT PRIMARY KEY,
+      category_slug TEXT NOT NULL,
+      category_name TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      address TEXT NOT NULL DEFAULT '',
+      phone TEXT NOT NULL DEFAULT '',
+      website TEXT NOT NULL DEFAULT '',
+      instagram TEXT NOT NULL DEFAULT '',
+      facebook TEXT NOT NULL DEFAULT '',
+      image_url TEXT NOT NULL DEFAULT '',
+      rating TEXT NOT NULL DEFAULT '',
+      review_count TEXT NOT NULL DEFAULT '',
+      source_url TEXT NOT NULL DEFAULT '',
+      source_data JSONB NOT NULL,
+      imported_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+    await sql`CREATE INDEX IF NOT EXISTS experimental_business_catalog_category_idx ON experimental_business_catalog (category_slug, name)`;
+    const sourceBusinesses = JSON.parse(await readFile(new URL('./server/data/experimental-nochisgo-businesses.json', import.meta.url), 'utf8'));
+    const [{ total }] = await sql`SELECT COUNT(*)::INTEGER AS total FROM experimental_business_catalog`;
+    if (Number(total) < sourceBusinesses.length) {
+      const rows = sourceBusinesses.map((business) => {
+        const slug = String(business.seccion || 'otros').trim().toLocaleLowerCase('en-US');
+        return {
+          source_id: String(business.id), category_slug: slug, category_name: experimentalCatalogLabels[slug] || slug,
+          name: String(business.titulo || 'Negocio sin nombre'), description: String(business.descripcion || ''),
+          address: String(business.direccion || ''), phone: String(business.telefono || business.whatsapp || ''),
+          website: String(business.web || ''), instagram: String(business.instagram || ''), facebook: String(business.facebook || ''),
+          image_url: String(business.img_portada || business.image_url || ''), rating: String(business.calificacion_promedio || ''),
+          review_count: String(business.total_calificaciones ?? ''), source_url: String(business.source_url || 'https://www.nochisgo.com'),
+          source_data: business,
+        };
+      });
+      for (let index = 0; index < rows.length; index += 80) {
+        const chunk = JSON.stringify(rows.slice(index, index + 80));
+        await sql`INSERT INTO experimental_business_catalog (
+          source_id, category_slug, category_name, name, description, address, phone, website, instagram,
+          facebook, image_url, rating, review_count, source_url, source_data
+        ) SELECT item.source_id, item.category_slug, item.category_name, item.name, item.description, item.address,
+          item.phone, item.website, item.instagram, item.facebook, item.image_url, item.rating, item.review_count,
+          item.source_url, item.source_data
+          FROM jsonb_to_recordset(${chunk}::jsonb) AS item(
+            source_id TEXT, category_slug TEXT, category_name TEXT, name TEXT, description TEXT, address TEXT, phone TEXT,
+            website TEXT, instagram TEXT, facebook TEXT, image_url TEXT, rating TEXT, review_count TEXT, source_url TEXT,
+            source_data JSONB
+          ) ON CONFLICT (source_id) DO NOTHING`;
+      }
+    }
+  })().catch((error) => { experimentalCatalogReady = undefined; throw error; });
+  return experimentalCatalogReady;
+};
+const getExperimentalCatalogCategories = async () => {
+  await ensureExperimentalCatalog();
+  const rows = await sql`SELECT category_slug AS slug, category_name AS name, COUNT(*)::INTEGER AS count
+    FROM experimental_business_catalog GROUP BY category_slug, category_name ORDER BY category_name`;
+  return rows.map((category) => ({ id: `experimental-${category.slug}`, name: category.name, visits: Number(category.count) || 0, gradient: 'bg-card-blue', emoji: '📍' }));
+};
+const getExperimentalCatalogPlaces = async () => {
+  await ensureExperimentalCatalog();
+  const rows = await sql`SELECT source_id, category_name, name, description, address, phone, website, instagram,
+    image_url, rating, review_count, source_data, imported_at
+    FROM experimental_business_catalog ORDER BY name`;
+  const stringValue = (value) => typeof value === 'string' ? value.trim() : '';
+  return rows.map((row) => {
+    const source = row.source_data && typeof row.source_data === 'object' ? row.source_data : {};
+    const images = [row.image_url, ...Object.entries(source)
+      .filter(([key, value]) => /^(img_(?:inst|menu)\d*|img_portada|image_url)$/i.test(key) && typeof value === 'string')
+      .map(([, value]) => value)].filter((value, index, values) => Boolean(value) && values.indexOf(value) === index);
+    const lat = Number.parseFloat(source.latitud);
+    const lng = Number.parseFloat(source.longitud);
+    const opening = stringValue(source.hora_apertura).slice(0, 5);
+    const closing = stringValue(source.hora_cierre).slice(0, 5);
+    const sourceId = String(row.source_id);
+    return {
+      id: `nochi-${sourceId}`, name: row.name, category: row.category_name,
+      subtitle: row.description || stringValue(source.categoria) || row.category_name,
+      location: row.address || 'Nochistlán de Mejía, Zacatecas', address: row.address || '',
+      mapUrl: Number.isFinite(lat) && Number.isFinite(lng) ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}` : '',
+      websiteUrl: row.website || '', instagramUrl: row.instagram || '', images, logo: images[0] || '',
+      rating: Number.parseFloat(row.rating) || 0, reviewCount: Number.parseInt(row.review_count, 10) || 0,
+      isOpen: Boolean(source.esta_abierto), cost: 1, distance: '', goodToKnow: [],
+      hours: opening && closing ? `${opening}–${closing}` : 'Horario no disponible',
+      ...(Number.isFinite(lat) ? { lat } : {}), ...(Number.isFinite(lng) ? { lng } : {}),
+      phone: row.phone || stringValue(source.whatsapp), createdAt: stringValue(source.fecha_registro) || row.imported_at,
+    };
+  });
+};
+const useExperimentalCatalog = async (req) => {
+  try {
+    const account = await getAccountSession(req);
+    return account?.email?.trim().toLocaleLowerCase('en-US') === EXPERIMENTAL_CATALOG_EMAIL;
+  } catch (error) {
+    console.error('Could not check experimental directory account:', error);
+    return false;
   }
 };
 app.post('/api/account/phone/signup', async (req, res) => {
@@ -2463,8 +2580,13 @@ app.get('/api/weather', async (_req, res) => {
   }
 });
 
-app.get('/api/categories', requireNeon, async (_req, res) => {
+app.get('/api/categories', requireNeon, async (req, res) => {
   try {
+    if (await useExperimentalCatalog(req)) {
+      const catalogCategories = await getExperimentalCatalogCategories();
+      res.set('Cache-Control', 'private, no-store');
+      return res.json({ experimentalCatalog: true, categories: catalogCategories });
+    }
     await ensureDirectorySchema();
     res.json(await sql`SELECT id, name, visits, gradient, emoji FROM categories ORDER BY sort_order`);
   } catch (error) {
@@ -2508,8 +2630,51 @@ function ensurePlaceCategoryCorrections() {
   return placeCategoryCorrections;
 }
 
+app.get('/api/experimental/catalog/categories', requireNeon, requireAccount, requireExperimentalCatalogAccess, async (_req, res) => {
+  try {
+    await ensureExperimentalCatalog();
+    const categories = await sql`SELECT category_slug AS slug, category_name AS name, COUNT(*)::INTEGER AS count
+      FROM experimental_business_catalog GROUP BY category_slug, category_name ORDER BY category_name`;
+    res.set('Cache-Control', 'no-store');
+    res.json(categories);
+  } catch (error) {
+    console.error('Could not load experimental catalog categories:', error);
+    res.status(500).json({ error: 'No se pudieron cargar las categorías experimentales.' });
+  }
+});
+
+app.get('/api/experimental/catalog', requireNeon, requireAccount, requireExperimentalCatalogAccess, async (req, res) => {
+  try {
+    await ensureExperimentalCatalog();
+    const category = typeof req.query.category === 'string' ? req.query.category.trim().slice(0, 60) : '';
+    const search = typeof req.query.q === 'string' ? req.query.q.trim().replace(/[%_]/g, '').slice(0, 100) : '';
+    const pattern = `%${search}%`;
+    const limit = Math.max(1, Math.min(60, Number.parseInt(String(req.query.limit || '40'), 10) || 40));
+    const offset = Math.max(0, Math.min(100000, Number.parseInt(String(req.query.offset || '0'), 10) || 0));
+    const [{ total }] = await sql`SELECT COUNT(*)::INTEGER AS total FROM experimental_business_catalog
+      WHERE (${category} = '' OR category_slug = ${category})
+      AND (${search} = '' OR name ILIKE ${pattern} OR category_name ILIKE ${pattern} OR description ILIKE ${pattern} OR address ILIKE ${pattern})`;
+    const businesses = await sql`SELECT source_id AS id, category_slug AS "categorySlug", category_name AS category,
+      name, description, address, phone, website, instagram, facebook, image_url AS "imageUrl", rating,
+      review_count AS "reviewCount", source_url AS "sourceUrl"
+      FROM experimental_business_catalog WHERE (${category} = '' OR category_slug = ${category})
+      AND (${search} = '' OR name ILIKE ${pattern} OR category_name ILIKE ${pattern} OR description ILIKE ${pattern} OR address ILIKE ${pattern})
+      ORDER BY name LIMIT ${limit} OFFSET ${offset}`;
+    res.set('Cache-Control', 'no-store');
+    res.json({ businesses, total: Number(total) || 0, limit, offset });
+  } catch (error) {
+    console.error('Could not load experimental catalog:', error);
+    res.status(500).json({ error: 'No se pudo cargar el catálogo experimental.' });
+  }
+});
+
 app.get('/api/places', requireNeon, async (req, res) => {
   try {
+    if (await useExperimentalCatalog(req)) {
+      const catalogPlaces = await getExperimentalCatalogPlaces();
+      res.set('Cache-Control', 'private, no-store');
+      return res.json({ experimentalCatalog: true, places: catalogPlaces });
+    }
     await Promise.all([ensureDirectorySchema(), ensureSubmissionSchema()]);
     await ensurePlaceCategoryCorrections();
     const places = await sql`SELECT id, name, category, subtitle, location, address,
@@ -2545,8 +2710,14 @@ app.get('/api/places', requireNeon, async (req, res) => {
   }
 });
 
-app.get('/api/places/recent', requireNeon, async (_req, res) => {
+app.get('/api/places/recent', requireNeon, async (req, res) => {
   try {
+    if (await useExperimentalCatalog(req)) {
+      const places = (await getExperimentalCatalogPlaces()).filter((place) => place.createdAt)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 10);
+      res.set('Cache-Control', 'private, no-store');
+      return res.json(places);
+    }
     await ensureDirectorySchema();
     const places = await sql`SELECT id, name, category, subtitle, location, address, images,
       rating, review_count AS "reviewCount", created_at AS "createdAt"
@@ -2607,8 +2778,14 @@ app.post('/api/activity/click', requireNeon, async (req, res) => {
   }
 });
 
-app.get('/api/places/popular-week', requireNeon, async (_req, res) => {
+app.get('/api/places/popular-week', requireNeon, async (req, res) => {
   try {
+    if (await useExperimentalCatalog(req)) {
+      const places = (await getExperimentalCatalogPlaces()).filter((place) => place.images?.length)
+        .sort((a, b) => (b.reviewCount || 0) - (a.reviewCount || 0) || (b.rating || 0) - (a.rating || 0)).slice(0, 8);
+      res.set('Cache-Control', 'private, no-store');
+      return res.json(places);
+    }
     await Promise.all([ensureDirectorySchema(), ensurePlaceActivitySchema()]);
     const [places, activity] = await Promise.all([
       sql`SELECT id, name, category, subtitle, location, address, images, rating, review_count AS "reviewCount"

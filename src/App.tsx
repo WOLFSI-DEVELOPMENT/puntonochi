@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
-import { categories, visits, mockPlaces } from './data';
+import { categories, visits, mockPlaces, mergeRequestedCategories, replaceDirectoryData } from './data';
 import { Bookmark, ChevronRight, CloudSun, Flame, Instagram, Sparkles, MapPin, Star, Store, X, Timer } from 'lucide-react';
 import { BottomNav } from './components/BottomNav';
 import { ColoniasPage } from './components/ColoniasPage';
@@ -357,6 +357,29 @@ export default function App() {
     return () => window.removeEventListener('navigate-tab', handleTabNavigation);
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    Promise.all([fetch('/api/categories', { cache: 'no-store' }), fetch('/api/places', { cache: 'no-store' })])
+      .then(async ([categoriesResponse, placesResponse]) => {
+        if (!categoriesResponse.ok || !placesResponse.ok) return null;
+        const [categoriesPayload, placesPayload] = await Promise.all([categoriesResponse.json(), placesResponse.json()]);
+        const nextCategories = categoriesPayload?.experimentalCatalog ? categoriesPayload.categories : categoriesPayload;
+        const nextPlaces = placesPayload?.experimentalCatalog ? placesPayload.places : placesPayload;
+        if (!Array.isArray(nextCategories) || !Array.isArray(nextPlaces)) return null;
+        return {
+          categories: categoriesPayload?.experimentalCatalog ? nextCategories as Category[] : mergeRequestedCategories(nextCategories as Category[]),
+          places: nextPlaces as Place[],
+        };
+      })
+      .then((directory) => {
+        if (!active || !directory) return;
+        replaceDirectoryData(directory.categories, directory.places);
+        setDirectoryVersion((version) => version + 1);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [signedInAccount?.email]);
+
   useLayoutEffect(() => {
     window.scrollTo(0, 0);
     document.documentElement.scrollTop = 0;
@@ -517,7 +540,7 @@ export default function App() {
     void loadPopular();
     const timer = window.setInterval(() => { void loadPopular(); }, 5 * 60 * 1000);
     return () => { active = false; window.clearInterval(timer); };
-  }, []);
+  }, [directoryVersion]);
 
   useEffect(() => {
     if (activeTab === 'inicio') {
