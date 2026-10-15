@@ -2547,6 +2547,50 @@ app.get('/api/experimental/catalog', requireNeon, requireAccount, requireExperim
   }
 });
 
+app.get('/sitemap-businesses.xml', requireNeon, async (_req, res) => {
+  try {
+    await ensureDirectorySchema();
+    const places = await sql`SELECT id, name FROM places ORDER BY name`;
+    await ensureSubmissionSchema();
+    const events = await sql`SELECT id FROM public_events WHERE COALESCE(end_date, event_date) >= CURRENT_DATE ORDER BY event_date ASC`;
+    const slugify = (value) => String(value || '')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase('es')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'negocio';
+    const xmlEscape = (value) => String(value).replace(/[<>&"']/g, (character) => ({
+      '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;',
+    })[character]);
+    const placesBySlug = new Map();
+    for (const place of places) {
+      const slug = slugify(place.name);
+      const group = placesBySlug.get(slug) || [];
+      group.push(place);
+      placesBySlug.set(slug, group);
+    }
+    const urls = [];
+    for (const [baseSlug, group] of placesBySlug) {
+      group.sort((left, right) => String(left.id).localeCompare(String(right.id), 'en'));
+      group.forEach((place, index) => {
+        const slug = group.length > 1 ? `${baseSlug}${index + 1}` : baseSlug;
+        urls.push(`  <url><loc>https://puntonochi.vercel.app/negocio/@${xmlEscape(slug)}</loc></url>`);
+      });
+    }
+    for (const event of events) {
+      urls.push(`  <url><loc>https://puntonochi.vercel.app/eventos/${encodeURIComponent(String(event.id))}</loc></url>`);
+    }
+    res.set({
+      'Content-Type': 'application/xml; charset=utf-8',
+      'Cache-Control': 'public, max-age=0, s-maxage=3600, stale-while-revalidate=86400',
+    });
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>`);
+  } catch (error) {
+    console.error('Could not build business sitemap:', error);
+    res.status(500).type('text/plain').send('Could not generate business sitemap.');
+  }
+});
+
 app.get('/api/places', requireNeon, async (req, res) => {
   try {
     if (await useExperimentalCatalog(req)) {

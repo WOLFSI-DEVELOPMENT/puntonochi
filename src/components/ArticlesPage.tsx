@@ -118,6 +118,7 @@ export function ArticlesPage() {
     }
     document.title = `${selectedArticle.title} | Artículos de Nochistlán | PuntoNochi`;
     const url = `${window.location.origin}/articulos/${encodeURIComponent(selectedArticle.slug)}`;
+    const articleImage = articleImages[selectedArticle.id]?.src;
     const updateMeta = (attribute: 'name' | 'property', key: string, content: string) => {
       let meta = document.head.querySelector<HTMLMetaElement>(`meta[${attribute}="${key}"]`);
       if (!meta) { meta = document.createElement('meta'); meta.setAttribute(attribute, key); document.head.appendChild(meta); }
@@ -127,12 +128,14 @@ export function ArticlesPage() {
     updateMeta('property', 'og:title', document.title);
     updateMeta('property', 'og:description', selectedArticle.summary);
     updateMeta('property', 'og:url', url);
+    updateMeta('property', 'og:image', articleImage ? new URL(articleImage, window.location.origin).href : `${window.location.origin}/social-preview.gif`);
     updateMeta('name', 'twitter:title', document.title);
     updateMeta('name', 'twitter:description', selectedArticle.summary);
+    updateMeta('name', 'twitter:image', articleImage ? new URL(articleImage, window.location.origin).href : `${window.location.origin}/social-preview.gif`);
     const canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
     if (canonical) canonical.href = url;
     const schema = document.getElementById('route-seo-schema') || document.head.appendChild(Object.assign(document.createElement('script'), { id: 'route-seo-schema', type: 'application/ld+json' }));
-    schema.textContent = JSON.stringify({ '@context': 'https://schema.org', '@type': 'Article', headline: selectedArticle.title, description: selectedArticle.summary, articleSection: selectedArticle.category, mainEntityOfPage: url, publisher: { '@type': 'Organization', name: 'PuntoNochi', url: window.location.origin } }).replace(/</g, '\\u003c');
+    schema.textContent = JSON.stringify({ '@context': 'https://schema.org', '@type': 'Article', headline: selectedArticle.title, description: selectedArticle.summary, image: articleImage ? [new URL(articleImage, window.location.origin).href] : undefined, articleSection: selectedArticle.category, mainEntityOfPage: url, inLanguage: 'es-MX', publisher: { '@type': 'Organization', name: 'PuntoNochi', url: window.location.origin } }).replace(/</g, '\\u003c');
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [selectedSlug, selectedArticle]);
 

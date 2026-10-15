@@ -46,9 +46,45 @@ export function PublicMenuPage({ id }: { id: string }) {
   }, [id]);
 
   useEffect(() => {
-    if (data?.menu?.businessName) document.title = `Menú de ${data.menu.businessName} | PuntoNochi`;
-    else document.title = 'Menú digital | PuntoNochi';
-  }, [data]);
+    const title = data?.menu?.businessName ? `Menú de ${data.menu.businessName} en Nochistlán | PuntoNochi` : 'Menú digital | PuntoNochi';
+    const description = data?.menu?.description || (data?.menu?.businessName
+      ? `Consulta los platillos, bebidas y precios de ${data.menu.businessName} en Nochistlán de Mejía, Zacatecas.`
+      : 'Consulta menús digitales de negocios locales de Nochistlán.');
+    const url = `${window.location.origin}/menu/${encodeURIComponent(id)}`;
+    document.title = title;
+    const setMeta = (attribute: 'name' | 'property', key: string, content: string) => {
+      let meta = document.head.querySelector<HTMLMetaElement>(`meta[${attribute}="${key}"]`);
+      if (!meta) { meta = document.createElement('meta'); meta.setAttribute(attribute, key); document.head.appendChild(meta); }
+      meta.content = content;
+    };
+    setMeta('name', 'description', description);
+    setMeta('name', 'robots', data ? 'index,follow' : 'noindex,follow');
+    setMeta('property', 'og:title', title);
+    setMeta('property', 'og:description', description);
+    setMeta('property', 'og:url', url);
+    setMeta('name', 'twitter:title', title);
+    setMeta('name', 'twitter:description', description);
+    let canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical); }
+    canonical.href = url;
+    const schema = document.getElementById('route-seo-schema') || document.head.appendChild(Object.assign(document.createElement('script'), { id: 'route-seo-schema', type: 'application/ld+json' }));
+    schema.textContent = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      name: title,
+      description,
+      url,
+      mainEntity: data ? {
+        '@type': 'Menu',
+        name: `Menú de ${data.menu.businessName}`,
+        hasMenuSection: data.menu.sections.map((section) => ({
+          '@type': 'MenuSection',
+          name: section.name,
+          hasMenuItem: section.items.map((item) => ({ '@type': 'MenuItem', name: item.name, description: item.description || undefined, offers: item.price ? { '@type': 'Offer', price: item.price.replace(/[^\d.,]/g, ''), priceCurrency: 'MXN' } : undefined })),
+        })),
+      } : undefined,
+    }).replace(/</g, '\\u003c');
+  }, [data, id]);
 
   return <main className="public-menu-page min-h-[100dvh] bg-[#f7f5ef] px-3 py-5 text-[#171717] sm:px-5 sm:py-9">
     {loading ? <div className="mx-auto flex min-h-[60dvh] max-w-lg items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-black/10 border-t-[#ee4b2d]"/></div> : notFound || !data ? <section className="mx-auto mt-20 max-w-sm text-center"><span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-[#ee4b2d] shadow-sm"><QrCode className="h-7 w-7"/></span><h1 className="mt-4 text-xl font-bold">No encontramos este menú</h1><p className="mt-2 text-sm text-black/55">Revisa el código QR o vuelve a escanearlo.</p><a href="/" className="mt-5 inline-flex h-11 items-center rounded-full bg-[#171717] px-5 text-sm font-semibold text-white">Ir a PuntoNochi</a></section> : <article className="mx-auto max-w-3xl">

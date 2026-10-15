@@ -209,6 +209,49 @@ export function NewsPage() {
   const [exchangeAmount, setExchangeAmount] = useState('100');
   const reduceMotion = useReducedMotion();
 
+  useEffect(() => {
+    const title = selectedEvent ? `${selectedEvent.title} | Eventos de Nochistlán | PuntoNochi` : 'Noticias y eventos de Nochistlán | PuntoNochi';
+    const description = selectedEvent
+      ? `${selectedEvent.description || selectedEvent.title} ${selectedEvent.location ? `Lugar: ${selectedEvent.location}.` : ''} Consulta fecha y detalles en PuntoNochi.`.slice(0, 300)
+      : 'Consulta noticias, eventos, actividades y videos informativos de Nochistlán y México.';
+    const url = selectedEvent ? `${window.location.origin}/eventos/${encodeURIComponent(selectedEvent.id)}` : `${window.location.origin}/noticias`;
+    const image = selectedEvent?.imageUrl || `${window.location.origin}/social-preview.gif`;
+    document.title = title;
+    const setMeta = (attribute: 'name' | 'property', key: string, content: string) => {
+      let meta = document.head.querySelector<HTMLMetaElement>(`meta[${attribute}="${key}"]`);
+      if (!meta) { meta = document.createElement('meta'); meta.setAttribute(attribute, key); document.head.appendChild(meta); }
+      meta.content = content;
+    };
+    setMeta('name', 'description', description);
+    setMeta('name', 'robots', 'index,follow');
+    setMeta('property', 'og:title', title);
+    setMeta('property', 'og:description', description);
+    setMeta('property', 'og:url', url);
+    setMeta('property', 'og:image', image);
+    setMeta('name', 'twitter:title', title);
+    setMeta('name', 'twitter:description', description);
+    setMeta('name', 'twitter:image', image);
+    let canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical); }
+    canonical.href = url;
+    const schema = document.getElementById('route-seo-schema') || document.head.appendChild(Object.assign(document.createElement('script'), { id: 'route-seo-schema', type: 'application/ld+json' }));
+    const pageSchema = selectedEvent ? {
+      '@context': 'https://schema.org',
+      '@type': 'Event',
+      name: selectedEvent.title,
+      description: selectedEvent.description || selectedEvent.title,
+      startDate: `${selectedEvent.date}T${/^\d{2}:\d{2}$/.test(selectedEvent.time || '') ? selectedEvent.time : '00:00'}:00-06:00`,
+      endDate: selectedEvent.endDate ? `${selectedEvent.endDate}T23:59:00-06:00` : undefined,
+      eventStatus: 'https://schema.org/EventScheduled',
+      eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+      image: selectedEvent.imageUrl || undefined,
+      location: { '@type': 'Place', name: selectedEvent.location, address: { '@type': 'PostalAddress', addressLocality: 'Nochistlán de Mejía', addressRegion: 'Zacatecas', addressCountry: 'MX' } },
+      organizer: selectedEvent.authorName ? { '@type': 'Organization', name: selectedEvent.authorName } : undefined,
+      url,
+    } : { '@context': 'https://schema.org', '@type': 'CollectionPage', name: title, description, url };
+    schema.textContent = JSON.stringify(pageSchema).replace(/</g, '\\u003c');
+  }, [selectedEvent]);
+
   const loadExchangeRate = () => {
     setExchangeRateLoading(true);
     setExchangeRateError('');

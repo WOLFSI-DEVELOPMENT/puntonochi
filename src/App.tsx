@@ -631,6 +631,7 @@ export default function App() {
     let title = 'PuntoNochi | Lugares, negocios y noticias de Nochistlán';
     let description = 'Descubre restaurantes, cafeterías, hoteles, servicios, videos y noticias de Nochistlán de Mejía, Zacatecas.';
     let noIndex = false;
+    const routePath = window.location.pathname;
     const articleSlug = activeTab === 'guias' ? window.location.pathname.match(/^\/articulos\/([^/]+)\/?$/)?.[1] : undefined;
     const routeArticle = articleSlug ? articleCatalog.find((article) => article.slug === decodeURIComponent(articleSlug)) : undefined;
 
@@ -645,7 +646,7 @@ export default function App() {
       description = 'Consulta el menú digital de un negocio local en Nochistlán.';
     } else if (selectedBusiness) {
       title = `${selectedBusiness.name} | ${selectedBusiness.category} en Nochistlán | PuntoNochi`;
-      description = `${selectedBusiness.name}: ${selectedBusiness.category} en ${selectedBusiness.location || 'Nochistlán de Mejía, Zacatecas'}. Consulta fotos, ubicación y datos del negocio en PuntoNochi.`;
+      description = `${selectedBusiness.name}: ${selectedBusiness.subtitle || selectedBusiness.category} en ${selectedBusiness.location || 'Nochistlán de Mejía, Zacatecas'}. Consulta horario, contacto, fotos y ubicación en PuntoNochi.`;
     } else if (showAdminPage) {
       title = 'Administración | PuntoNochi';
       description = 'Panel privado de administración de PuntoNochi.';
@@ -653,6 +654,13 @@ export default function App() {
     } else if (showSearch) {
       title = 'Buscar negocios en Nochistlán | PuntoNochi';
       description = 'Busca negocios, restaurantes, servicios y lugares en Nochistlán de Mejía, Zacatecas.';
+      noIndex = true;
+    } else if (selectedColonia) {
+      title = `Negocios en ${selectedColonia.name}, Nochistlán | PuntoNochi`;
+      description = `Encuentra negocios, lugares y servicios en ${selectedColonia.name}, Nochistlán de Mejía, Zacatecas.`;
+    } else if (/^\/(?:guardados|ask-nochi|buscar|admin)(?:\/|$)/.test(routePath)) {
+      title = routePath.startsWith('/ask-nochi') ? 'Pregunta a Nochi | PuntoNochi' : routePath.startsWith('/guardados') ? 'Mis negocios guardados | PuntoNochi' : 'PuntoNochi';
+      description = 'Descubre negocios, lugares y servicios de Nochistlán en PuntoNochi.';
       noIndex = true;
     } else if (selectedCategory) {
       title = `${selectedCategory.name} en Nochistlán | PuntoNochi`;
@@ -667,14 +675,27 @@ export default function App() {
       title = 'Explorar negocios y lugares en Nochistlán | PuntoNochi';
       description = 'Explora fotos, negocios y lugares recomendados en Nochistlán de Mejía, Zacatecas.';
     } else if (activeTab === 'videos') {
-      title = 'Videos de Nochistlán | PuntoNochi';
-      description = 'Mira videos cortos y largos sobre lugares y novedades de Nochistlán.';
+      if (routePath.startsWith('/mapa')) {
+        title = 'Mapa de negocios y lugares en Nochistlán | PuntoNochi';
+        description = 'Explora en el mapa restaurantes, comercios, servicios y lugares de Nochistlán de Mejía, Zacatecas.';
+      } else if (routePath.startsWith('/mercado')) {
+        title = 'Anuncios y clasificados en Nochistlán | PuntoNochi';
+        description = 'Encuentra productos, servicios y anuncios locales publicados por la comunidad de Nochistlán.';
+      } else {
+        title = 'Videos de Nochistlán | PuntoNochi';
+        description = 'Mira videos cortos y largos sobre negocios, lugares, eventos y novedades de Nochistlán.';
+      }
     } else if (activeTab === 'guias') {
       title = routeArticle ? `${routeArticle.title} | Artículos de Nochistlán | PuntoNochi` : 'Artículos de Nochistlán | PuntoNochi';
       description = routeArticle?.summary || 'Historias, cultura y lugares para conocer mejor Nochistlán de Mejía.';
     } else if (activeTab === 'noticias') {
-      title = 'Noticias de México y Nochistlán | PuntoNochi';
-      description = 'Consulta noticias y videos informativos de México y Nochistlán en PuntoNochi.';
+      if (/^\/eventos\/[^/]+\/?$/.test(routePath)) {
+        title = 'Evento en Nochistlán | PuntoNochi';
+        description = 'Consulta fecha, horario, ubicación y detalles de este evento en Nochistlán de Mejía.';
+      } else {
+        title = 'Noticias y eventos de Nochistlán | PuntoNochi';
+        description = 'Consulta noticias, eventos, actividades y videos informativos de Nochistlán y México.';
+      }
     }
 
     document.title = title;
@@ -695,11 +716,40 @@ export default function App() {
     setMeta('property', 'og:title', title);
     setMeta('property', 'og:description', description);
     setMeta('property', 'og:url', `${SEO_SITE_ORIGIN}${window.location.pathname}`);
+    setMeta('property', 'og:site_name', 'PuntoNochi');
+    setMeta('property', 'og:type', 'website');
+    const businessImage = selectedBusiness?.images?.find(Boolean) || selectedBusiness?.logo;
+    const businessImages = selectedBusiness?.images?.map((image) => {
+      try { return new URL(image, SEO_SITE_ORIGIN).href; } catch { return null; }
+    }).filter((image): image is string => Boolean(image)) || [];
+    let socialImage = 'https://puntonochi.vercel.app/social-preview.gif';
+    if (businessImage) {
+      try { socialImage = new URL(businessImage, SEO_SITE_ORIGIN).href; } catch { /* Keep the site-wide preview if the image URL is malformed. */ }
+    }
+    setMeta('property', 'og:image', socialImage);
+    setMeta('property', 'og:image:alt', selectedBusiness ? `Imagen de ${selectedBusiness.name} en Nochistlán` : 'Descubre negocios y lugares de Nochistlán con PuntoNochi');
+    if (businessImage) {
+      const imageType = /\.png(?:$|\?)/i.test(socialImage) ? 'image/png' : /\.webp(?:$|\?)/i.test(socialImage) ? 'image/webp' : /\.gif(?:$|\?)/i.test(socialImage) ? 'image/gif' : 'image/jpeg';
+      setMeta('property', 'og:image:type', imageType);
+      document.head.querySelector('meta[property="og:image:width"]')?.remove();
+      document.head.querySelector('meta[property="og:image:height"]')?.remove();
+    } else {
+      setMeta('property', 'og:image:type', 'image/gif');
+      setMeta('property', 'og:image:width', '800');
+      setMeta('property', 'og:image:height', '420');
+    }
     setMeta('name', 'twitter:title', title);
     setMeta('name', 'twitter:description', description);
+    setMeta('name', 'twitter:card', 'summary_large_image');
+    setMeta('name', 'twitter:image', socialImage);
 
-    const canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
-    if (canonical) canonical.href = `${SEO_SITE_ORIGIN}${window.location.pathname}`;
+    let canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.rel = 'canonical';
+      document.head.appendChild(canonical);
+    }
+    canonical.href = `${SEO_SITE_ORIGIN}${window.location.pathname}`;
 
     const pageUrl = `${SEO_SITE_ORIGIN}${window.location.pathname}`;
     const pageSchema: Record<string, unknown> = routeArticle ? {
@@ -717,8 +767,15 @@ export default function App() {
       name: selectedBusiness.name,
       description,
       url: pageUrl,
-      image: selectedBusiness.images.map((image) => new URL(image, SEO_SITE_ORIGIN).href),
+      image: businessImages.length ? businessImages : businessImage ? [socialImage] : undefined,
       telephone: selectedBusiness.phone || undefined,
+      priceRange: selectedBusiness.cost ? '$'.repeat(Math.max(1, Math.min(4, selectedBusiness.cost))) : undefined,
+      sameAs: [selectedBusiness.websiteUrl, selectedBusiness.instagramUrl, selectedBusiness.facebookUrl, selectedBusiness.tiktokUrl].filter(Boolean),
+      aggregateRating: selectedBusiness.reviewCount > 0 ? {
+        '@type': 'AggregateRating',
+        ratingValue: selectedBusiness.rating,
+        reviewCount: selectedBusiness.reviewCount,
+      } : undefined,
       address: {
         '@type': 'PostalAddress',
         streetAddress: selectedBusiness.address || undefined,
@@ -755,7 +812,7 @@ export default function App() {
       document.head.appendChild(schemaScript);
     }
     schemaScript.textContent = JSON.stringify(pageSchema).replace(/</g, '\\u003c');
-  }, [activeTab, selectedBusiness, selectedCategory, showAllCategories, showColonias, showSearch, showAdminPage, publicMenuId, legalDocument]);
+  }, [activeTab, selectedBusiness, selectedCategory, selectedColonia, showAllCategories, showColonias, showSearch, showAdminPage, publicMenuId, legalDocument]);
 
   useEffect(() => {
     const onSearchQuery = (event: Event) => setSearchQuery((event as CustomEvent<string>).detail);
