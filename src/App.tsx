@@ -38,6 +38,7 @@ import { AccountAuthSheet } from './components/AccountSheets';
 import { getStreakMilestone, StreakBadgeCelebration, StreakPage } from './components/StreakPage';
 import { PublicMenuPage } from './components/PublicMenuPage';
 import { HotelProfileClaimPage } from './components/HotelProfileClaimPage';
+import { PuntoNochiComparisonPage } from './components/PuntoNochiComparisonPage';
 import { LegalPage, type LegalDocument } from './components/LegalPage';
 import { PageLoadingSkeleton } from './components/PageLoadingSkeleton';
 import { Analytics } from '@vercel/analytics/react';
@@ -639,10 +640,14 @@ export default function App() {
     let noIndex = false;
     const routePath = window.location.pathname;
     const hotelClaimRoute = /^\/reclamar\/hotelnochistlan\/?$/.test(routePath);
+    const comparisonRoute = /^\/punto-nochi-vs-nochisgo\/?$/.test(routePath);
     const articleSlug = activeTab === 'guias' ? window.location.pathname.match(/^\/articulos\/([^/]+)\/?$/)?.[1] : undefined;
     const routeArticle = articleSlug ? articleCatalog.find((article) => article.slug === decodeURIComponent(articleSlug)) : undefined;
 
-    if (hotelClaimRoute) {
+    if (comparisonRoute) {
+      title = 'PuntoNochi vs NochisGo | Directorio de Nochistlán';
+      description = 'Compara PuntoNochi y NochisGo: descubre negocios, eventos, PuntoShorts, perfiles públicos y novedades de Nochistlán de Mejía, Zacatecas.';
+    } else if (hotelClaimRoute) {
       title = 'Hotel Nochistlán | Perfil oficial en Nochistlán de Mejía, Zacatecas | PuntoNochi';
       description = 'Reclama y administra el perfil oficial de Hotel Nochistlán en PuntoNochi. Publica PuntoShorts, eventos y novedades de Nochistlán de Mejía, Zacatecas.';
     } else if (legalDocument === 'privacidad') {
@@ -850,6 +855,7 @@ export default function App() {
   }, []);
 
   if (publicMenuId) return <PublicMenuPage id={publicMenuId}/>;
+  if (window.location.pathname === '/punto-nochi-vs-nochisgo' || window.location.pathname === '/punto-nochi-vs-nochisgo/') return <PuntoNochiComparisonPage />;
   if (window.location.pathname === '/reclamar/hotelnochistlan') return <><HotelProfileClaimPage onRequireAccount={() => setShowAccountAuth(true)} onClose={() => { window.history.pushState({}, '', '/explorar'); setActiveTab('explorar'); }} />{showAccountAuth && <AccountAuthSheet onClose={() => setShowAccountAuth(false)}/>}</>;
 
   return (
