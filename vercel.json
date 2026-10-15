@@ -3,6 +3,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/api/notifications/subscribe", "destination": "/api/notifications?__notificationPath=subscribe" },
+    { "source": "/api/notifications/vapid-public-key", "destination": "/api/notifications?__notificationPath=vapid-public-key" },
     { "source": "/sitemap-businesses.xml", "destination": "/api/sitemap-businesses" },
     { "source": "/api/events/:id/image", "destination": "/api/places?__eventPath=:id/image" },
     { "source": "/api/events/:id/photos/:photoId", "destination": "/api/places?__eventPath=:id/photos/:photoId" },

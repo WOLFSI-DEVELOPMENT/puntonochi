@@ -12,6 +12,15 @@ async function ensureSchema(sql) {
 }
 
 export default async function handler(req, res) {
+  const requestUrl = new URL(req.url || '/', `https://${req.headers.host || 'localhost'}`);
+  const action = requestUrl.searchParams.get('__notificationPath');
+  if (action === 'vapid-public-key') {
+    const publicKey = process.env.VAPID_PUBLIC_KEY;
+    if (!publicKey) return res.status(503).json({ error: 'Las notificaciones aún no están configuradas.' });
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.status(200).json({ publicKey });
+  }
+  if (action !== 'subscribe') return res.status(404).json({ error: 'Notification route not found.' });
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
   const origin = req.headers.origin;
   if (origin && new URL(origin).host !== req.headers.host) return res.status(403).json({ error: 'Invalid origin.' });
