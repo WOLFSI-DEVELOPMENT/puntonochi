@@ -1,5 +1,5 @@
 import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ArrowRight, Bookmark, Image as ImageIcon, MapPin, MessageCircle, Plus, Search, Star, X } from 'lucide-react';
+import { ArrowRight, Bookmark, Clock3, Image as ImageIcon, MapPin, MessageCircle, Plus, Search, Star, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Place } from '../types';
 import CornerKit from '@cornerkit/core';
@@ -15,6 +15,41 @@ const normalizeSearchText = (value: unknown) => String(value || '')
   .toLocaleLowerCase('es')
   .replace(/[^\p{L}\p{N}]+/gu, ' ')
   .trim();
+
+function fuzzyTokenMatch(term: string, text: string) {
+  if (text.includes(term)) return true;
+  if (term.length < 4) return false;
+  const words = text.split(/\s+/);
+  const maxDistance = term.length >= 8 ? 2 : 1;
+  return words.some((word) => {
+    if (Math.abs(word.length - term.length) > maxDistance) return false;
+    let previous = Array.from({ length: word.length + 1 }, (_, index) => index);
+    for (let row = 1; row <= term.length; row++) {
+      const current = [row];
+      let rowMinimum = row;
+      for (let column = 1; column <= word.length; column++) {
+        const value = Math.min(current[column - 1] + 1, previous[column] + 1, previous[column - 1] + (term[row - 1] === word[column - 1] ? 0 : 1));
+        current[column] = value;
+        rowMinimum = Math.min(rowMinimum, value);
+      }
+      if (rowMinimum > maxDistance) return false;
+      previous = current;
+    }
+    return previous[word.length] <= maxDistance;
+  });
+}
+
+function allWordsMatch(words: string[], text: string) {
+  return words.length > 0 && words.every((word) => fuzzyTokenMatch(word, text));
+}
+
+const SEARCH_RECENTS_KEY = 'puntonochi-recent-searches-v1';
+function readRecentSearches() {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(SEARCH_RECENTS_KEY) || '[]');
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim()).slice(0, 6) : [];
+  } catch { return []; }
+}
 
 function BusinessCard({ place, onSelect }: { place: Place; onSelect: (place: Place) => void }) {
   return <button type="button" data-search-squircle onClick={() => onSelect(place)} className="flex h-[106px] w-full items-center gap-3 rounded-[24px] bg-[#292a2d] p-[5px] text-left text-white transition-colors hover:bg-[#303135] active:scale-[0.99]">
@@ -39,6 +74,7 @@ type SearchPageProps = {
   places: Place[];
   categoryScoped: boolean;
   categoryName?: string;
+  onSearchTerm: (term: string) => void;
 };
 
 export function SearchSparkleIcon() {
@@ -175,7 +211,7 @@ export function AskNochiInline({ places, onSelectPlace, onClose }: { places: Pla
   };
   return <div className="mt-5">
     <form onSubmit={(event) => void send(event)} className="flex h-12 w-full items-center gap-2 rounded-2xl bg-[#292929] px-2.5 text-white">
-      <button type="button" onClick={onClose} aria-label="Cerrar pregunta de Ask Nochi" title="Cancelar" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white"><span className="material-symbols-rounded text-[21px]">close</span></button>
+      <button type="button" onClick={onClose} data-sheet-close aria-label="Cerrar pregunta de Ask Nochi" title="Cancelar" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white"><span className="material-symbols-rounded text-[21px]">close</span></button>
       <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Pregunta lo que quieras a Nochi" aria-label="Pregunta a Ask Nochi" autoComplete="off" className="min-w-0 flex-1 appearance-none border-0 !bg-transparent p-0 text-[16px] text-white outline-none placeholder:text-white/40 focus:!bg-transparent focus:outline-none focus:ring-0"/>
       <button type="submit" disabled={!question.trim() || busy} aria-label="Enviar pregunta" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500 text-white transition-opacity disabled:opacity-40"><span className="material-symbols-rounded text-[22px]">arrow_upward</span></button>
     </form>
@@ -269,7 +305,7 @@ function AskNochiSheet({ places, onClose, onSelectPlace }: { places: Place[]; on
             <div className="flex items-center gap-1.5">
               <button type="button" onClick={startNew} aria-label="Nueva búsqueda con IA" className="flex h-9 items-center gap-1 rounded-full bg-[#292a2d] px-2.5 text-[11px] font-semibold text-white/80"><Plus className="h-3.5 w-3.5"/>Nueva</button>
               <button type="button" onClick={() => setShowRecent((value) => !value)} className="flex h-9 items-center gap-1 rounded-full bg-[#292a2d] px-2.5 text-[11px] font-semibold text-white/80"><Bookmark className="h-3.5 w-3.5"/>Recientes</button>
-              <button type="button" onClick={onClose} aria-label="Cerrar Ask Nochi" className="flex h-9 w-9 items-center justify-center rounded-full bg-[#292a2d] text-white/80"><X className="h-4 w-4"/></button>
+              <button type="button" onClick={onClose} data-sheet-close aria-label="Cerrar Ask Nochi" className="flex h-9 w-9 items-center justify-center rounded-full bg-[#292a2d] text-white/80"><X className="h-4 w-4"/></button>
             </div>
           </header>
         </div>
@@ -309,13 +345,15 @@ function AskNochiSheet({ places, onClose, onSelectPlace }: { places: Place[]; on
   </AnimatePresence>;
 }
 
-export function SearchPage({ query, onClose, onSelectBusiness, onOpenEvents, onOpenMarketplace, places, categoryScoped, categoryName }: SearchPageProps) {
+export function SearchPage({ query, onClose, onSelectBusiness, onOpenEvents, onOpenMarketplace, places, categoryScoped, categoryName, onSearchTerm }: SearchPageProps) {
   const [events, setEvents] = useState<{ id: string; title: string; date: string; time?: string | null; location: string; description: string; imageUrl?: string }[]>([]);
   const [listings, setListings] = useState<{ id: string; title: string; category: string; price: string; location: string; description: string; images?: { url: string }[] }[]>([]);
   const touchStartY = useRef<number | null>(null);
   const deferredQuery = useDeferredValue(query);
   const normalized = normalizeSearchText(deferredQuery);
   const words = useMemo(() => normalized.split(/\s+/).filter(Boolean), [normalized]);
+  const recentSearches = useMemo(readRecentSearches, []);
+  const popularSuggestions = useMemo(() => [...places].sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.reviewCount || 0) - (a.reviewCount || 0)).slice(0, 5), [places]);
   useEffect(() => {
     let active = true;
     void Promise.allSettled([
@@ -338,7 +376,7 @@ export function SearchPage({ query, onClose, onSelectBusiness, onOpenEvents, onO
   const results = useMemo(() => {
     if (!normalized) return [];
     return indexedPlaces.map(({ place, name, category, searchable }) => {
-      if (!words.every((word) => searchable.includes(word))) return null;
+      if (!allWordsMatch(words, searchable)) return null;
       const score = (name === normalized ? 100 : name.startsWith(normalized) ? 60 : name.includes(normalized) ? 35 : 0)
         + (category === normalized ? 45 : category.includes(normalized) ? 25 : 0)
         + (words.filter((word) => name.includes(word)).length * 8)
@@ -350,8 +388,8 @@ export function SearchPage({ query, onClose, onSelectBusiness, onOpenEvents, onO
       .map(({ place }) => place);
   }, [indexedPlaces, normalized, words]);
 
-  const matchingEvents = useMemo(() => categoryScoped ? [] : events.filter((item) => words.length > 0 && words.every((word) => normalizeSearchText([item.title, item.location, item.description].join(' ')).includes(word))), [categoryScoped, events, words]);
-  const matchingListings = useMemo(() => categoryScoped ? [] : listings.filter((item) => words.length > 0 && words.every((word) => normalizeSearchText([item.title, item.category, item.location, item.description].join(' ')).includes(word))), [categoryScoped, listings, words]);
+  const matchingEvents = useMemo(() => categoryScoped ? [] : events.filter((item) => allWordsMatch(words, normalizeSearchText([item.title, item.location, item.description].join(' ')))), [categoryScoped, events, words]);
+  const matchingListings = useMemo(() => categoryScoped ? [] : listings.filter((item) => allWordsMatch(words, normalizeSearchText([item.title, item.category, item.location, item.description].join(' ')))), [categoryScoped, listings, words]);
   const totalResults = results.length + matchingEvents.length + matchingListings.length;
 
   useEffect(() => {
@@ -365,13 +403,17 @@ export function SearchPage({ query, onClose, onSelectBusiness, onOpenEvents, onO
   return (
     <motion.main onTouchStart={(event) => { touchStartY.current = event.touches[0]?.clientY ?? null; }} onTouchEnd={(event) => { const endY = event.changedTouches[0]?.clientY; if (touchStartY.current !== null && endY !== undefined && endY - touchStartY.current > 90) onClose(); touchStartY.current = null; }} className="fixed inset-0 z-[45] overflow-y-auto bg-[#101114]/75 pb-28 pt-24 text-white backdrop-blur-2xl" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
       <section className="mx-auto max-w-2xl px-4 pb-8">
-        {normalized.length < 2 ? <div className="rounded-[24px] bg-white/[0.08] p-5 text-sm text-white/65">{categoryScoped && categoryName ? `Busca negocios de ${categoryName}.` : 'Busca negocios, eventos o anuncios en México.'}</div> : <>
+        {normalized.length < 2 ? <div className="space-y-5 rounded-[24px] bg-white/[0.06] p-5 text-sm text-white/65">
+          <p>{categoryScoped && categoryName ? `Busca negocios de ${categoryName}.` : 'Busca negocios, eventos o anuncios en México.'}</p>
+          {recentSearches.length > 0 && <div><p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/40"><Clock3 className="h-3.5 w-3.5"/>Búsquedas recientes</p><div className="flex flex-wrap gap-2">{recentSearches.map((term) => <button key={term} type="button" onClick={() => onSearchTerm(term)} className="rounded-full bg-white/[0.08] px-3 py-2 text-white/80 hover:bg-white/[0.13]">{term}</button>)}</div></div>}
+          <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/40">Lugares populares</p><div className="flex flex-wrap gap-2">{popularSuggestions.map((place) => <button key={place.id} type="button" onClick={() => { onClose(); onSelectBusiness(place); }} className="rounded-full bg-white/[0.08] px-3 py-2 text-white/80 hover:bg-white/[0.13]">{place.name}</button>)}</div></div>
+        </div> : <>
           <h1 className="mb-4 text-xl font-bold">{categoryScoped && categoryName ? `${categoryName} · ${totalResults} resultados` : `Resultados (${totalResults})`}</h1>
           <div className="space-y-3">
             {results.map((place) => <BusinessCard key={`place-${place.id}`} place={place} onSelect={(item) => { onClose(); onSelectBusiness(item); }} />)}
             {matchingEvents.map((item) => <button type="button" key={`event-${item.id}`} onClick={() => { onClose(); onOpenEvents(); }} className="w-full overflow-hidden rounded-[24px] bg-[#292a2d] text-left"><div className="flex items-center gap-3 p-3">{item.imageUrl ? <img src={item.imageUrl} alt="" className="h-20 w-24 shrink-0 rounded-2xl object-cover"/> : <span className="flex h-20 w-24 shrink-0 items-center justify-center rounded-2xl bg-white/10"><span className="material-symbols-rounded text-3xl">event</span></span>}<span className="min-w-0"><span className="block font-bold">{item.title}</span><span className="mt-1 block text-xs text-white/60">{item.date}{item.time ? ` · ${item.time}` : ''}</span><span className="mt-1 block truncate text-xs text-white/45">{item.location}</span></span></div></button>)}
             {matchingListings.map((item) => <button type="button" key={`listing-${item.id}`} onClick={() => { onClose(); onOpenMarketplace(); }} className="w-full overflow-hidden rounded-[24px] bg-[#292a2d] text-left"><div className="flex items-center gap-3 p-3">{item.images?.[0]?.url ? <img src={item.images[0].url} alt="" className="h-20 w-24 shrink-0 rounded-2xl object-cover"/> : <span className="flex h-20 w-24 shrink-0 items-center justify-center rounded-2xl bg-white/10"><span className="material-symbols-rounded text-3xl">storefront</span></span>}<span className="min-w-0"><span className="block font-bold">{item.title}</span><span className="mt-1 block text-xs text-white/60">{item.category} · {item.price}</span><span className="mt-1 block truncate text-xs text-white/45">{item.location}</span></span></div></button>)}
-            {totalResults === 0 && <div className="rounded-[24px] bg-white/[0.06] px-4 py-8 text-center text-sm text-white/60">No encontramos coincidencias. Prueba con otras palabras.</div>}
+            {totalResults === 0 && <div className="rounded-[24px] bg-white/[0.06] px-4 py-7 text-center"><p className="text-sm font-semibold text-white/80">No encontramos resultados para “{deferredQuery.trim()}”.</p><p className="mt-1 text-sm text-white/55">Prueba con menos palabras o revisa la ortografía. También puedes explorar lugares populares.</p><div className="mt-4 flex flex-wrap justify-center gap-2">{popularSuggestions.slice(0, 3).map((place) => <button key={place.id} type="button" onClick={() => { onClose(); onSelectBusiness(place); }} className="rounded-full bg-white/[0.09] px-3 py-2 text-xs text-white/80">{place.name}</button>)}</div></div>}
           </div>
         </>}
         <button type="button" onClick={onClose} className="mx-auto mt-5 block rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-white/80">Cancelar búsqueda</button>

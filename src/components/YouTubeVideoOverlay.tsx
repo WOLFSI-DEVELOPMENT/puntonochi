@@ -62,7 +62,7 @@ export function YouTubeVideoOverlay({ video, onClose }: Props) {
                 <p className="truncate text-xs font-medium text-white/50">{video.creator} · {video.isShort ? 'Short' : 'Video'}</p>
                 <h2 id="youtube-video-title" className="mt-1 line-clamp-2 text-sm font-semibold sm:text-base">{video.title}</h2>
               </div>
-              <button type="button" onClick={onClose} aria-label="Cerrar video" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20">
+              <button type="button" onClick={onClose} data-sheet-close aria-label="Cerrar video" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20">
                 <X className="h-5 w-5" />
               </button>
             </div>

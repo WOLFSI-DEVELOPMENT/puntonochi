@@ -476,7 +476,7 @@ function AppleUtilitySheets({ active, onClose }) {
     <AnimatePresence>
       {reminderComposer && (active === 'reminders' || active === 'calendar') && <motion.button type="button" aria-label="Salir de recordatorios" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeReminderComposer} className="fixed inset-0 z-[159] bg-black/55 backdrop-blur-[3px]"/>}
       {reminderComposer && (active === 'reminders' || active === 'calendar') && <motion.section data-lgn-reminder-composer data-desktop-sheet="popup" role="dialog" aria-modal="true" aria-labelledby="lgn-reminder-composer-title" initial={{ y: '100%', opacity: .8 }} animate={{ y: 0, opacity: 1 }} exit={{ y: '100%', opacity: .8 }} transition={{ type: 'spring', damping: 30, stiffness: 310 }} className="fixed inset-x-[10px] bottom-[10px] z-[160] mx-auto flex max-h-[min(70dvh,560px)] min-h-[280px] w-[calc(100%-20px)] max-w-[560px] flex-col overflow-hidden rounded-[30px] bg-[#1c1d20] p-5 text-white shadow-[0_20px_80px_rgba(0,0,0,.6)]">
-          <header className="relative z-10 mb-4 flex shrink-0 items-center justify-between"><div><button type="button" onClick={() => setReminderListMenuOpen((open) => !open)} aria-expanded={reminderListMenuOpen} className="flex items-center gap-1 text-[17px] font-semibold text-[#ff9f0a]"><span>Recordatorios</span><ChevronDown className={`h-4 w-4 transition-transform ${reminderListMenuOpen ? 'rotate-180' : ''}`}/></button><h2 id="lgn-reminder-composer-title" className="mt-1 text-[12px] text-white/45">Nuevo recordatorio</h2></div><button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); closeReminderComposer(); }} aria-label="Cerrar y salir" className="pointer-events-auto relative z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/[.12] text-white/80"><X className="h-4 w-4"/></button>
+          <header className="relative z-10 mb-4 flex shrink-0 items-center justify-between"><div><button type="button" onClick={() => setReminderListMenuOpen((open) => !open)} aria-expanded={reminderListMenuOpen} className="flex items-center gap-1 text-[17px] font-semibold text-[#ff9f0a]"><span>Recordatorios</span><ChevronDown className={`h-4 w-4 transition-transform ${reminderListMenuOpen ? 'rotate-180' : ''}`}/></button><h2 id="lgn-reminder-composer-title" className="mt-1 text-[12px] text-white/45">Nuevo recordatorio</h2></div><button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); closeReminderComposer(); }} data-sheet-close aria-label="Cerrar y salir" className="pointer-events-auto relative z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/[.12] text-white/80"><X className="h-4 w-4"/></button>
             {reminderListMenuOpen && <div className="absolute left-0 top-[48px] z-20 w-56 overflow-hidden rounded-[18px] bg-[#303136] p-1 shadow-xl">{[{ id: 'none', label: 'Mis recordatorios' }, { id: 'today', label: 'Hoy' }, { id: 'scheduled', label: 'Programado' }].map((option) => <button key={option.id} type="button" onClick={() => selectReminderSchedule(option.id)} className="flex h-10 w-full items-center rounded-[13px] px-3 text-left text-sm text-white/85 hover:bg-white/[.08]">{option.label}</button>)}</div>}
           </header>
           <div ref={reminderComposerScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -527,7 +527,7 @@ function QuickNotesSheet({ onClose }) {
   return <>
     <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[139] bg-black/60 backdrop-blur-sm"/>
     <motion.section data-lgn-notes-sheet data-desktop-sheet="side-right" role="dialog" aria-modal="false" aria-labelledby="lgn-notes-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }} className="pointer-events-auto fixed inset-x-[5px] bottom-[5px] z-[140] mx-auto flex h-[min(82dvh,760px)] max-w-[720px] flex-col overflow-hidden rounded-[30px] bg-[#1c1d20] text-white shadow-2xl">
-      <header className="relative z-10 flex shrink-0 items-center justify-between gap-3 border-b border-white/[.07] px-5 pb-3 pt-4"><div className="min-w-0"><h2 id="lgn-notes-title" className="text-lg font-bold">Cuaderno</h2><p className="mt-0.5 text-[11px] text-white/45">{notes.length} {notes.length === 1 ? 'nota adhesiva' : 'notas adhesivas'}</p></div><button type="button" onClick={onClose} aria-label="Cerrar cuaderno" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[.08] text-white/80 transition-colors hover:bg-white/[.14]"><X className="h-4 w-4"/></button></header>
+      <header className="relative z-10 flex shrink-0 items-center justify-between gap-3 border-b border-white/[.07] px-5 pb-3 pt-4"><div className="min-w-0"><h2 id="lgn-notes-title" className="text-lg font-bold">Cuaderno</h2><p className="mt-0.5 text-[11px] text-white/45">{notes.length} {notes.length === 1 ? 'nota adhesiva' : 'notas adhesivas'}</p></div><button type="button" onClick={onClose} data-sheet-close aria-label="Cerrar cuaderno" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[.08] text-white/80 transition-colors hover:bg-white/[.14]"><X className="h-4 w-4"/></button></header>
       <div ref={canvasRef} className="relative min-h-0 flex-1 touch-pan-x touch-pan-y overflow-auto overscroll-contain" style={{ backgroundColor: '#202124', backgroundImage: 'radial-gradient(rgba(255,255,255,.17) 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
         <div className="relative min-h-[1500px] min-w-[1600px]" style={{ width: '1600px', height: '1500px' }}>
           {!notes.length && <div className="absolute left-5 top-5 max-w-[240px] rounded-2xl bg-black/35 px-4 py-3 text-sm text-white/55 backdrop-blur-md">Tu lienzo está listo. Añade una nota para empezar tu cuaderno.</div>}
@@ -589,7 +589,6 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
   const [voiceSearchStatus, setVoiceSearchStatus] = useState('idle');
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [voiceSearchError, setVoiceSearchError] = useState('');
-  const [voiceSearchAnswer, setVoiceSearchAnswer] = useState('');
   const voiceRecognitionRef = useRef(null);
   const voiceSubmittedRef = useRef(false);
   const voiceListeningRef = useRef(false);
@@ -618,7 +617,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
   }, [externalSearchOpen]);
   useEffect(() => {
     if (!timerActive && !stopwatchRunning) return undefined;
-    const tick = window.setInterval(() => setTimerNow(Date.now()), 200);
+    const tick = window.setInterval(() => setTimerNow(Date.now()), stopwatchRunning ? 100 : 1000);
     return () => window.clearInterval(tick);
   }, [timerActive, stopwatchRunning]);
   useEffect(() => {
@@ -686,30 +685,15 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
     setVoiceSearchStatus('idle');
     setVoiceSearchError('');
   };
-  const searchVoiceQuery = async (rawQuery) => {
+  const searchVoiceQuery = (rawQuery) => {
     const text = String(rawQuery || '').trim();
     if (!text) { setVoiceSearchError('Di qué lugar o servicio estás buscando.'); setVoiceSearchStatus('ready'); return; }
     setVoiceTranscript(text);
     setVoiceSearchStatus('processing');
     setVoiceSearchError('');
-    setVoiceSearchAnswer('');
-    try {
-      const response = await fetch('/api/ask-nochi', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: text, history: [], searchMode: 'business' }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.error || 'No se pudo entender la búsqueda. Inténtalo de nuevo.');
-      const place = Array.isArray(data.places) ? data.places[0] : null;
-      if (place && onSelectBusiness) {
-        closeVoiceSearch();
-        onSelectBusiness(place);
-        return;
-      }
-      setVoiceSearchAnswer(String(data.answer || ''));
-      setVoiceSearchError(place ? 'No se pudo abrir este negocio.' : 'No encontré un negocio relacionado. Prueba con otro nombre o servicio.');
-      setVoiceSearchStatus('ready');
-    } catch (error) {
-      setVoiceSearchError(error instanceof Error ? error.message : 'No se pudo completar la búsqueda.');
-      setVoiceSearchStatus('error');
-    }
+    closeVoiceSearch();
+    onOpenSearch?.();
+    window.setTimeout(() => onSearch(text), 0);
   };
   const startVoiceRecognition = (session) => {
     if (!voiceListeningRef.current || voiceSessionRef.current !== session) return;
@@ -777,7 +761,6 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
     setVoiceSearchOpen(true);
     setVoiceTranscript('');
     setVoiceSearchError('');
-    setVoiceSearchAnswer('');
     voiceSubmittedRef.current = false;
     voiceListeningRef.current = true;
     const session = ++voiceSessionRef.current;
@@ -1234,7 +1217,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
           <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[129] bg-black/45 backdrop-blur-sm"/>
           <motion.section data-lgn-timer-sheet data-desktop-sheet="popup" role="dialog" aria-modal="false" aria-labelledby="lgn-timer-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }} className="pointer-events-auto fixed inset-x-[5px] bottom-[5px] z-[130] mx-auto w-[calc(100%-10px)] max-w-[520px] overflow-hidden rounded-[28px] bg-black p-5 pb-[max(20px,env(safe-area-inset-bottom))] text-white shadow-2xl backdrop-blur-2xl">
             <div className="h-[env(safe-area-inset-top)]" aria-hidden="true"/><div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/25"/>
-            <div className="relative -mt-1 flex min-h-12 items-start justify-between pr-10"><div><h2 id="lgn-timer-title" className="text-xl font-bold">{timerActive ? 'Temporizador activo' : '¿Cuánto tiempo?'}</h2></div><button type="button" onClick={() => setTimerPickerOpen(false)} aria-label="Cerrar temporizador" className="absolute right-[-15px] top-[-15px] flex h-9 w-9 items-center justify-center rounded-full bg-white/[.1] p-2 text-white transition-colors hover:bg-white/[.16] active:bg-white/[.22]"><X className="h-4 w-4"/></button></div>
+            <div className="relative -mt-1 flex min-h-12 items-start justify-between pr-10"><div><h2 id="lgn-timer-title" className="text-xl font-bold">{timerActive ? 'Temporizador activo' : '¿Cuánto tiempo?'}</h2></div><button type="button" onClick={() => setTimerPickerOpen(false)} data-sheet-close aria-label="Cerrar temporizador" className="absolute right-[-15px] top-[-15px] flex h-9 w-9 items-center justify-center rounded-full bg-white/[.1] p-2 text-white transition-colors hover:bg-white/[.16] active:bg-white/[.22]"><X className="h-4 w-4"/></button></div>
             {timerActive ? <><div className="py-6 text-center"><span className="font-mono text-6xl font-semibold tabular-nums tracking-tight">{timerDisplay}</span><p className="mt-2 text-xs text-white/45">{timerPausedRemaining !== null ? 'En pausa' : 'Tiempo restante'}</p></div><div className="flex gap-2"><button type="button" onClick={() => { if (timerPausedRemaining !== null) { onResumeTimer?.(); setTimerPausedRemaining(null); } else { setTimerPausedRemaining(Math.max(0, (timerEndAt || 0) - Date.now())); onPauseTimer?.(); } }} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-white/[.1] text-sm font-semibold">{timerPausedRemaining !== null ? <Play className="h-4 w-4"/> : <Pause className="h-4 w-4"/>}{timerPausedRemaining !== null ? 'Reanudar' : 'Pausar'}</button><button type="button" onClick={() => { onStopTimer?.(); setTimerPausedRemaining(null); setTimerPickerOpen(false); setTimerNoticeDismissed(true); }} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-[#ff453a]/15 text-sm font-semibold text-[#ff6b63]"><X className="h-4 w-4"/>Detener</button></div></> : <><div className="relative mb-4 overflow-hidden rounded-[26px] bg-black px-3 pb-4 pt-3">
                 <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-black via-black/80 to-transparent"/><div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-black via-black/80 to-transparent"/>
                 <div ref={timerRulerRef} onScroll={updateTimerRuler} onWheel={(event) => { if (timerRulerRef.current) timerRulerRef.current.scrollLeft += Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX; }} onPointerDown={(event) => { if (event.pointerType === 'mouse') { timerRulerDrag.current = { x: event.clientX, left: timerRulerRef.current?.scrollLeft || 0 }; event.currentTarget.setPointerCapture(event.pointerId); } }} onPointerMove={(event) => { if (timerRulerDrag.current && timerRulerRef.current) { timerRulerRef.current.scrollLeft = timerRulerDrag.current.left - (event.clientX - timerRulerDrag.current.x); } }} onPointerUp={() => { timerRulerDrag.current = null; }} onPointerCancel={() => { timerRulerDrag.current = null; }} className="relative h-[91px] touch-pan-x select-none overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden cursor-ew-resize">
@@ -1254,13 +1237,12 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
             <div className="mx-auto flex h-28 items-center justify-center gap-[5px]" aria-hidden="true">
               {[46, 72, 54, 82, 58, 74, 48].map((height, index) => <motion.span key={index} animate={voiceSearchStatus === 'listening' ? { height: [height * .45, height, height * .62, height * .82, height * .45], opacity: [0.72, 1, .82, 1, .72] } : { height: voiceSearchStatus === 'processing' ? [height * .5, height * .85, height * .5] : 12, opacity: .88 }} transition={{ duration: voiceSearchStatus === 'listening' ? .9 + index * .05 : .8, repeat: voiceSearchStatus === 'listening' || voiceSearchStatus === 'processing' ? Infinity : 0, ease: 'easeInOut', delay: index * .055 }} className="w-[15px] rounded-full bg-white"/>)}
             </div>
-            <p className="mt-8 text-[20px] font-medium tracking-tight">{voiceSearchStatus === 'listening' ? 'Te escucho' : voiceSearchStatus === 'processing' ? 'Entendiendo tu búsqueda…' : voiceSearchStatus === 'ready' ? '¿Qué lugar buscas?' : voiceSearchStatus === 'error' ? 'No pude completar la búsqueda' : 'Búsqueda por voz'}</p>
+            <p className="mt-8 text-[20px] font-medium tracking-tight">{voiceSearchStatus === 'listening' ? 'Te escucho' : voiceSearchStatus === 'processing' ? 'Abriendo resultados…' : voiceSearchStatus === 'ready' ? '¿Qué lugar buscas?' : voiceSearchStatus === 'error' ? 'No pude completar la búsqueda' : 'Búsqueda por voz'}</p>
             {voiceTranscript && <p className="mx-auto mt-3 max-w-md text-[15px] leading-6 text-white/65">“{voiceTranscript}”</p>}
-            {voiceSearchAnswer && <p className="mx-auto mt-3 max-w-md text-[13px] leading-5 text-white/45">{voiceSearchAnswer}</p>}
             {voiceSearchError && <p role="alert" className="mx-auto mt-3 max-w-md text-[13px] leading-5 text-white/50">{voiceSearchError}</p>}
             {(voiceSearchStatus === 'ready' || voiceSearchStatus === 'error') && <form onSubmit={(event) => { event.preventDefault(); void searchVoiceQuery(voiceTranscript); }} className="mx-auto mt-6 flex max-w-md items-center gap-2 rounded-full bg-[#222326] p-1.5 pl-4"><input autoFocus value={voiceTranscript} onChange={(event) => setVoiceTranscript(event.target.value)} placeholder="O escribe lo que necesitas" aria-label="Escribir búsqueda" className="min-w-0 flex-1 bg-transparent py-2 text-left text-[14px] text-white outline-none placeholder:text-white/35"/><button type="submit" className="flex h-10 shrink-0 items-center justify-center rounded-full bg-white px-4 text-[12px] font-semibold text-black">Buscar</button></form>}
           </div>
-          <p className="absolute inset-x-0 bottom-[max(28px,env(safe-area-inset-bottom))] text-center text-[14px] text-white/75">{voiceSearchStatus === 'listening' ? 'Toca el botón para terminar' : voiceSearchStatus === 'processing' ? 'Buscando en los negocios de Nochistlán' : voiceSearchStatus === 'ready' ? 'Di otra búsqueda o escríbela' : 'Busca un lugar, servicio o lo que necesitas'}</p>
+          <p className="absolute inset-x-0 bottom-[max(28px,env(safe-area-inset-bottom))] text-center text-[14px] text-white/75">{voiceSearchStatus === 'listening' ? 'Toca el botón para terminar' : voiceSearchStatus === 'processing' ? 'Mostrando negocios, eventos y anuncios' : voiceSearchStatus === 'ready' ? 'Di otra búsqueda o escríbela' : 'Busca un lugar, servicio o lo que necesitas'}</p>
           <button type="button" onClick={toggleVoiceRecognition} disabled={voiceSearchStatus === 'processing'} aria-label={voiceSearchStatus === 'listening' ? 'Terminar grabación' : 'Iniciar búsqueda por voz'} className="pointer-events-auto absolute bottom-[max(20px,env(safe-area-inset-bottom))] left-5 z-10 flex h-[68px] w-[68px] touch-manipulation items-center justify-center rounded-full bg-[#252528] text-white shadow-xl transition-transform active:scale-95 disabled:opacity-40">{voiceSearchStatus === 'listening' ? <Square className="h-5 w-5 fill-white"/> : <Mic className="h-6 w-6"/>}</button>
           <button type="button" onClick={closeVoiceSearch} aria-label="Cancelar búsqueda por voz" className="pointer-events-auto absolute bottom-[max(20px,env(safe-area-inset-bottom))] right-5 z-10 flex h-[68px] w-[68px] touch-manipulation items-center justify-center rounded-full bg-[#ff554d] text-white shadow-xl active:scale-95"><X className="h-8 w-8" strokeWidth={2.5}/></button>
         </motion.div>}

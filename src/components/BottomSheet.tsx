@@ -50,6 +50,8 @@ export function BottomSheet({ children, onClose, fullHeight = false }: BottomShe
       >
         <div className="absolute top-4 right-4 z-20">
           <button 
+            data-sheet-close
+            aria-label="Cerrar"
             onClick={onClose}
             className="w-8 h-8 bg-black/5 backdrop-blur-md squircle flex items-center justify-center text-neutral-600 hover:bg-black/10 transition-colors"
           >

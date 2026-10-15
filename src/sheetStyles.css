@@ -1,0 +1,88 @@
+/* Shared sheet chrome, matching the account sign-in sheet. */
+.dark [data-desktop-sheet],
+[data-desktop-sheet] {
+  background-color: #202124 !important;
+  color: #fff;
+  border-radius: 32px !important;
+  border: 0 !important;
+}
+
+[data-desktop-sheet] :where(header, div):has(> [data-sheet-close]):not([data-desktop-sheet]) {
+  position: static !important;
+}
+
+[data-desktop-sheet] [data-sheet-close] {
+  position: absolute !important;
+  inset: 12px 12px auto auto !important;
+  z-index: 30;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, .08) !important;
+  color: rgba(255, 255, 255, .85) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+[data-desktop-sheet] [data-sheet-close] svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+[data-desktop-sheet] [data-sheet-close] .material-symbols-rounded {
+  font-size: 16px !important;
+}
+
+[data-desktop-sheet] > header {
+  background: transparent !important;
+  border-bottom: 0 !important;
+  padding-right: 60px;
+}
+
+[data-desktop-sheet] [data-sheet-drag-handle] {
+  background: transparent !important;
+}
+
+[data-desktop-sheet] [data-sheet-drag-handle] > div {
+  width: 48px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .25);
+}
+
+[data-desktop-sheet]:not(:has([data-sheet-drag-handle]))::before {
+  content: '';
+  position: absolute;
+  top: 20px;
+  left: calc(50% - 24px);
+  width: 48px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .25);
+  pointer-events: none;
+  z-index: 10;
+}
+
+[data-desktop-sheet]:not(:has([data-sheet-drag-handle])) > header {
+  padding-top: 44px;
+}
+
+[data-desktop-sheet]:not(:has([data-sheet-drag-handle])):not(:has(> header)) {
+  padding-top: 44px !important;
+}
+
+@media (max-width: 1023px) {
+  [data-desktop-sheet] {
+    left: 5px !important;
+    right: 5px !important;
+    bottom: 5px !important;
+    width: auto !important;
+  }
+}

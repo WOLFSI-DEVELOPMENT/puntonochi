@@ -269,7 +269,7 @@ export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => 
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_50%_43%,rgba(255,255,255,0.08),transparent_48%),linear-gradient(180deg,#050505_0%,#000_50%,#090909_100%)]" />
 
       {step === 'choice' && <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-[560px] flex-col justify-center px-5 pb-10 pt-16">
-        <button type="button" onClick={onClose} aria-label="Cerrar" className="absolute left-5 top-5 flex h-11 w-11 items-center justify-center rounded-full bg-[#292929]"><X className="h-5 w-5"/></button>
+        <button type="button" onClick={onClose} data-sheet-close aria-label="Cerrar" className="absolute left-5 top-5 flex h-11 w-11 items-center justify-center rounded-full bg-[#292929]"><X className="h-5 w-5"/></button>
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40">PuntoNochi · Crear</p>
         <h1 className="text-3xl font-bold tracking-tight">¿Qué quieres compartir?</h1>
         <p className="mt-2 text-sm leading-relaxed text-white/55">Elige cómo quieres participar en la comunidad.</p>
@@ -325,10 +325,10 @@ export function CreatePostFlow({ onClose, onPromoteBusiness }: { onClose: () => 
       {showAccountPrompt && <AccountRequiredPrompt onClose={() => setShowAccountPrompt(false)} message="Inicia sesión con Google o Facebook para publicar fotos y compartir contenido en PuntoNochi."/>}
       <AnimatePresence>
         {showPlacePicker && <>
-          <motion.button aria-label="Cerrar selector" onClick={() => setShowPlacePicker(false)} className="fixed inset-0 z-[90] bg-black/65" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+          <motion.button data-sheet-close aria-label="Cerrar selector" onClick={() => setShowPlacePicker(false)} className="fixed inset-0 z-[90] bg-black/65" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
           <motion.section {...placePickerDrag} data-desktop-sheet="popup" role="dialog" aria-modal="true" className="fixed inset-x-0 bottom-0 z-[91] mx-auto flex h-[min(78dvh,720px)] w-full max-w-[620px] flex-col overflow-hidden rounded-t-[32px] bg-[#202020] pt-2" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360, mass: 0.82 }}>
             <SheetDragHandle controls={placePickerDrag.dragControls}/>
-            <div className="mb-4 flex items-center justify-between px-5"><h2 className="text-lg font-bold">Elige un negocio</h2><button type="button" onClick={() => setShowPlacePicker(false)} aria-label="Cerrar" className="rounded-full bg-white/[0.08] p-2"><X className="h-4 w-4" /></button></div>
+            <div className="mb-4 flex items-center justify-between px-5"><h2 className="text-lg font-bold">Elige un negocio</h2><button type="button" onClick={() => setShowPlacePicker(false)} data-sheet-close aria-label="Cerrar" className="rounded-full bg-white/[0.08] p-2"><X className="h-4 w-4" /></button></div>
             <div className="mx-5 mb-4 flex items-center gap-2 rounded-full bg-[#303030] px-4 py-3"><Search className="h-4 w-4 shrink-0 text-white/45" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar negocio" style={{ background: 'transparent', backgroundColor: 'transparent' }} className="!min-w-0 !flex-1 !bg-transparent text-sm text-white outline-none placeholder:text-white/50" /></div>
             <div className="relative min-h-0 flex-1 overflow-hidden">
               <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,transparent_62%,rgba(0,0,0,0.78)_100%)]" />

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { CalendarDays, Camera, Grid2X2, LoaderCircle, MapPin, MessageCircle, Pencil, Settings, Star, Store, UserRound, Users, X } from 'lucide-react';
+import { Camera, LoaderCircle, Pencil, UserRound, Users, X } from 'lucide-react';
 import { AccountRequiredPrompt } from './AccountSheets';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 
@@ -11,8 +11,6 @@ type Activity = {
   events: { id: string; title: string; date: string; location: string; imageUrl: string }[];
   marketplaceListings: { id: string; category: string; title: string; price: string; location: string; description: string; images: { id: string; url: string; sortOrder: number }[] }[];
 };
-type Tab = 'posts' | 'reviews' | 'events' | 'marketplace';
-
 async function readApiJson<T>(response: Response): Promise<T> {
   const body = await response.text();
   try { return JSON.parse(body) as T; }
@@ -22,7 +20,6 @@ async function readApiJson<T>(response: Response): Promise<T> {
 export function PublicProfileSheet({ profileId, onClose }: { profileId: string; onClose: () => void }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [activity, setActivity] = useState<Activity>({ posts: [], reviews: [], events: [], marketplaceListings: [] });
-  const [tab, setTab] = useState<Tab>('posts');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -92,34 +89,41 @@ export function PublicProfileSheet({ profileId, onClose }: { profileId: string; 
   };
 
   return <>
-    <motion.button type="button" aria-label="Cerrar perfil público" onClick={onClose} className="fixed inset-0 z-[126] bg-black/70 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}/>
-    <motion.main data-desktop-sheet="side-right" role="dialog" aria-modal="true" aria-label="Perfil público" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 340 }} className="fixed inset-0 z-[127] flex w-full flex-col overflow-y-auto bg-[#111214] pb-[env(safe-area-inset-bottom)] text-white">
-      <header className="sticky top-0 z-10 flex items-center justify-between bg-[#111214]/85 px-5 py-3 backdrop-blur-xl"><span className="text-sm font-semibold">Perfil</span><div className="flex items-center gap-2">{profile?.isSelf && <button type="button" aria-label="Abrir ajustes" onClick={() => window.dispatchEvent(new Event('open-profile-settings'))} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.08]"><Settings className="h-4 w-4"/></button>}<button type="button" aria-label="Cerrar" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.08]"><X className="h-4 w-4"/></button></div></header>
-      <section className="px-5 pb-5 pt-2">
-        {loading ? <div className="flex min-h-44 items-center justify-center"><LoaderCircle className="h-6 w-6 animate-spin text-white/55"/></div> : error && !profile ? <p role="alert" className="py-12 text-center text-sm text-white/55">{error}</p> : profile && <>
-          <div className="flex items-center gap-4">{profile.picture ? <img src={profile.picture} alt="" referrerPolicy="no-referrer" className="h-20 w-20 rounded-full object-cover"/> : <span className="flex h-20 w-20 items-center justify-center rounded-full bg-[#292a2d]"><UserRound className="h-9 w-9 text-white/65"/></span>}<div className="min-w-0 flex-1"><h1 className="truncate text-2xl font-bold">{profile.name}</h1><p className="mt-1 text-xs text-white/45">Comunidad de Nochistlán</p></div>{profile.isSelf && <button type="button" onClick={() => { setEditName(profile.name); setEditBio(profile.bio); setPhotoData(''); setEditing(true); }} className="flex h-10 shrink-0 items-center gap-2 rounded-full bg-white/[0.09] px-3 text-xs font-semibold"><Pencil className="h-3.5 w-3.5"/>Editar</button>}</div>
-          {profile.bio && <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-white/75">{profile.bio}</p>}
-          <div className="mt-5 flex items-center gap-6"><div><strong>{profile.posts}</strong><span className="ml-1.5 text-xs text-white/50">publicaciones</span></div><div><strong>{profile.followers}</strong><span className="ml-1.5 text-xs text-white/50">seguidores</span></div><div><strong>{profile.following}</strong><span className="ml-1.5 text-xs text-white/50">siguiendo</span></div></div>
-          {!profile.isSelf && <button type="button" disabled={busy} onClick={() => void toggleFollow()} className={`mt-5 flex h-10 w-full items-center justify-center rounded-full text-sm font-bold disabled:opacity-60 ${profile.isFollowing ? 'bg-[#292a2d] text-white' : 'bg-[#1683f8] text-white'}`}>{busy ? 'Un momento…' : profile.isFollowing ? 'Siguiendo' : 'Seguir'}</button>}
+    <motion.button type="button" data-sheet-close aria-label="Cerrar perfil público" onClick={onClose} className="fixed inset-0 z-[126] bg-black/70 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}/>
+    <motion.main role="dialog" aria-modal="true" aria-label="Perfil público" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 340 }} className="fixed inset-0 z-[127] flex w-full flex-col overflow-y-auto bg-[#050506] pb-[env(safe-area-inset-bottom)] text-white">
+      <button type="button" data-sheet-close aria-label="Cerrar perfil" onClick={onClose} className="fixed right-4 top-[max(16px,env(safe-area-inset-top))] z-20 flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.08] text-white/80 backdrop-blur-md"><X className="h-4 w-4"/></button>
+      {loading ? <div className="flex min-h-64 items-center justify-center"><LoaderCircle className="h-6 w-6 animate-spin text-white/55"/></div> : error && !profile ? <p role="alert" className="py-20 text-center text-sm text-white/55">{error}</p> : profile && <>
+        <section className="mx-auto w-full max-w-5xl px-5 pb-6 pt-[max(56px,calc(env(safe-area-inset-top)+38px))] sm:px-8 sm:pt-16">
+          <div className="flex items-start gap-5 sm:gap-8">
+            {profile.picture ? <img src={profile.picture} alt="" referrerPolicy="no-referrer" className="h-[92px] w-[92px] shrink-0 rounded-full object-cover sm:h-32 sm:w-32"/> : <span className="flex h-[92px] w-[92px] shrink-0 items-center justify-center rounded-full bg-[#252629] sm:h-32 sm:w-32"><UserRound className="h-10 w-10 text-white/65 sm:h-14 sm:w-14"/></span>}
+            <div className="min-w-0 flex-1 pt-1 sm:pt-2">
+              <h1 className="pr-10 text-[22px] font-extrabold leading-tight tracking-[-.035em] sm:text-3xl">{profile.name}</h1>
+              <p className="mt-1 text-xs font-medium text-white/45 sm:text-sm">Perfil de la comunidad</p>
+              <div className="mt-4 flex max-w-[390px] items-center gap-5 sm:gap-8">
+                <div><strong className="block text-base font-bold tabular-nums sm:text-lg">{profile.posts}</strong><span className="text-[10px] text-white/45 sm:text-xs">publicaciones</span></div>
+                <div><strong className="block text-base font-bold tabular-nums sm:text-lg">{profile.followers}</strong><span className="text-[10px] text-white/45 sm:text-xs">seguidores</span></div>
+                <div><strong className="block text-base font-bold tabular-nums sm:text-lg">{profile.following}</strong><span className="text-[10px] text-white/45 sm:text-xs">siguiendo</span></div>
+              </div>
+            </div>
+          </div>
+          {profile.bio && <p className="mt-5 max-w-2xl whitespace-pre-wrap text-[13px] leading-relaxed text-white/80 sm:text-sm">{profile.bio}</p>}
+          <div className="mt-5 max-w-sm">
+            {profile.isSelf ? <button type="button" onClick={() => { setEditName(profile.name); setEditBio(profile.bio); setPhotoData(''); setEditing(true); }} className="flex h-10 w-full items-center justify-center gap-2 rounded-full bg-white/[0.1] px-4 text-xs font-semibold text-white"><Pencil className="h-3.5 w-3.5"/>Editar perfil</button> : <button type="button" disabled={busy} onClick={() => void toggleFollow()} className={`flex h-10 w-full items-center justify-center rounded-full text-xs font-bold disabled:opacity-60 ${profile.isFollowing ? 'bg-white/[0.1] text-white' : 'bg-white text-black'}`}>{busy ? 'Un momento…' : profile.isFollowing ? 'Siguiendo' : 'Seguir'}</button>}
+          </div>
           {error && <p role="alert" className="mt-3 text-xs text-rose-300">{error}</p>}
-        </>}
-      </section>
-      {profile && <>
-        <nav aria-label="Actividad del perfil" className="sticky top-[56px] z-10 flex overflow-x-auto border-y border-white/[0.07] bg-[#111214]/90 backdrop-blur-xl">{([{ key: 'posts', label: 'Posts', icon: Grid2X2 }, { key: 'reviews', label: 'Reseñas', icon: MessageCircle }, { key: 'events', label: 'Eventos', icon: CalendarDays }, { key: 'marketplace', label: 'Mercado', icon: Store }] as const).map(({ key, label, icon: Icon }) => <button key={key} type="button" onClick={() => setTab(key)} aria-pressed={tab === key} className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap px-2 py-3 text-[11px] font-semibold ${tab === key ? 'text-white' : 'text-white/45'}`}><Icon className="h-3.5 w-3.5 shrink-0"/><span>{label}</span><span className="text-white/35">{key === 'posts' ? profile.posts : key === 'reviews' ? profile.reviews : key === 'events' ? profile.events : profile.listings}</span></button>)}</nav>
-        <section className="flex-1 px-4 py-4">
-          {tab === 'posts' && (activity.posts.length ? <div className="grid grid-cols-3 gap-1">{activity.posts.map((post) => <div key={post.id} className="relative aspect-square overflow-hidden rounded-[16px] bg-[#202124]"><img src={post.imageUrl} alt={post.caption || 'Publicación'} loading="lazy" className="h-full w-full object-cover"/><span className="absolute inset-x-0 bottom-0 line-clamp-2 bg-gradient-to-t from-black/80 to-transparent p-2 pt-6 text-[10px]">{post.caption}</span></div>)}</div> : <Empty label="Todavía no hay publicaciones"/>)}
-          {tab === 'reviews' && (activity.reviews.length ? <div className="space-y-2">{activity.reviews.map((review) => <article key={review.id} className="rounded-[22px] bg-[#202124] p-4"><div className="flex items-center justify-between gap-2"><h2 className="truncate text-sm font-bold">{review.placeName}</h2><span className="flex items-center gap-1 text-sm text-blue-300"><Star className="h-3.5 w-3.5 fill-current"/>{review.rating}</span></div><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-white/65">{review.text}</p></article>)}</div> : <Empty label="Todavía no hay reseñas"/>)}
-          {tab === 'events' && (activity.events.length ? <div className="space-y-3">{activity.events.map((event) => <article key={event.id} className="overflow-hidden rounded-[22px] bg-[#202124]"><img src={event.imageUrl} alt="" className="aspect-video w-full object-cover"/><div className="p-4"><h2 className="text-base font-bold">{event.title}</h2><p className="mt-2 flex items-center gap-1.5 text-xs text-white/55"><CalendarDays className="h-3.5 w-3.5"/>{new Date(`${event.date}T12:00:00Z`).toLocaleDateString('es-MX', { dateStyle: 'medium', timeZone: 'UTC' })}</p><p className="mt-1 flex items-center gap-1.5 text-xs text-white/55"><MapPin className="h-3.5 w-3.5"/>{event.location}</p></div></article>)}</div> : <Empty label="Todavía no hay eventos"/>)}
-          {tab === 'marketplace' && (activity.marketplaceListings.length ? <div className="grid grid-cols-2 gap-2">{activity.marketplaceListings.map((listing) => <article key={listing.id} className="overflow-hidden rounded-[20px] bg-[#202124]"><div className="relative aspect-square bg-[#292a2d]">{listing.images[0]?.url ? <img src={listing.images[0].url} alt={listing.title} loading="lazy" className="h-full w-full object-cover"/> : <Store className="absolute left-1/2 top-1/2 h-9 w-9 -translate-x-1/2 -translate-y-1/2 text-white/25"/>}<span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[9px] font-semibold">{listing.category}</span></div><div className="p-3"><h2 className="line-clamp-2 text-xs font-bold">{listing.title}</h2><p className="mt-1 text-sm font-extrabold">{listing.price}</p><p className="mt-1 flex items-center gap-1 truncate text-[10px] text-white/45"><MapPin className="h-3 w-3 shrink-0"/>{listing.location}</p></div></article>)}</div> : <Empty label="Todavía no hay anuncios en el Mercado"/>)}
+        </section>
+        <section className="mx-auto min-h-[45vh] w-full max-w-5xl flex-1 px-5 pb-12 sm:px-8">
+          <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[.16em] text-white/45">Publicaciones</h2>
+          {activity.posts.length ? <div className="grid grid-cols-3 gap-1.5 sm:gap-2">{activity.posts.map((post) => <article key={post.id} className="relative aspect-square overflow-hidden rounded-[4px] bg-[#1b1c1f]">{post.imageUrl && <img src={post.imageUrl} alt={post.caption || 'Publicación'} loading="lazy" className="h-full w-full object-cover"/>}{post.caption && <span className="absolute inset-x-0 bottom-0 line-clamp-2 bg-gradient-to-t from-black/80 to-transparent p-2 pt-6 text-[10px]">{post.caption}</span>}</article>)}</div> : <Empty label="Todavía no hay publicaciones"/>}
         </section>
       </>}
     </motion.main>
     <AnimatePresence>
       {editing && profile?.isSelf && <>
-        <motion.button type="button" aria-label="Cerrar edición del perfil" onClick={() => { setEditing(false); setPhotoData(''); }} className="fixed inset-0 z-[138] bg-black/65 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}/>
+        <motion.button type="button" data-sheet-close aria-label="Cerrar edición del perfil" onClick={() => { setEditing(false); setPhotoData(''); }} className="fixed inset-0 z-[138] bg-black/65 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}/>
         <motion.section {...editSheetDrag} data-desktop-sheet="popup" role="dialog" aria-modal="true" aria-labelledby="edit-profile-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360, mass: .82 }} className="fixed inset-x-0 bottom-0 z-[139] mx-auto flex max-h-[85dvh] w-full max-w-lg flex-col overflow-y-auto rounded-t-[30px] bg-[#202124] px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-2 text-white shadow-2xl">
           <SheetDragHandle controls={editSheetDrag.dragControls} tone="dark" className="mb-2"/>
-          <header className="mb-5 flex items-center justify-between"><div><h2 id="edit-profile-title" className="text-xl font-bold">Editar perfil</h2><p className="mt-1 text-xs text-white/45">Actualiza cómo te ve la comunidad.</p></div><button type="button" aria-label="Cerrar edición del perfil" onClick={() => { setEditing(false); setPhotoData(''); }} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.08] text-white/75"><X className="h-4 w-4"/></button></header>
+          <header className="mb-5 flex items-center justify-between"><div><h2 id="edit-profile-title" className="text-xl font-bold">Editar perfil</h2><p className="mt-1 text-xs text-white/45">Actualiza cómo te ve la comunidad.</p></div><button type="button" data-sheet-close aria-label="Cerrar edición del perfil" onClick={() => { setEditing(false); setPhotoData(''); }} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.08] text-white/75"><X className="h-4 w-4"/></button></header>
           <div className="space-y-4">
             <label className="block text-xs font-semibold text-white/55">Nombre público<input value={editName} maxLength={60} onChange={(event) => setEditName(event.target.value)} className="mt-1.5 h-12 w-full rounded-[16px] bg-[#151618] px-4 text-sm text-white outline-none placeholder:text-white/25 focus:ring-1 focus:ring-blue-300/60"/></label>
             <label className="block text-xs font-semibold text-white/55">Biografía<textarea value={editBio} maxLength={280} rows={4} onChange={(event) => setEditBio(event.target.value)} placeholder="Cuéntale algo a la comunidad" className="mt-1.5 w-full resize-none rounded-[16px] bg-[#151618] px-4 py-3 text-sm text-white outline-none placeholder:text-white/25 focus:ring-1 focus:ring-blue-300/60"/><span className="mt-1 block text-right text-[10px] text-white/35">{editBio.length}/280</span></label>

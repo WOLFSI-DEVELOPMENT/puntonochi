@@ -243,6 +243,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
       ck.applyAll('.ck-apply', { radius: 23, smoothing: 1 });
       ck.applyAll('[data-detail-squircle]', { radius: 24, smoothing: 1 });
       ck.applyAll('[data-suggested-business]', { radius: 22, smoothing: 1 });
+      if (window.matchMedia('(max-width: 767px)').matches) ck.applyAll('[data-business-sheet-squircle]', { radius: 32, smoothing: 1 });
     }, 300);
     return () => clearTimeout(timer);
   }, [place, reviewsLoading, communityReviews.length]);
@@ -310,8 +311,8 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
         exit={{ y: "100%" }}
         transition={{ type: "spring", damping: 32, stiffness: 360, mass: 0.82 }}
         {...detailDrag}
-        data-no-tab-swipe data-desktop-sheet="side-right"
-        className="fixed inset-x-0 bottom-0 z-[61] h-[min(92dvh,900px)] max-h-[calc(100dvh-env(safe-area-inset-top))] overflow-hidden rounded-t-[32px] bg-[#171717] flex flex-col"
+        data-no-tab-swipe data-desktop-sheet="side-right" data-business-sheet-squircle
+        className="fixed inset-x-0 bottom-0 z-[61] h-[min(92dvh,900px)] max-h-[calc(100dvh-env(safe-area-inset-top))] overflow-hidden rounded-t-[32px] [corner-shape:squircle] bg-[#171717] flex flex-col"
       >
         <SheetDragHandle controls={detailDrag.dragControls} tone="dark" className="absolute inset-x-0 top-0 z-20" />
 
@@ -343,12 +344,12 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
             </button>
 
             {/* Logo */}
-            <div className="absolute -bottom-10 left-5 w-20 h-20 rounded-full border-4 border-[#171717] bg-[#292a2d] overflow-hidden">
+            <div className="absolute -bottom-10 left-5 z-10 w-20 h-20 rounded-full border-4 border-[#171717] bg-[#292a2d] overflow-hidden">
               <img src={place.logo} alt={place.name} className="w-full h-full object-cover" />
             </div>
           </div>
 
-          <div className="px-5 pt-12 pb-6">
+          <div className="relative z-[1] -mt-7 rounded-t-[32px] [corner-shape:squircle] bg-[#202124] px-5 pt-20 pb-6">
             <h1 className="mb-1 text-[28px] font-bold leading-tight text-neutral-900"><VerifiedBusinessName name={place.name}/></h1>
             <p className="text-[15px] font-medium text-neutral-600">
               {place.category} • <span className="text-[#1a73e8] hover:underline cursor-pointer">{place.location}</span>
@@ -864,16 +865,17 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
       </AnimatePresence>
       <AnimatePresence>
         {showDigitalCard && <>
-          <motion.button type="button" aria-label="Cerrar tarjeta digital" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowDigitalCard(false)} className="fixed inset-0 z-[88] cursor-default bg-black/55 backdrop-blur-sm" />
+          <motion.button type="button" data-sheet-close aria-label="Cerrar tarjeta digital" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowDigitalCard(false)} className="fixed inset-0 z-[88] cursor-default bg-black/55 backdrop-blur-sm" />
           <motion.section data-desktop-sheet="popup" role="dialog" aria-modal="true" aria-labelledby="digital-card-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360, mass: .82 }} {...digitalCardDrag} className="fixed inset-x-0 bottom-0 z-[89] mx-auto flex max-h-[94dvh] w-full max-w-[520px] flex-col overflow-y-auto rounded-t-[30px] bg-[#202124] px-6 pb-[max(24px,env(safe-area-inset-bottom))] pt-3 text-white shadow-2xl">
             <SheetDragHandle controls={digitalCardDrag.dragControls} tone="dark" className="-mt-5 mb-3" />
             <div className="mb-4 flex items-center justify-between px-1">
               <div><h3 id="digital-card-title" className="text-center text-xl font-bold">Tarjeta digital</h3><p className="mt-1 text-center text-xs text-white/45">Comparte los datos de este negocio</p></div>
-              <button type="button" aria-label="Cerrar tarjeta digital" onClick={() => setShowDigitalCard(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[.08] text-white/70"><X className="h-4 w-4"/></button>
+              <button type="button" data-sheet-close aria-label="Cerrar tarjeta digital" onClick={() => setShowDigitalCard(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[.08] text-white/70"><X className="h-4 w-4"/></button>
             </div>
 
             <div className="flex min-h-0 flex-1 items-center justify-center py-2">
-              <article className={`relative isolate overflow-hidden text-[#171717] shadow-[0_18px_45px_rgba(0,0,0,.3)] transition-[width,height] duration-300 ${cardLandscape ? 'grid aspect-video w-full max-h-[32dvh] max-w-[440px] grid-cols-[1.35fr_.85fr] items-stretch gap-2 rounded-[26px] px-5 py-4 text-left' : 'flex aspect-[9/16] max-h-[43dvh] w-[min(68vw,270px)] flex-col items-center rounded-[26px] px-5 py-5 text-center'}`} style={{ backgroundColor: cardColor }}>
+              <article className={`relative isolate overflow-hidden text-[#171717] transition-[width,height] duration-300 ${cardLandscape ? 'grid aspect-video w-full max-h-[32dvh] max-w-[440px] grid-cols-[1.35fr_.85fr] items-stretch gap-2 rounded-[26px] px-5 py-4 text-left' : 'flex aspect-[9/16] max-h-[43dvh] w-[min(68vw,270px)] flex-col items-center rounded-[26px] px-5 py-5 text-center'}`} style={{ backgroundColor: cardColor }}>
+                <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 rounded-[inherit] bg-white/25 backdrop-blur-xl" />
                 <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-12 -z-10 h-36 w-36 rounded-full bg-white/20 blur-2xl"/>
                 <div className={`flex min-w-0 flex-col ${cardLandscape ? 'items-start justify-center pr-1' : 'items-center'}`}>
                   {place.logo && <img src={place.logo} alt="" className={`mb-2 rounded-full border-2 border-black/10 object-cover ${cardLandscape ? 'h-8 w-8' : 'h-12 w-12'}`}/>}
@@ -911,10 +913,10 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
       </AnimatePresence>
       <AnimatePresence>
         {showHypeSheet && <>
-          <motion.button type="button" aria-label="Cerrar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowHypeSheet(false)} className="fixed inset-0 z-[120] cursor-default bg-black/65 backdrop-blur-sm" />
+          <motion.button type="button" data-sheet-close aria-label="Cerrar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowHypeSheet(false)} className="fixed inset-0 z-[120] cursor-default bg-black/65 backdrop-blur-sm" />
           <motion.section data-desktop-sheet="popup" role="dialog" aria-modal="true" aria-labelledby="hype-sheet-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 330 }} className="fixed inset-x-0 bottom-0 z-[121] mx-auto w-full max-w-lg rounded-t-[30px] bg-[#111214] px-5 pb-[max(24px,env(safe-area-inset-bottom))] pt-3 text-white shadow-2xl">
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/30" />
-            <button type="button" onClick={() => setShowHypeSheet(false)} aria-label="Cerrar hoja" className="absolute right-4 top-3 flex h-9 w-9 items-center justify-center rounded-full text-white/55 hover:bg-white/10 hover:text-white"><X className="h-5 w-5"/></button>
+            <button type="button" onClick={() => setShowHypeSheet(false)} data-sheet-close aria-label="Cerrar hoja" className="absolute right-4 top-3 flex h-9 w-9 items-center justify-center rounded-full text-white/55 hover:bg-white/10 hover:text-white"><X className="h-5 w-5"/></button>
             <div className="mx-auto flex min-h-36 max-w-xs flex-col items-center justify-center text-center">
               <svg aria-hidden="true" viewBox="0 0 180 140" className="mb-2 h-32 w-40 overflow-visible">
                 <defs>

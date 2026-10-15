@@ -388,7 +388,9 @@
   color: #e8eaed !important;
   color-scheme: dark;
 }
-.dark [class*="bg-[#f8f9fa]"], .dark [class~="bg-white"], .dark .bg-white { background-color: #1e1e1e !important; }
+.dark [class*="bg-[#f8f9fa]"],
+.dark [class~="bg-white"]:not(button):not(a):not([role="button"]),
+.dark .bg-white:not(button):not(a):not([role="button"]) { background-color: #1e1e1e !important; }
 .dark [class*="from-[#f8f9fa]"] { --tw-gradient-from: #1e1e1e var(--tw-gradient-from-position) !important; --tw-gradient-to: rgba(30, 30, 30, 0) var(--tw-gradient-to-position) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important; }
 .dark [class*="bg-neutral-50"], .dark .bg-neutral-50 { background-color: #202124 !important; }
 .dark [class*="bg-neutral-100"], .dark .bg-neutral-100 { background-color: #2d2f31 !important; color: #ffffff !important; }
@@ -405,23 +407,13 @@
 .dark [class*="border-neutral-200"], .dark .border-neutral-200 { border-color: #5f6368 !important; }
 .dark [class*="border-white"] { border-color: #3c4043 !important; }
 .dark input:not(.search-input-fix):not([type="checkbox"]) { background-color: #202124 !important; color: #fff !important; }
+.dark input:not(.search-input-fix):not([type="checkbox"]).short-comment-input,
+input.short-comment-input { background: transparent !important; background-color: transparent !important; box-shadow: none !important; -webkit-appearance: none; appearance: none; }
+.dark input.short-comment-input:-webkit-autofill,
+input.short-comment-input:-webkit-autofill { -webkit-box-shadow: 0 0 0 1000px transparent inset !important; -webkit-text-fill-color: #fff !important; caret-color: #fff; }
 .dark input.search-input-fix, input.search-input-fix { background-color: transparent !important; background: transparent !important; }
 .dark input.ask-nochi-input, input.ask-nochi-input { background-color: transparent !important; background: transparent !important; }
 .dark .admin-login-button { background-color: #ffffff !important; color: #111111 !important; }
-/* Keep solid white call-to-action controls white in dark mode. The generic
-   surface rule above is only for white surfaces that belong to the dark UI. */
-.dark [class~="bg-white"][class~="text-black"],
-.dark [class~="bg-white"][class~="!text-black"],
-.dark [class~="!bg-white"][class~="text-black"],
-.dark [class~="!bg-white"][class~="!text-black"],
-.dark [class~="bg-white"][class*="text-[#202124]"],
-.dark [class~="!bg-white"][class*="text-[#202124]"],
-.dark [class~="bg-white"][class*="text-neutral-900"],
-.dark [class~="!bg-white"][class*="text-neutral-900"] {
-  background-color: #ffffff !important;
-  color: #111111 !important;
-}
-
 html.dark #app-root .home-footer {
   background-color: #ffffff !important;
   color: #202124 !important;

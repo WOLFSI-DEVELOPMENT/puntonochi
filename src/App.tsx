@@ -3,16 +3,16 @@ import { categories, visits, mockPlaces } from './data';
 import { Bookmark, ChevronRight, CloudSun, Flame, Instagram, Sparkles, MapPin, Star, Store, X, Timer } from 'lucide-react';
 import { BottomNav } from './components/BottomNav';
 import { ColoniasPage } from './components/ColoniasPage';
-const DiscoverPage = React.lazy(() => import('./components/DiscoverPage').then((module) => ({ default: module.DiscoverPage })));
+const ExploreVideoWireframe = React.lazy(() => import('./components/ExploreVideoWireframe').then((module) => ({ default: module.ExploreVideoWireframe })));
 import { CategoryPage } from './components/CategoryPage';
 import { AllCategoriesPage } from './components/AllCategoriesPage';
 import { DestacadosPage } from './components/DestacadosPage';
 import { ColoniaDetailPage } from './components/ColoniaDetailPage';
 import { BusinessDetailSheet } from './components/BusinessDetailSheet';
-import { HomeVideosSection } from './components/HomeVideosSection';
 import { FlipText } from './components/FlipText';
 import { VerifiedBusinessName } from './components/VerifiedBusinessName';
-import { HomeArticlesSection } from './components/HomeArticlesSection';
+const HomeVideosSection = React.lazy(() => import('./components/HomeVideosSection').then((module) => ({ default: module.HomeVideosSection })));
+const HomeArticlesSection = React.lazy(() => import('./components/HomeArticlesSection').then((module) => ({ default: module.HomeArticlesSection })));
 import { articleCatalog } from './data/articles-index';
 import { AutoLayoutRoot } from './layout/AutoLayout';
 const VideosPage = React.lazy(() => import('./components/VideosPage').then((module) => ({ default: module.VideosPage })));
@@ -41,6 +41,7 @@ import { Analytics } from '@vercel/analytics/react';
 import { getTotalHypes, HYPES_UPDATED_EVENT } from './hypes';
 import { getDailyDropChoices, getDailyDropQuestion } from './dailyDrop';
 import { findBusinessByRouteSlug, getBusinessPath } from './businessLinks';
+import { installAppLocalization } from './i18n';
 
 const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
 const WELCOME_SEEN_KEY = 'puntonochi-welcome-seen-v1';
@@ -105,6 +106,11 @@ declare global {
 
 export default function App() {
   const reduceMotion = useReducedMotion();
+  const [articlesNearView, setArticlesNearView] = useState(false);
+  const [videosNearView, setVideosNearView] = useState(false);
+  const articlesSectionRef = useRef<HTMLDivElement>(null);
+  const videosSectionRef = useRef<HTMLDivElement>(null);
+  useEffect(() => installAppLocalization(), []);
   useEffect(() => {
     document.documentElement.classList.add('dark');
   }, []);
@@ -202,6 +208,24 @@ export default function App() {
   const [selectedBusiness, setSelectedBusiness] = useState<Place | null>(init.initialBusiness);
   const [publicMenuId] = useState<string | null>(init.initialMenuId);
   const [activeTab, setActiveTab] = useState(init.initialTab);
+  useEffect(() => {
+    if (!('IntersectionObserver' in window)) { setArticlesNearView(true); setVideosNearView(true); return undefined; }
+    const observers = [
+      [articlesSectionRef.current, setArticlesNearView],
+      [videosSectionRef.current, setVideosNearView],
+    ] as const;
+    const activeObservers = observers.flatMap(([element, reveal]) => {
+      if (!element) return [];
+      const observer = new IntersectionObserver(([entry]) => {
+        if (!entry.isIntersecting) return;
+        reveal(true);
+        observer.disconnect();
+      }, { rootMargin: '450px 0px' });
+      observer.observe(element);
+      return [observer];
+    });
+    return () => activeObservers.forEach((observer) => observer.disconnect());
+  }, [activeTab]);
   const [timerEndAt, setTimerEndAt] = useState<number | null>(null);
   const [timerPausedFor, setTimerPausedFor] = useState<number | null>(null);
   const [timerRemainingDisplay, setTimerRemainingDisplay] = useState(0);
@@ -241,7 +265,7 @@ export default function App() {
   useEffect(() => {
     if (timerEndAt === null) return undefined;
     const update = () => { const left = Math.max(0, timerEndAt - Date.now()); setTimerRemainingDisplay(left); if (left <= 0) completeTimer(); };
-    update(); const interval = window.setInterval(update, 200);
+    update(); const interval = window.setInterval(update, 1000);
     return () => window.clearInterval(interval);
   }, [timerEndAt]);
   const dailyDropQuestion = getDailyDropQuestion();
@@ -903,8 +927,8 @@ export default function App() {
             </div>
           </section>}
 
-          <div><HomeArticlesSection onViewAll={() => setActiveTab('guias')} onOpenArticle={(slug) => { window.history.pushState({}, '', `/articulos/${encodeURIComponent(slug)}`); setActiveTab('guias'); }} /></div>
-          <div><HomeVideosSection onViewAll={() => setActiveTab('noticias')} /></div>
+          <div ref={articlesSectionRef} className="min-h-[220px]">{articlesNearView && <React.Suspense fallback={<div className="h-[180px] animate-pulse rounded-[24px] bg-white/[.04]"/>}><HomeArticlesSection onViewAll={() => setActiveTab('guias')} onOpenArticle={(slug) => { window.history.pushState({}, '', `/articulos/${encodeURIComponent(slug)}`); setActiveTab('guias'); }} /></React.Suspense>}</div>
+          <div ref={videosSectionRef} className="min-h-[220px]">{videosNearView && <React.Suspense fallback={<div className="h-[180px] animate-pulse rounded-[24px] bg-white/[.04]"/>}><HomeVideosSection onViewAll={() => setActiveTab('noticias')} /></React.Suspense>}</div>
 
           <section className="mb-10">
             <div className="mb-4 px-5">
@@ -1064,17 +1088,12 @@ export default function App() {
       )}
 
         {activeTab === 'explorar' && (
-          <motion.div key="explore-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}>
-          <React.Suspense fallback={<PageLoadingSkeleton page="explore"/>}>
-            <DiscoverPage 
-              key="discover" 
-              onSelectBusiness={(place) => setSelectedBusiness(place)} 
-              onPromoteBusiness={() => setShowBusinessPromotion(true)}
-              onOpenOwnProfile={signedInAccount ? () => setPublicProfileId(signedInAccount.id) : undefined}
-              account={signedInAccount}
-            />
+          <React.Suspense fallback={<div className="fixed inset-0 z-[80] bg-[#08090b]"/>}>
+            <ExploreVideoWireframe onClose={() => setActiveTab('inicio')} onRequireAccount={() => setShowAccountAuth(true)} onOpenBusiness={(business) => {
+              setActiveTab('inicio');
+              setSelectedBusiness(business);
+            }}/>
           </React.Suspense>
-          </motion.div>
         )}
         {activeTab === 'videos' && (
           <motion.div key="videos-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<PageLoadingSkeleton page="market"/>}><VideosPage key="videos" onSelectBusiness={(place) => setSelectedBusiness(place)} /></React.Suspense></motion.div>
@@ -1105,7 +1124,7 @@ export default function App() {
       <AnimatePresence>{legalDocument && <LegalPage document={legalDocument} onClose={() => { setLegalDocument(null); window.history.replaceState({}, '', '/'); }}/>}</AnimatePresence>
 
       {/* Bottom Navigation & Search */}
-      {activeTab !== 'ask-nochi' && !showAdminPage && !showStreakPage && !legalDocument && !(activeTab === 'videos' && marketplaceDetailOpen) && (
+      {activeTab !== 'ask-nochi' && activeTab !== 'explorar' && !showAdminPage && !showStreakPage && !legalDocument && !(activeTab === 'videos' && marketplaceDetailOpen) && (
         <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => { setSearchQuery(''); setShowSearch(false); }} onOpenProfile={() => setShowProfileSheet(true)} onSelectBusiness={(place) => setSelectedBusiness(place)} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} timerEndAt={timerEndAt} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onStopTimer={stopTimer} onTimerComplete={completeTimer} searchQuery={searchQuery} searchOpen={showSearch} />
       )}
 
@@ -1119,6 +1138,7 @@ export default function App() {
           <SearchPage
             key="search-page"
             query={searchQuery}
+            onSearchTerm={(term) => setSearchQuery(term)}
             onClose={() => { setSearchQuery(''); setShowSearch(false); }}
             onOpenEvents={() => setActiveTab('noticias')}
             onOpenMarketplace={() => setActiveTab('videos')}

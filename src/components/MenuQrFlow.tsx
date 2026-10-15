@@ -257,7 +257,7 @@ export function MenuQrFlow({ accountName, onClose, onSaved }: { accountName: str
   };
 
   return <main className="menu-qr-flow fixed inset-0 z-[100] overflow-y-auto bg-[#f4f4f2] text-[#171717]">
-    <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-black/[.08] bg-[#f4f4f2]/95 px-4 backdrop-blur sm:px-7"><button type="button" onClick={() => step === 'capture' ? onClose() : setStep('capture')} className="flex h-10 items-center gap-2 rounded-full px-3 text-sm font-semibold hover:bg-black/5"><ArrowLeft className="h-4 w-4"/>{step === 'capture' ? 'Crear' : step === 'edit' ? 'Foto del menú' : 'Terminado'}</button><span className="text-xs font-semibold text-black/45">Menú con QR</span><button type="button" onClick={onClose} aria-label="Cerrar" className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-black/5"><X className="h-5 w-5"/></button></header>
+    <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-black/[.08] bg-[#f4f4f2]/95 px-4 backdrop-blur sm:px-7"><button type="button" onClick={() => step === 'capture' ? onClose() : setStep('capture')} className="flex h-10 items-center gap-2 rounded-full px-3 text-sm font-semibold hover:bg-black/5"><ArrowLeft className="h-4 w-4"/>{step === 'capture' ? 'Crear' : step === 'edit' ? 'Foto del menú' : 'Terminado'}</button><span className="text-xs font-semibold text-black/45">Menú con QR</span><button type="button" onClick={onClose} data-sheet-close aria-label="Cerrar" className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-black/5"><X className="h-5 w-5"/></button></header>
 
     <div className="mx-auto w-full max-w-xl px-4 pb-10 pt-5 sm:px-7">
       {step === 'capture' && <>

@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Activity, ArrowRight, Bookmark, CalendarDays, Fingerprint, Flame, Hourglass, LogOut, UserRound, X } from 'lucide-react';
+import { Activity, ArrowRight, Bookmark, CalendarDays, Fingerprint, Flame, Globe2, Hourglass, LogOut, UserRound, X } from 'lucide-react';
 import type { Place } from '../types';
 import { mockPlaces } from '../data';
 import { DAILY_USE_KEY, getBookmarkedPlaceIds, getNavDesign, getProfileActivity, profileDateKey, setBookmarkedPlaceIds, setNavDesign, type NavDesign, type ProfileActivity } from '../profileStorage';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 import CornerKit from '@cornerkit/core';
 import { AccountAuthSheet, registerCurrentPasskey } from './AccountSheets';
+import { APP_LANGUAGES, getAppLanguage, getAppLanguageSetting, setAppLanguage, type AppLanguage, type AppLanguageSetting } from '../i18n';
 
 const profileCorners = new CornerKit();
+const AUTO_LANGUAGE_LABEL: Record<AppLanguage, string> = { es: 'Automático', en: 'Automatic' };
 type DailyUse = { totalDays: number; currentStreak: number };
 type UserAccount = { id: string; name: string; email: string; picture: string | null; phone?: string };
 type AccountContent = {
@@ -46,6 +48,8 @@ export function ProfileSheet({ onClose, onSelectBusiness, settingsOnly = false }
   const [activity, setActivity] = useState<ProfileActivity>(getProfileActivity);
   const [bookmarkIds, setBookmarkIds] = useState<string[]>(getBookmarkedPlaceIds);
   const [navDesign, setCurrentNavDesign] = useState<NavDesign>(getNavDesign);
+  const [languageSetting, setLanguageSetting] = useState<AppLanguageSetting>(getAppLanguageSetting);
+  const currentLanguage = getAppLanguage();
   const [account, setAccount] = useState<UserAccount | null>(null);
   const [accountContent, setAccountContent] = useState<AccountContent | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
@@ -106,6 +110,15 @@ export function ProfileSheet({ onClose, onSelectBusiness, settingsOnly = false }
   }, [settingsOnly]);
 
   useEffect(() => {
+    const syncLanguage = (event: Event) => {
+      const detail = (event as CustomEvent<{ language: AppLanguage; setting: AppLanguageSetting }>).detail;
+      setLanguageSetting(detail?.setting || getAppLanguageSetting());
+    };
+    window.addEventListener('puntonochi-language-changed', syncLanguage);
+    return () => window.removeEventListener('puntonochi-language-changed', syncLanguage);
+  }, []);
+
+  useEffect(() => {
     const url = new URL(window.location.href);
     if (!url.searchParams.has('accountAuth') && !url.searchParams.has('accountAuthError')) return;
     url.searchParams.delete('accountAuth');
@@ -146,10 +159,18 @@ export function ProfileSheet({ onClose, onSelectBusiness, settingsOnly = false }
   };
 
   return <>
-    <motion.button aria-label="Cerrar" onClick={onClose} className={`fixed inset-0 ${settingsOnly ? 'z-[129]' : 'z-[84]'} bg-black/60 backdrop-blur-sm`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+    <motion.button data-sheet-close aria-label="Cerrar" onClick={onClose} className={`fixed inset-0 ${settingsOnly ? 'z-[129]' : 'z-[84]'} bg-black/60 backdrop-blur-sm`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
     <motion.section {...sheetDrag} data-desktop-sheet="side-right" role="dialog" aria-modal="true" aria-label={settingsOnly ? 'Ajustes' : 'Perfil'} initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360, mass: 0.82 }} className={`fixed inset-x-0 bottom-0 ${settingsOnly ? 'z-[130]' : 'z-[85]'} mx-auto flex max-h-[92dvh] w-full max-w-[640px] flex-col overflow-hidden rounded-t-[32px] bg-[#202124] text-white shadow-2xl`}>
-      <div className="relative shrink-0 border-b border-white/[0.08] px-5 pb-4 pt-1"><SheetDragHandle controls={sheetDrag.dragControls}/><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">PUNTONOCHI · {settingsOnly ? 'PREFERENCIAS' : 'TU ESPACIO'}</p><h2 className="mt-1 text-2xl font-bold">{settingsOnly ? 'Ajustes' : 'Perfil'}</h2><button type="button" onClick={onClose} aria-label="Cerrar" className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.08]"><X className="h-5 w-5"/></button></div>
+      <div className="relative shrink-0 border-b border-white/[0.08] px-5 pb-4 pt-1"><SheetDragHandle controls={sheetDrag.dragControls}/><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">PUNTONOCHI · {settingsOnly ? 'PREFERENCIAS' : 'TU ESPACIO'}</p><h2 className="mt-1 text-2xl font-bold">{settingsOnly ? 'Ajustes' : 'Perfil'}</h2><button type="button" onClick={onClose} data-sheet-close aria-label="Cerrar" className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.08]"><X className="h-5 w-5"/></button></div>
       <div className="min-h-0 flex-1 touch-pan-y space-y-4 overflow-y-auto overscroll-contain px-5 py-5 pb-[calc(env(safe-area-inset-bottom)+32px)]">
+        <section data-profile-squircle className="rounded-[24px] bg-[#292a2d] p-4">
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><Globe2 className="h-[18px] w-[18px] text-blue-200"/><span>Idioma de la aplicación</span></div>
+          <p className="mb-3 text-xs leading-relaxed text-white/50">Elige el idioma de toda la interfaz. En automático usamos el idioma preferido de tu navegador y lo actualizamos si cambia.</p>
+          <select aria-label="Idioma de la aplicación" value={languageSetting} onChange={(event) => { const nextSetting = event.currentTarget.value as AppLanguageSetting; setLanguageSetting(nextSetting); setAppLanguage(nextSetting); }} className="search-input-fix h-12 w-full appearance-none rounded-2xl bg-[#202124] px-4 text-sm font-medium text-white outline-none ring-1 ring-white/[0.06] focus:ring-2 focus:ring-blue-300/50">
+            <option value="auto">{AUTO_LANGUAGE_LABEL[currentLanguage]} · {APP_LANGUAGES.find((option) => option.code === currentLanguage)?.nativeName}</option>
+            {APP_LANGUAGES.map((option) => <option key={option.code} value={option.code}>{option.nativeName}</option>)}
+          </select>
+        </section>
         {settingsOnly ? <><section data-profile-squircle className="rounded-[24px] bg-[#292a2d] p-4"><div className="mb-1 flex items-center gap-2 text-sm font-semibold"><span className="material-symbols-rounded text-[18px] text-blue-200">dock_to_bottom</span>Diseño de navegación</div><p className="mb-3 text-xs leading-relaxed text-white/50">Elige cómo quieres ver la barra inferior.</p><div className="grid grid-cols-2 gap-2.5">{([{ id: 'dynamic' as const, title: 'Dynamic', description: 'Brillo y movimiento', glass: false }, { id: 'simple' as const, title: 'Simple', description: 'Cristal esmerilado', glass: true }]).map((option) => <button key={option.id} type="button" aria-pressed={navDesign === option.id} onClick={() => chooseNavDesign(option.id)} className={`rounded-[20px] p-2.5 text-left transition-colors ${navDesign === option.id ? 'bg-blue-500/15 ring-1 ring-blue-300/70' : 'bg-[#202124] ring-1 ring-white/[0.06]'}`}><span className="relative mb-2 flex h-[58px] items-center justify-center overflow-hidden rounded-[17px] bg-[#111214]"><span className={`flex h-[34px] w-[90%] items-center justify-around rounded-full ${option.glass ? 'bg-[#292a2d]/80 backdrop-blur-xl' : 'bg-white/[0.12] shadow-[0_4px_12px_rgba(0,0,0,0.45)]'}`}>{['home', 'explore', 'smart_display', 'newspaper', 'search'].map((icon, index) => <span key={icon} className={`material-symbols-rounded flex h-[26px] w-[26px] items-center justify-center rounded-full text-[12px] ${index === 0 ? option.glass ? 'bg-[#414246] text-white' : 'bg-white/15 text-white' : 'text-white/55'}`}>{icon}</span>)}</span></span><span className="block text-[13px] font-bold">{option.title}</span><span className="mt-0.5 block text-[10px] text-white/45">{option.description}</span></button>)}</div></section>{account && <section className="rounded-[24px] bg-[#292a2d] p-4"><div className="flex items-center gap-3"><Fingerprint className="h-5 w-5 text-blue-200"/><div className="min-w-0 flex-1"><h3 className="text-sm font-bold">Acceso con passkey</h3><p className="mt-1 text-xs text-white/45">Usa huella, rostro o el bloqueo de tu dispositivo.</p></div></div><button type="button" disabled={passkeyBusy} onClick={async () => { setPasskeyBusy(true); setPasskeyFeedback(''); try { await registerCurrentPasskey(); setPasskeyFeedback('Passkey configurada.'); } catch (error) { setPasskeyFeedback(error instanceof Error ? error.message : 'No se pudo configurar la passkey.'); } finally { setPasskeyBusy(false); } }} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-blue-500 px-4 text-xs font-bold text-white disabled:opacity-50">{passkeyBusy ? 'Configurando…' : 'Configurar passkey'}</button>{passkeyFeedback && <p role="status" className="mt-3 text-center text-xs text-white/55">{passkeyFeedback}</p>}</section>}</> : account ? <>
 
         <section data-profile-squircle className="rounded-[24px] bg-[#292a2d] p-4">

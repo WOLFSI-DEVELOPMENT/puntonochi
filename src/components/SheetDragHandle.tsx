@@ -19,5 +19,5 @@ export function useSheetDrag(onDismiss: () => void) {
 }
 
 export function SheetDragHandle({ controls, tone = 'light', className = '' }: { controls: ReturnType<typeof useDragControls>; tone?: 'light' | 'dark'; className?: string }) {
-  return <div aria-hidden="true" onPointerDown={(event) => controls.start(event)} className={`flex h-8 shrink-0 cursor-grab touch-none items-center justify-center active:cursor-grabbing ${className}`}><div className={`h-1.5 w-12 rounded-full ${tone === 'dark' ? 'bg-black/20' : 'bg-white/25'}`} /></div>;
+  return <div data-sheet-drag-handle aria-hidden="true" onPointerDown={(event) => controls.start(event)} className={`flex h-8 shrink-0 cursor-grab touch-none items-center justify-center active:cursor-grabbing ${className}`}><div className={`h-1.5 w-12 rounded-full ${tone === 'dark' ? 'bg-black/20' : 'bg-white/25'}`} /></div>;
 }

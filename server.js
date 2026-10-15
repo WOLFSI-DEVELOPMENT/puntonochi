@@ -2060,6 +2060,142 @@ app.get('/api/community-posts/feed', requireNeon, async (req, res) => {
   }
 });
 
+const shortVideoCatalog = [
+  { id: 'puntonochi-short-1', videoUrl: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1790910290/Untitled_video_4_edhg8f.mp4' },
+  { id: 'puntonochi-short-2', videoUrl: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1790279115/Earth_zoomed_from_space_20260924134241_jkhbtw.mp4' },
+  { id: 'puntonochi-short-3', videoUrl: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1790871656/Expo_Eventos_2026_qekh1y.mp4' },
+  { id: 'ayuntamiento-short-1', videoUrl: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1792028431/Video-37742_mqjpu6.mp4' },
+  { id: 'ayuntamiento-short-2', videoUrl: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1792028583/Video-38656_sc5f2h.mp4' },
+  { id: 'ayuntamiento-short-3', videoUrl: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1792028784/Video-75824_tev9f7.mp4' },
+  { id: 'hotel-nochistlan-short-1', videoUrl: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1792029646/Video-44459_hxywo3.mp4' },
+];
+let shortsSchemaReady;
+const ensureShortsSchema = () => {
+  if (!shortsSchemaReady) shortsSchemaReady = (async () => {
+    await ensureAccountSchema();
+    await sql`CREATE TABLE IF NOT EXISTS short_videos (
+      id TEXT PRIMARY KEY,
+      video_url TEXT NOT NULL,
+      total_likes INTEGER NOT NULL DEFAULT 0 CHECK (total_likes >= 0),
+      total_dislikes INTEGER NOT NULL DEFAULT 0 CHECK (total_dislikes >= 0),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+    await sql`CREATE TABLE IF NOT EXISTS short_video_reactions (
+      video_id TEXT NOT NULL REFERENCES short_videos(id) ON DELETE CASCADE,
+      user_google_sub TEXT NOT NULL REFERENCES user_accounts(google_sub) ON DELETE CASCADE,
+      reaction TEXT NOT NULL CHECK (reaction IN ('like', 'dislike')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (video_id, user_google_sub)
+    )`;
+    await sql`CREATE TABLE IF NOT EXISTS short_video_comments (
+      id TEXT PRIMARY KEY,
+      video_id TEXT NOT NULL REFERENCES short_videos(id) ON DELETE CASCADE,
+      author_google_sub TEXT NOT NULL REFERENCES user_accounts(google_sub) ON DELETE CASCADE,
+      body TEXT NOT NULL CHECK (char_length(body) BETWEEN 1 AND 500),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+    await sql`CREATE INDEX IF NOT EXISTS short_video_comments_feed_idx ON short_video_comments (video_id, created_at DESC)`;
+    await sql`CREATE INDEX IF NOT EXISTS short_video_reactions_user_idx ON short_video_reactions (user_google_sub, video_id)`;
+    for (const video of shortVideoCatalog) {
+      await sql`INSERT INTO short_videos (id, video_url) VALUES (${video.id}, ${video.videoUrl})
+        ON CONFLICT (id) DO UPDATE SET video_url = EXCLUDED.video_url, updated_at = NOW()`;
+    }
+  })().catch((error) => { shortsSchemaReady = undefined; throw error; });
+  return shortsSchemaReady;
+};
+
+app.get('/api/shorts', requireNeon, async (req, res) => {
+  try {
+    await ensureShortsSchema();
+    const account = await getAccountSession(req);
+    const videos = await sql`SELECT video.id, video.video_url AS "videoUrl", video.total_likes AS likes,
+      video.total_dislikes AS dislikes,
+      (SELECT COUNT(*)::INTEGER FROM short_video_comments AS comment WHERE comment.video_id = video.id) AS "commentCount",
+      (SELECT reaction FROM short_video_reactions AS own_reaction WHERE own_reaction.video_id = video.id AND own_reaction.user_google_sub = ${account?.id || ''}) AS "myReaction"
+      FROM short_videos AS video ORDER BY CASE WHEN video.id LIKE 'puntonochi-short-%' THEN 0 WHEN video.id LIKE 'ayuntamiento-short-%' THEN 1 ELSE 2 END, video.id`;
+    res.set('Cache-Control', 'no-store');
+    res.json(videos);
+  } catch (error) {
+    console.error('Could not load PuntoShorts:', error);
+    res.status(500).json({ error: 'No se pudieron cargar las interacciones de los videos.' });
+  }
+});
+
+app.get('/api/shorts/:id/comments', requireNeon, async (req, res) => {
+  try {
+    await ensureShortsSchema();
+    const videoId = String(req.params.id).slice(0, 80);
+    const comments = await sql`SELECT comment.id, comment.body, comment.created_at AS "createdAt",
+      account.google_sub AS "authorId", account.display_name AS "authorName", account.picture_url AS "authorPicture"
+      FROM short_video_comments AS comment JOIN user_accounts AS account ON account.google_sub = comment.author_google_sub
+      WHERE comment.video_id = ${videoId} ORDER BY comment.created_at DESC LIMIT 100`;
+    res.set('Cache-Control', 'no-store');
+    res.json(comments);
+  } catch (error) {
+    console.error('Could not load PuntoShorts comments:', error);
+    res.status(500).json({ error: 'No se pudieron cargar los comentarios.' });
+  }
+});
+
+app.post('/api/shorts/:id/reactions', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  const reaction = req.body?.reaction;
+  if (!['like', 'dislike'].includes(reaction)) return res.status(400).json({ error: 'Elige Me gusta o No me gusta.' });
+  try {
+    await ensureShortsSchema();
+    const videoId = String(req.params.id).slice(0, 80);
+    const [video] = await sql`WITH previous AS MATERIALIZED (
+        SELECT reaction FROM short_video_reactions WHERE video_id = ${videoId} AND user_google_sub = ${req.account.id}
+      ), removed AS (
+        DELETE FROM short_video_reactions WHERE video_id = ${videoId} AND user_google_sub = ${req.account.id} AND reaction = ${reaction} RETURNING reaction
+      ), saved AS (
+        INSERT INTO short_video_reactions (video_id, user_google_sub, reaction)
+        SELECT ${videoId}, ${req.account.id}, ${reaction} WHERE NOT EXISTS (SELECT 1 FROM removed)
+        ON CONFLICT (video_id, user_google_sub) DO UPDATE SET reaction = EXCLUDED.reaction, updated_at = NOW()
+        WHERE short_video_reactions.reaction IS DISTINCT FROM EXCLUDED.reaction
+        RETURNING reaction
+      ), reaction_state AS (
+        SELECT (SELECT reaction FROM previous LIMIT 1) AS old_reaction,
+          CASE WHEN EXISTS (SELECT 1 FROM removed) THEN NULL ELSE (SELECT reaction FROM saved LIMIT 1) END AS new_reaction
+      )
+      UPDATE short_videos AS video SET
+        total_likes = GREATEST(0, video.total_likes + (CASE WHEN reaction_state.new_reaction = 'like' THEN 1 ELSE 0 END) - (CASE WHEN reaction_state.old_reaction = 'like' THEN 1 ELSE 0 END)),
+        total_dislikes = GREATEST(0, video.total_dislikes + (CASE WHEN reaction_state.new_reaction = 'dislike' THEN 1 ELSE 0 END) - (CASE WHEN reaction_state.old_reaction = 'dislike' THEN 1 ELSE 0 END)),
+        updated_at = NOW()
+      FROM reaction_state WHERE video.id = ${videoId}
+      RETURNING video.total_likes AS likes, video.total_dislikes AS dislikes,
+        reaction_state.new_reaction AS "myReaction"`;
+    if (!video) return res.status(404).json({ error: 'No se encontró este video.' });
+    res.set('Cache-Control', 'no-store');
+    res.json(video);
+  } catch (error) {
+    console.error('Could not save PuntoShorts reaction:', error);
+    res.status(500).json({ error: 'No se pudo guardar tu reacción.' });
+  }
+});
+
+app.post('/api/shorts/:id/comments', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
+  if (!body || body.length > 500) return res.status(400).json({ error: 'Escribe un comentario de hasta 500 caracteres.' });
+  try {
+    await ensureShortsSchema();
+    const videoId = String(req.params.id).slice(0, 80);
+    const id = randomUUID();
+    const [comment] = await sql`INSERT INTO short_video_comments (id, video_id, author_google_sub, body)
+      SELECT ${id}, video.id, ${req.account.id}, ${body} FROM short_videos AS video WHERE video.id = ${videoId}
+      RETURNING id, body, created_at AS "createdAt"`;
+    if (!comment) return res.status(404).json({ error: 'No se encontró este video.' });
+    res.set('Cache-Control', 'no-store');
+    res.status(201).json({ ...comment, authorId: req.account.id, authorName: req.account.name, authorPicture: req.account.picture });
+  } catch (error) {
+    console.error('Could not save PuntoShorts comment:', error);
+    res.status(500).json({ error: 'No se pudo guardar tu comentario.' });
+  }
+});
+
 let guideSchemaReady;
 const ensureGuideSchema = () => {
   if (!guideSchemaReady) guideSchemaReady = (async () => {

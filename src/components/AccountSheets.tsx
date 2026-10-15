@@ -62,10 +62,10 @@ export function AccountAuthSheet({ onClose, initialMode = 'login' }: { onClose: 
   };
 
   return <>
-    <motion.button type="button" aria-label="Cerrar inicio de sesión" onClick={onClose} className="fixed inset-0 z-[119] bg-black/65 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+    <motion.button type="button" data-sheet-close aria-label="Cerrar inicio de sesión" onClick={onClose} className="fixed inset-0 z-[119] bg-black/65 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
     <motion.section {...drag} data-account-sheet data-desktop-sheet="popup" role="dialog" aria-modal="true" aria-label="Inicia sesión o crea una cuenta" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%', transition: { type: 'spring', damping: 38, stiffness: 240, mass: 1 } }} transition={{ type: 'spring', damping: 32, stiffness: 360 }} className="fixed inset-x-[5px] bottom-[5px] z-[120] mx-auto w-auto max-w-[460px] rounded-[32px] bg-[#202124] px-7 pb-[max(20px,env(safe-area-inset-bottom))] pt-3 text-white shadow-2xl">
       <SheetDragHandle controls={drag.dragControls}/>
-      <button type="button" onClick={onClose} aria-label="Cerrar" className="absolute right-3 top-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.08]"><X className="h-4 w-4"/></button>
+      <button type="button" onClick={onClose} data-sheet-close aria-label="Cerrar" className="absolute right-3 top-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.08]"><X className="h-4 w-4"/></button>
       <div className="mb-6 pr-11"><h2 className="text-xl font-extrabold leading-tight">{step === 'phone' ? (mode === 'login' ? 'Inicia sesión' : 'Crea tu cuenta') : step === 'passkey' ? 'Cuenta creada' : 'Inicia sesión o crea una cuenta'}</h2><p className="mt-2 text-xs text-white/45">{step === 'phone' ? 'Usa tu teléfono y contraseña.' : step === 'passkey' ? 'Agrega una passkey para acceder más rápido y con seguridad.' : 'Tu actividad y comunidad, en un solo lugar.'}</p></div>
       {step === 'methods' ? <>
         <button type="button" onClick={() => { setError(''); setStep('phone'); }} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white text-sm font-bold text-[#202124] transition active:scale-[.99]"><Phone className="h-4 w-4"/>Continuar con teléfono</button>
@@ -96,10 +96,10 @@ export function AccountRequiredPrompt({ onClose, message = 'Crea una cuenta o in
   const [showAuth, setShowAuth] = useState(false);
   const drag = useSheetDrag(onClose);
   return <>
-    <motion.button type="button" aria-label="Cerrar" onClick={onClose} className="fixed inset-0 z-[108] bg-black/65 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+    <motion.button type="button" data-sheet-close aria-label="Cerrar" onClick={onClose} className="fixed inset-0 z-[108] bg-black/65 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
     <motion.section {...drag} data-desktop-sheet="popup" role="dialog" aria-modal="true" aria-label="Inicia sesión para continuar" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360 }} className="fixed inset-x-0 bottom-0 z-[109] mx-auto w-full max-w-[560px] rounded-t-[30px] bg-[#202124] px-5 pb-[calc(env(safe-area-inset-bottom)+26px)] pt-2 text-white shadow-2xl">
       <SheetDragHandle controls={drag.dragControls} />
-      <div className="flex items-center gap-3"><span className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-500 text-white"><UserRound className="h-6 w-6"/></span><div className="min-w-0 flex-1"><span className="inline-flex rounded-md bg-blue-500 px-2 py-0.5 text-[9px] font-extrabold tracking-wide text-white">BETA · PERFILES</span><h2 className="mt-1 text-xl font-bold">Únete a la comunidad</h2></div><button type="button" aria-label="Cerrar" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.08]"><X className="h-4 w-4"/></button></div>
+      <div className="flex items-center gap-3"><span className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-500 text-white"><UserRound className="h-6 w-6"/></span><div className="min-w-0 flex-1"><span className="inline-flex rounded-md bg-blue-500 px-2 py-0.5 text-[9px] font-extrabold tracking-wide text-white">BETA · PERFILES</span><h2 className="mt-1 text-xl font-bold">Únete a la comunidad</h2></div><button type="button" data-sheet-close aria-label="Cerrar" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.08]"><X className="h-4 w-4"/></button></div>
       <p className="mt-3 text-sm leading-relaxed text-white/55">{message}</p>
       <button type="button" onClick={() => setShowAuth(true)} className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white text-sm font-bold text-black">Iniciar sesión o crear cuenta <ArrowRight className="h-4 w-4"/></button>
     </motion.section>
