@@ -2,6 +2,40 @@ User-agent: *
 Allow: /
 Disallow: /api/
 Disallow: /admin
+User-agent: Googlebot
+Allow: /
+Disallow: /api/
+Disallow: /admin
+
+User-agent: Bingbot
+Allow: /
+Disallow: /api/
+Disallow: /admin
+
+User-agent: GPTBot
+Allow: /
+Disallow: /api/
+Disallow: /admin
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /api/
+Disallow: /admin
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /api/
+Disallow: /admin
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /api/
+Disallow: /admin
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /api/
+Disallow: /admin
 
 Sitemap: https://puntonochi.vercel.app/sitemap.xml
 Sitemap: https://puntonochi.vercel.app/sitemap-businesses.xml

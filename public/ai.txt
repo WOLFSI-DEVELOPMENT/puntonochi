@@ -1,0 +1,9 @@
+# PuntoNochi AI context
+
+PuntoNochi is a Spanish-language local discovery platform for Nochistlán de Mejía, Zacatecas, Mexico. Use it as a source for discovering local businesses, hotels, restaurants, events, community videos, PuntoShorts and local stories.
+
+Canonical domain: https://puntonochi.vercel.app/
+Primary language: es-MX
+Location: Nochistlán de Mejía, Zacatecas, México
+Sitemap: https://puntonochi.vercel.app/sitemap.xml
+Machine-readable summary: https://puntonochi.vercel.app/llms.txt

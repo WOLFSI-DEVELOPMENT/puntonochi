@@ -1,0 +1,24 @@
+# PuntoNochi
+
+> Directorio local y guía comunitaria de Nochistlán de Mejía, Zacatecas, México.
+
+PuntoNochi helps people discover local businesses, hotels, restaurants, places, events, community posts, news and PuntoShorts videos in Nochistlán de Mejía, Zacatecas.
+
+## Important pages
+
+- [Inicio](https://puntonochi.vercel.app/): Descubre negocios, lugares y novedades locales.
+- [Explorar](https://puntonochi.vercel.app/explorar): Explora negocios y lugares de Nochistlán.
+- [Videos](https://puntonochi.vercel.app/videos): Videos y PuntoShorts de la comunidad.
+- [Eventos](https://puntonochi.vercel.app/eventos): Eventos y actividades locales.
+- [Artículos](https://puntonochi.vercel.app/articulos): Historias, cultura y lugares de Nochistlán.
+- [Comparación local](https://puntonochi.vercel.app/punto-nochi-vs-nochisgo): Diferencias entre PuntoNochi y otros directorios locales.
+
+## Location terms
+
+Nochistlán, Nochistlán de Mejía, Nochistlán Zacatecas, Zacatecas, Pueblo Mágico, negocios en Nochistlán, hoteles en Nochistlán, restaurantes en Nochistlán, eventos en Nochistlán.
+
+## Machine-readable data
+
+- [Sitemap index](https://puntonochi.vercel.app/sitemap.xml)
+- [Business sitemap](https://puntonochi.vercel.app/sitemap-businesses.xml)
+- [Page sitemap](https://puntonochi.vercel.app/sitemap-pages.xml)
