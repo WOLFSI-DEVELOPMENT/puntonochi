@@ -605,6 +605,7 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (/^\/(?:reclamar\/hotelnochistlan|punto-nochi-vs-nochisgo)\/?$/.test(window.location.pathname)) return;
     let path = '/';
     if (legalDocument) {
       path = `/${legalDocument}`;
