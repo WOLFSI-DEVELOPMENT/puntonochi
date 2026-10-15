@@ -41,7 +41,7 @@ import { HotelProfileClaimPage } from './components/HotelProfileClaimPage';
 import { PuntoNochiComparisonPage } from './components/PuntoNochiComparisonPage';
 import { LegalPage, type LegalDocument } from './components/LegalPage';
 import { PageLoadingSkeleton } from './components/PageLoadingSkeleton';
-import { Analytics } from '@vercel/analytics/react';
+import { Analytics, track } from '@vercel/analytics/react';
 import { getTotalHypes, HYPES_UPDATED_EVENT } from './hypes';
 import { getDailyDropChoices, getDailyDropQuestion } from './dailyDrop';
 import { findBusinessByRouteSlug, getBusinessPath } from './businessLinks';
@@ -426,8 +426,11 @@ export default function App() {
   }, []);
 
   const finishWelcome = () => {
+    track('Welcome Continue', { destination: 'search' });
     try { localStorage.setItem(WELCOME_SEEN_KEY, 'true'); } catch { /* Welcome still closes if storage is unavailable. */ }
     setShowWelcome(false);
+    setSearchQuery('');
+    setShowSearch(true);
     setWelcomeTransitionDone(false);
     window.setTimeout(() => setWelcomeTransitionDone(true), 360);
   };
@@ -514,6 +517,7 @@ export default function App() {
     const timer = window.setTimeout(() => {
       const term = searchQuery.trim().replace(/\s+/g, ' ');
       if (!showSearch || term.length < 2) return;
+      track('Search Submitted');
       const recent = readLocalList(RECENT_SEARCHES_KEY).filter((item) => item.toLocaleLowerCase('es') !== term.toLocaleLowerCase('es'));
       try { localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify([term, ...recent].slice(0, 12))); } catch { /* Suggestions still work without storage. */ }
       void fetch('/api/activity/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: term }) }).catch(() => undefined);
@@ -530,6 +534,7 @@ export default function App() {
 
   useEffect(() => {
     if (!selectedBusiness) return;
+    track('Business Detail Opened', { category: selectedBusiness.category || 'unknown' });
     const recent = readLocalList(RECENT_PLACES_KEY).filter((id) => id !== selectedBusiness.id);
     try { localStorage.setItem(RECENT_PLACES_KEY, JSON.stringify([selectedBusiness.id, ...recent].slice(0, 20))); } catch { /* Optional personalization. */ }
     void fetch('/api/activity/click', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ placeId: selectedBusiness.id }) }).catch(() => undefined);
@@ -922,32 +927,6 @@ export default function App() {
           </section>
           <div className="flex flex-col">
           <React.Suspense fallback={<div className="mx-5 mb-10 h-[190px] animate-pulse rounded-[24px] bg-white/[.04]"/>}><HomeEventsSection onViewAll={() => setActiveTab('eventos')} onOpenEvent={(id) => { window.history.pushState({}, '', `/eventos/${encodeURIComponent(id)}`); setActiveTab('eventos'); }} /></React.Suspense>
-          {/* Personalized suggestions */}
-          <section className="mb-10">
-            <div className="px-5 mb-4">
-              <h2 className="text-2xl font-bold flex items-center gap-2"><Sparkles className="h-5 w-5 text-[#1a73e8]"/>{deviceLocation ? 'Cerca de ti' : 'Sugeridos'}</h2>
-              <p className="text-[15px] text-neutral-500 font-medium mt-0.5">{deviceLocation ? 'Negocios ordenados por distancia a tu ubicación' : 'Negocios para ti, según lo que buscas y guardas'}</p>
-            </div>
-
-            <div className="flex gap-4 overflow-x-auto px-5 pb-2 scrollbar-hide snap-x snap-mandatory">
-              {loading ? [1, 2, 3].map((item) => <div key={item} className="h-[220px] w-[250px] shrink-0 animate-pulse rounded-[28px] bg-neutral-200 snap-start" />) : suggestedPlaces.map((place) => (
-                <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
-                  <img src={place.images[0]} alt={place.name} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
-                  <div className="absolute left-4 right-4 top-4 flex items-center justify-between">
-                    <span className="rounded-full bg-black/35 px-3 py-1 text-xs font-semibold backdrop-blur-sm">{place.category}</span>
-                    {getBookmarkedPlaceIds().includes(place.id) && <Bookmark className="h-4 w-4 fill-white drop-shadow" />}
-                  </div>
-                  <div className="absolute bottom-4 left-4 right-4">
-                    <h3 className="line-clamp-2 text-lg font-bold leading-tight"><VerifiedBusinessName name={place.name}/></h3>
-                    <p className="mt-1 flex items-center gap-1 truncate text-xs text-white/80"><MapPin className="h-3 w-3 shrink-0"/>{distanceFromDevice(place, deviceLocation) !== null ? `${distanceFromDevice(place, deviceLocation)!.toFixed(1)} km de aquí` : place.location || place.address || 'Nochistlán'}</p>
-                    {place.rating > 0 && <p className="mt-1 flex items-center gap-1 text-xs text-white/85"><Star className="h-3 w-3 fill-current text-yellow-300"/>{place.rating.toFixed(1)}{place.reviewCount ? ` · ${place.reviewCount} reseñas` : ''}</p>}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </section>
-
           {/* By Category Section */}
           <section className="mb-10">
             <div 
@@ -1004,6 +983,32 @@ export default function App() {
                   );
                 })
               )}
+            </div>
+          </section>
+
+          {/* Personalized suggestions */}
+          <section className="mb-10">
+            <div className="px-5 mb-4">
+              <h2 className="text-2xl font-bold flex items-center gap-2"><Sparkles className="h-5 w-5 text-[#1a73e8]"/>{deviceLocation ? 'Cerca de ti' : 'Sugeridos'}</h2>
+              <p className="text-[15px] text-neutral-500 font-medium mt-0.5">{deviceLocation ? 'Negocios ordenados por distancia a tu ubicación' : 'Negocios para ti, según lo que buscas y guardas'}</p>
+            </div>
+
+            <div className="flex gap-4 overflow-x-auto px-5 pb-2 scrollbar-hide snap-x snap-mandatory">
+              {loading ? [1, 2, 3].map((item) => <div key={item} className="h-[220px] w-[250px] shrink-0 animate-pulse rounded-[28px] bg-neutral-200 snap-start" />) : suggestedPlaces.map((place) => (
+                <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
+                  <img src={place.images[0]} alt={place.name} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
+                  <div className="absolute left-4 right-4 top-4 flex items-center justify-between">
+                    <span className="rounded-full bg-black/35 px-3 py-1 text-xs font-semibold backdrop-blur-sm">{place.category}</span>
+                    {getBookmarkedPlaceIds().includes(place.id) && <Bookmark className="h-4 w-4 fill-white drop-shadow" />}
+                  </div>
+                  <div className="absolute bottom-4 left-4 right-4">
+                    <h3 className="line-clamp-2 text-lg font-bold leading-tight"><VerifiedBusinessName name={place.name}/></h3>
+                    <p className="mt-1 flex items-center gap-1 truncate text-xs text-white/80"><MapPin className="h-3 w-3 shrink-0"/>{distanceFromDevice(place, deviceLocation) !== null ? `${distanceFromDevice(place, deviceLocation)!.toFixed(1)} km de aquí` : place.location || place.address || 'Nochistlán'}</p>
+                    {place.rating > 0 && <p className="mt-1 flex items-center gap-1 text-xs text-white/85"><Star className="h-3 w-3 fill-current text-yellow-300"/>{place.rating.toFixed(1)}{place.reviewCount ? ` · ${place.reviewCount} reseñas` : ''}</p>}
+                  </div>
+                </button>
+              ))}
             </div>
           </section>
 

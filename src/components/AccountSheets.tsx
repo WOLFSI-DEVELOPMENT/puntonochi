@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import { track } from '@vercel/analytics/react';
 import { startAuthentication, startRegistration } from '@simplewebauthn/browser';
 import { ArrowLeft, ArrowRight, Facebook, Fingerprint, KeyRound, Phone, UserRound, X } from 'lucide-react';
 import CornerKit from '@cornerkit/core';
@@ -44,7 +45,7 @@ export function AccountAuthSheet({ onClose, initialMode = 'login' }: { onClose: 
     try {
       const data = await readResponse(await fetch(`/api/account/phone/${mode}`, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, password }) }));
       if (!data.account) throw new Error('No se recibió la cuenta.');
-      if (mode === 'signup') { window.dispatchEvent(new Event('account-session-updated')); setStep('passkey'); }
+      if (mode === 'signup') { track('Account Created', { method: 'phone' }); window.dispatchEvent(new Event('account-session-updated')); setStep('passkey'); }
       else finish();
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo completar el inicio de sesión.'); }
     finally { setBusy(false); }
