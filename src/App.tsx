@@ -638,10 +638,14 @@ export default function App() {
     let description = 'Descubre restaurantes, cafeterías, hoteles, servicios, videos y noticias de Nochistlán de Mejía, Zacatecas.';
     let noIndex = false;
     const routePath = window.location.pathname;
+    const hotelClaimRoute = /^\/reclamar\/hotelnochistlan\/?$/.test(routePath);
     const articleSlug = activeTab === 'guias' ? window.location.pathname.match(/^\/articulos\/([^/]+)\/?$/)?.[1] : undefined;
     const routeArticle = articleSlug ? articleCatalog.find((article) => article.slug === decodeURIComponent(articleSlug)) : undefined;
 
-    if (legalDocument === 'privacidad') {
+    if (hotelClaimRoute) {
+      title = 'Hotel Nochistlán | Perfil oficial en Nochistlán de Mejía, Zacatecas | PuntoNochi';
+      description = 'Reclama y administra el perfil oficial de Hotel Nochistlán en PuntoNochi. Publica PuntoShorts, eventos y novedades de Nochistlán de Mejía, Zacatecas.';
+    } else if (legalDocument === 'privacidad') {
       title = 'Política de privacidad | PuntoNochi';
       description = 'Consulta cómo PuntoNochi recopila, utiliza y protege información, incluidas las tecnologías publicitarias.';
     } else if (legalDocument === 'terminos') {
@@ -761,7 +765,18 @@ export default function App() {
     canonical.href = `${SEO_SITE_ORIGIN}${window.location.pathname}`;
 
     const pageUrl = `${SEO_SITE_ORIGIN}${window.location.pathname}`;
-    const pageSchema: Record<string, unknown> = routeArticle ? {
+    const pageSchema: Record<string, unknown> = hotelClaimRoute ? {
+      '@context': 'https://schema.org',
+      '@type': 'Hotel',
+      '@id': `${pageUrl}#hotel`,
+      name: 'Hotel Nochistlán',
+      description,
+      url: pageUrl,
+      image: `${SEO_SITE_ORIGIN}/hotel-nochistlan-avatar.jpg`,
+      address: { '@type': 'PostalAddress', addressLocality: 'Nochistlán de Mejía', addressRegion: 'Zacatecas', addressCountry: 'MX' },
+      areaServed: ['Nochistlán', 'Nochistlán de Mejía', 'Zacatecas'],
+      brand: { '@type': 'Brand', name: 'Hotel Nochistlán' },
+    } : routeArticle ? {
       '@context': 'https://schema.org',
       '@type': 'Article',
       headline: routeArticle.title,

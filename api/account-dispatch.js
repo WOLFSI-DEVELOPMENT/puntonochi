@@ -14,6 +14,13 @@ export default function accountDispatch(req, res) {
   }
 
   const accountPath = requestUrl.searchParams.get('__accountPath');
+  const claimPath = requestUrl.searchParams.get('__claimPath');
+  if (claimPath) {
+    if (!/^hotelnochistlan(?:\/claim)?$/.test(claimPath)) return res.status(404).json({ error: 'Claim route not found.' });
+    requestUrl.searchParams.delete('__claimPath');
+    req.url = `/api/profile-claims/${claimPath}${requestUrl.search}`;
+    return app(req, res);
+  }
   if (!accountPath) return res.status(404).json({ error: 'Account route not found.' });
   requestUrl.searchParams.delete('__accountPath');
   req.url = `/api/account/${accountPath}${requestUrl.search}`;

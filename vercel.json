@@ -3,6 +3,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/api/profile-claims/:slug/claim", "destination": "/api/account-dispatch?__claimPath=:slug/claim" },
+    { "source": "/api/profile-claims/:slug", "destination": "/api/account-dispatch?__claimPath=:slug" },
     { "source": "/api/notifications/subscribe", "destination": "/api/notifications?__notificationPath=subscribe" },
     { "source": "/api/notifications/vapid-public-key", "destination": "/api/notifications?__notificationPath=vapid-public-key" },
     { "source": "/sitemap-businesses.xml", "destination": "/api/sitemap-businesses" },
