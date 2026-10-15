@@ -1,4 +1,4 @@
-const CACHE_NAME = 'puntonochi-shell-v2';
+const CACHE_NAME = 'puntonochi-shell-v3';
 const APP_SHELL = ['/', '/manifest.webmanifest', '/pwa-192.png', '/favicon.png'];
 
 self.addEventListener('install', (event) => {
@@ -23,14 +23,20 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
 
   if (request.mode === 'navigate') {
+    const networkUpdate = fetch(request).then((response) => {
+      if (response.ok) {
+        const copy = response.clone();
+        return caches.open(CACHE_NAME).then((cache) => cache.put('/', copy)).then(() => response);
+      }
+      return response;
+    });
+    // A returning PWA should open from its saved shell immediately, even on a slow network.
+    // Refresh the shell in the background; use the network on the first visit when no copy exists.
+    event.waitUntil(networkUpdate.then(() => undefined).catch(() => undefined));
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put('/', copy)));
-          return response;
-        })
-        .catch(() => caches.match('/'))
+      caches.match('/')
+        .then((cached) => cached || networkUpdate)
+        .catch(() => networkUpdate)
     );
     return;
   }
