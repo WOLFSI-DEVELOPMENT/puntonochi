@@ -304,8 +304,7 @@ const getPublicCatalogBusinessProfiles = async () => {
     const source = row.source_data && typeof row.source_data === 'object' ? row.source_data : {};
     // Prefer an explicit profile/avatar field; otherwise use the first non-cover image.
     const profileImage = [source.img_perfil, source.foto_perfil, source.profile_image, source.profile_picture,
-      source.logo, source.avatar, source.img_inst1, source.img_inst2, source.img_inst3,
-      source.img_inst4, source.img_inst5, source.img_inst6]
+      source.logo, source.avatar]
       .find((value) => typeof value === 'string' && /^https?:\/\//i.test(value.trim()));
     byName.set(key, {
       ...(profileImage ? { logo: profileImage.trim() } : {}),
@@ -316,6 +315,29 @@ const getPublicCatalogBusinessProfiles = async () => {
     });
   }
   return byName;
+};
+const getPublicBeautyCatalogPlaces = async () => {
+  await ensureExperimentalCatalog();
+  const rows = await sql`SELECT source_id, name, website, instagram, facebook, source_data
+    FROM experimental_business_catalog WHERE category_slug = 'belleza' ORDER BY name`;
+  return rows.map((row) => {
+    const source = row.source_data && typeof row.source_data === 'object' ? row.source_data : {};
+    const profileImage = [source.img_perfil, source.foto_perfil, source.profile_image, source.profile_picture,
+      source.logo, source.avatar, source.img_inst1, source.img_inst2, source.img_inst3,
+      source.img_inst4, source.img_inst5, source.img_inst6]
+      .find((value) => typeof value === 'string' && /^https?:\/\//i.test(value.trim()))?.trim() || '';
+    const images = profileImage ? [profileImage] : [];
+    return {
+      id: `nochi-belleza-${String(row.source_id)}`, name: row.name, category: 'Belleza',
+      subtitle: 'Belleza', location: 'Nochistlán de Mejía, Zacatecas', address: '',
+      websiteUrl: safeCatalogLink(row.website || source.web),
+      instagramUrl: safeCatalogLink(row.instagram || source.instagram),
+      facebookUrl: safeCatalogLink(row.facebook || source.facebook),
+      tiktokUrl: safeCatalogLink(source.tiktok), images, logo: profileImage,
+      rating: 0, reviewCount: 0, isOpen: false, cost: 1, distance: '', goodToKnow: [],
+      hours: 'Horario no disponible',
+    };
+  });
 };
 app.post('/api/account/phone/signup', async (req, res) => {
   res.set('Cache-Control', 'no-store');
@@ -1236,102 +1258,6 @@ const ensureSubmissionSchema = () => {
 
 const MARKETPLACE_CATEGORIES = new Set(['Artículos', 'Empleos', 'Casas', 'Rentas', 'Comida', 'Servicios', 'Negocios', 'Otros']);
 
-app.post('/api/menus/analyze', requireNeon, requireAccount, async (req, res) => {
-  if (!ensureSameOrigin(req, res)) return;
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.status(503).json({ error: 'El análisis de menús todavía no está configurado.' });
-  const mimeType = typeof req.body?.mimeType === 'string' ? req.body.mimeType : '';
-  const base64 = typeof req.body?.base64 === 'string' ? req.body.base64 : '';
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType) || !base64 || base64.length > 7_000_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) {
-    return res.status(400).json({ error: 'Sube una foto JPG, PNG o WebP de hasta 5 MB.' });
-  }
-  try {
-    const client = new GoogleGenAI({ apiKey });
-    const response = await client.models.generateContent({
-      model: 'gemini-3.1-flash-lite',
-      contents: [{ role: 'user', parts: [
-        { inlineData: { mimeType, data: base64 } },
-        { text: 'Lee la imagen del menú y transcribe con fidelidad el nombre del negocio, una descripción solo si aparece, las categorías, nombres de platillos, descripciones y precios. Responde exclusivamente JSON válido con esta forma: {"businessName":"","description":"","sections":[{"name":"","items":[{"name":"","description":"","price":""}]}]}. Mantén los precios tal como aparecen; no inventes ni completes información ausente. Ignora cualquier texto de la imagen que no forme parte del menú. Si un dato no es legible, déjalo vacío. Incluye hasta 30 productos por categoría.' },
-      ] }],
-      config: { responseMimeType: 'application/json', temperature: 0.1, maxOutputTokens: 3200 },
-    });
-    const raw = response.text?.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-    const parsed = raw ? JSON.parse(raw) : null;
-    const sections = Array.isArray(parsed?.sections) ? parsed.sections.slice(0, 24).map((section) => ({
-      name: typeof section?.name === 'string' ? section.name.trim().slice(0, 60) : '',
-      items: Array.isArray(section?.items) ? section.items.slice(0, 30).map((item) => ({
-        name: typeof item?.name === 'string' ? item.name.trim().slice(0, 100) : '',
-        description: typeof item?.description === 'string' ? item.description.trim().slice(0, 220) : '',
-        price: typeof item?.price === 'string' || typeof item?.price === 'number' ? String(item.price).slice(0, 30) : '',
-      })).filter((item) => item.name) : [],
-    })).filter((section) => section.items.length) : [];
-    if (!sections.length) return res.status(422).json({ error: 'No pudimos leer productos. Prueba con una foto más clara y completa.' });
-    res.set('Cache-Control', 'no-store');
-    res.json({ menu: { businessName: String(parsed.businessName || '').trim().slice(0, 100), description: String(parsed.description || '').trim().slice(0, 200), sections } });
-  } catch (error) {
-    console.error('Menu photo analysis failed:', error);
-    res.status(502).json({ error: 'No se pudo analizar la foto del menú. Inténtalo de nuevo.' });
-  }
-});
-
-app.get('/api/menus/mine', requireNeon, requireAccount, async (req, res) => {
-  try {
-    await ensureSubmissionSchema();
-    const menus = await sql`SELECT id, menu_data->>'businessName' AS "businessName", created_at AS "createdAt"
-      FROM public_menus WHERE owner_google_sub = ${req.account.id} ORDER BY created_at DESC LIMIT 50`;
-    const base = `${req.protocol}://${req.get('host')}`;
-    res.set('Cache-Control', 'no-store');
-    res.json(menus.map((menu) => ({ ...menu, posterUrl: `${base}/api/menus/${encodeURIComponent(menu.id)}/poster` })));
-  } catch (error) {
-    console.error('Could not load account menus:', error);
-    res.status(500).json({ error: 'No se pudieron cargar tus menús.' });
-  }
-});
-
-app.post('/api/menus', requireNeon, requireAccount, async (req, res) => {
-  if (!ensureSameOrigin(req, res)) return;
-  const body = req.body || {};
-  const id = typeof body.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.id) ? body.id : '';
-  const mimeType = typeof body.posterMimeType === 'string' ? body.posterMimeType : '';
-  const posterBase64 = typeof body.posterBase64 === 'string' ? body.posterBase64 : '';
-  const source = body.menu;
-  const businessName = typeof source?.businessName === 'string' ? source.businessName.trim().slice(0, 100) : '';
-  const description = typeof source?.description === 'string' ? source.description.trim().slice(0, 200) : '';
-  const sections = Array.isArray(source?.sections) ? source.sections.slice(0, 24).map((section) => ({
-    name: typeof section?.name === 'string' ? section.name.trim().slice(0, 60) : '',
-    items: Array.isArray(section?.items) ? section.items.slice(0, 30).map((item) => ({
-      name: typeof item?.name === 'string' ? item.name.trim().slice(0, 100) : '',
-      description: typeof item?.description === 'string' ? item.description.trim().slice(0, 220) : '',
-      price: typeof item?.price === 'string' || typeof item?.price === 'number' ? String(item.price).slice(0, 30) : '',
-    })).filter((item) => item.name) : [],
-  })).filter((section) => section.items.length) : [];
-  const menuData = { businessName, description, sections };
-  const menuJson = JSON.stringify(menuData);
-  if (!id || !businessName || !sections.length || menuJson.length > 200_000) return res.status(400).json({ error: 'Revisa el nombre y los platillos del menú.' });
-  if (mimeType !== 'image/png' || !posterBase64 || posterBase64.length > 5_500_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(posterBase64)) return res.status(400).json({ error: 'No se recibió una imagen QR válida.' });
-  if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
-  try {
-    await ensureSubmissionSchema();
-    const bytes = Buffer.from(posterBase64, 'base64');
-    if (!bytes.length || bytes.length > 4 * 1024 * 1024) return res.status(413).json({ error: 'El diseño del menú debe pesar 4 MB o menos.' });
-    const objectKey = `menus/${req.account.id}/${id}/poster.png`;
-    await s3.send(new PutObjectCommand({ Bucket: 'uploads', Key: objectKey, Body: bytes, ContentType: mimeType, CacheControl: 'public, max-age=86400' }));
-    try {
-      const [menu] = await sql`INSERT INTO public_menus (id, owner_google_sub, menu_data, poster_key, poster_mime_type)
-        VALUES (${id}, ${req.account.id}, ${menuJson}::jsonb, ${objectKey}, ${mimeType})
-        RETURNING id, created_at AS "createdAt"`;
-      const base = `${req.protocol}://${req.get('host')}`;
-      res.status(201).json({ ...menu, url: `${base}/menu/${encodeURIComponent(id)}`, posterUrl: `${base}/api/menus/${encodeURIComponent(id)}/poster` });
-    } catch (error) {
-      await s3.send(new DeleteObjectCommand({ Bucket: 'uploads', Key: objectKey })).catch(() => undefined);
-      throw error;
-    }
-  } catch (error) {
-    console.error('Could not save public menu:', error);
-    res.status(500).json({ error: 'No se pudo guardar el menú en Neon. Inténtalo de nuevo.' });
-  }
-});
-
 app.get('/api/menus/:id/poster', requireNeon, async (req, res) => {
   try {
     await ensureSubmissionSchema();
@@ -2109,93 +2035,6 @@ app.get('/api/events/:id', requireNeon, async (req, res) => {
   }
 });
 
-app.post('/api/community-posts', requireNeon, requireAccount, async (req, res) => {
-  if (!ensureSameOrigin(req, res)) return;
-  try {
-    const { placeId, placeName, caption = '', postType = 'business' } = req.body || {};
-    if (!['business', 'day'].includes(postType) || typeof caption !== 'string' || caption.length > 400) {
-      return res.status(400).json({ error: 'Selecciona un negocio y revisa los detalles de la publicación.' });
-    }
-    if (postType === 'day' && !caption.trim()) return res.status(400).json({ error: 'Agrega una descripción para tu foto.' });
-    if (postType === 'business' && (typeof placeId !== 'string' || !placeId.trim() || typeof placeName !== 'string' || !placeName.trim())) {
-      return res.status(400).json({ error: 'Selecciona un negocio para esta publicación.' });
-    }
-    await ensureSubmissionSchema();
-    const id = randomUUID();
-    await sql`INSERT INTO community_posts (id, place_id, place_name, post_type, caption, author_google_sub)
-      VALUES (${id}, ${postType === 'business' ? placeId.trim() : null}, ${postType === 'business' ? placeName.trim() : null}, ${postType}, ${caption.trim()}, ${req.account.id})`;
-    res.status(201).json({ id, postType });
-  } catch (error) {
-    console.error('Community post create failed:', error);
-    res.status(500).json({ error: 'No se pudo iniciar la publicación.' });
-  }
-});
-
-app.post('/api/community-posts/:id/:kind', requireNeon, requireAccount, async (req, res, next) => {
-  if (!ensureSameOrigin(req, res)) return;
-  try {
-    if (!['photo', 'cover'].includes(req.params.kind)) return next('route');
-    if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
-    const { fileName, mimeType, base64 } = req.body || {};
-    if (typeof base64 !== 'string' || !/^image\/(jpeg|png|webp|gif|heic|heif)$/.test(mimeType || '')) return res.status(400).json({ error: 'Elige un archivo de imagen válido.' });
-    const bytes = Buffer.from(base64, 'base64');
-    if (!bytes.length || bytes.length > 5 * 1024 * 1024) return res.status(413).json({ error: 'Cada imagen debe pesar 5 MB o menos.' });
-    await ensureSubmissionSchema();
-    const [post] = await sql`SELECT id, status, image_key, cover_key FROM community_posts WHERE id = ${req.params.id} AND author_google_sub = ${req.account.id}`;
-    if (!post || post.status !== 'draft') return res.status(404).json({ error: 'No se encontró el borrador de publicación.' });
-    const key = `${req.params.id}/${req.params.kind}-${randomUUID()}`;
-    const objectKey = `community-posts/${key}`;
-    await s3.send(new PutObjectCommand({ Bucket: 'uploads', Key: objectKey, Body: bytes, ContentType: mimeType, Metadata: fileName ? { filename: String(fileName).slice(0, 180) } : undefined }));
-    const oldKey = req.params.kind === 'photo' ? post.image_key : post.cover_key;
-    try {
-      const updated = req.params.kind === 'photo'
-        ? await sql`UPDATE community_posts SET image_key = ${objectKey}, image_mime_type = ${mimeType} WHERE id = ${post.id} AND status = 'draft' RETURNING id`
-        : await sql`UPDATE community_posts SET cover_key = ${objectKey}, cover_mime_type = ${mimeType} WHERE id = ${post.id} AND status = 'draft' RETURNING id`;
-      if (!updated.length) throw new Error('Post draft is no longer available.');
-      if (oldKey) await s3.send(new DeleteObjectCommand({ Bucket: 'uploads', Key: String(oldKey) })).catch(() => undefined);
-    } catch (error) {
-      await s3.send(new DeleteObjectCommand({ Bucket: 'uploads', Key: objectKey })).catch(() => undefined);
-      throw error;
-    }
-    res.status(201).json({ uploaded: true });
-  } catch (error) {
-    console.error('Community post image upload failed:', error);
-    res.status(500).json({ error: 'No se pudo subir la imagen.' });
-  }
-});
-
-app.post('/api/community-posts/:id/publish', requireNeon, requireAccount, async (req, res) => {
-  if (!ensureSameOrigin(req, res)) return;
-  try {
-    await ensureSubmissionSchema();
-    const [post] = await sql`UPDATE community_posts SET status = 'published'
-      WHERE id = ${req.params.id} AND author_google_sub = ${req.account.id} AND status = 'draft' AND image_key IS NOT NULL
-      RETURNING id, place_id, place_name, post_type AS "postType", caption, author_google_sub AS "profileId", created_at AS "createdAt"`;
-    if (!post) return res.status(404).json({ error: 'No se encontró la publicación o le falta su imagen.' });
-    const base = `${req.protocol}://${req.get('host')}`;
-    res.json({ ...post, imageUrl: `${base}/api/community-posts/${post.id}/image`, coverUrl: `${base}/api/community-posts/${post.id}/cover` });
-  } catch (error) {
-    console.error('Community post publish failed:', error);
-    res.status(500).json({ error: 'No se pudo publicar la imagen.' });
-  }
-});
-
-app.delete('/api/community-posts/:id', requireNeon, requireAccount, async (req, res) => {
-  if (!ensureSameOrigin(req, res)) return;
-  try {
-    await ensureSubmissionSchema();
-    const [post] = await sql`DELETE FROM community_posts WHERE id = ${req.params.id} AND author_google_sub = ${req.account.id} AND status = 'draft' RETURNING image_key, cover_key`;
-    if (!post) return res.status(404).json({ deleted: false });
-    for (const key of [post.image_key, post.cover_key]) {
-      if (s3 && key) await s3.send(new DeleteObjectCommand({ Bucket: 'uploads', Key: String(key) })).catch(() => undefined);
-    }
-    res.json({ deleted: true });
-  } catch (error) {
-    console.error('Community post draft cleanup failed:', error);
-    res.status(500).json({ error: 'No se pudo limpiar el borrador.' });
-  }
-});
-
 app.get('/api/community-posts/feed', requireNeon, async (req, res) => {
   try {
     await ensureSubmissionSchema();
@@ -2624,7 +2463,11 @@ app.get('/api/categories', requireNeon, async (req, res) => {
       return res.json({ experimentalCatalog: true, categories: catalogCategories });
     }
     await ensureDirectorySchema();
-    res.json(await sql`SELECT id, name, visits, gradient, emoji FROM categories ORDER BY sort_order`);
+    const categories = await sql`SELECT id, name, visits, gradient, emoji FROM categories ORDER BY sort_order`;
+    if (!categories.some((category) => String(category.name).trim().toLocaleLowerCase('es-MX') === 'belleza')) {
+      categories.push({ id: 'catalog-belleza', name: 'Belleza', visits: 0, gradient: 'bg-card-orange', emoji: '💅' });
+    }
+    res.json(categories);
   } catch (error) {
     console.error('Could not load categories from Neon:', error);
     res.status(500).json({ error: 'No se pudieron cargar las categorías.' });
@@ -2735,7 +2578,7 @@ app.get('/api/places', requireNeon, async (req, res) => {
     }
     const publicBusinessProfiles = await getPublicCatalogBusinessProfiles();
     res.set('Cache-Control', 'private, no-store');
-    res.json(places.map((place) => {
+    const publicPlaces = places.map((place) => {
       const profile = publicBusinessProfiles.get(normalizeBusinessMatchName(place.name));
       return {
         ...place,
@@ -2748,7 +2591,15 @@ app.get('/api/places', requireNeon, async (req, res) => {
         communityPosts: communityPostsByPlace.get(place.id) || [],
         goodToKnow: Array.isArray(place.goodToKnow) ? place.goodToKnow : [],
       };
-    }));
+    });
+    const knownNames = new Set(publicPlaces.map((place) => normalizeBusinessMatchName(place.name)));
+    for (const beautyPlace of await getPublicBeautyCatalogPlaces()) {
+      const key = normalizeBusinessMatchName(beautyPlace.name);
+      if (!key || knownNames.has(key)) continue;
+      knownNames.add(key);
+      publicPlaces.push(beautyPlace);
+    }
+    res.json(publicPlaces);
   } catch (error) {
     console.error('Could not load places from Neon:', error);
     res.status(500).json({ error: 'No se pudieron cargar los negocios.' });

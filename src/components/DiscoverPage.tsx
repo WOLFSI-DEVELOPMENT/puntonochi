@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, Filter, Heart, House, Images, MapPin, Menu, MessageCircle, Plus, Search, Star, Store, UserRound, X } from 'lucide-react';
-import { CreatePostFlow } from './CreatePostFlow';
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, Filter, Heart, House, Images, MapPin, Menu, MessageCircle, Search, Star, Store, UserRound, X } from 'lucide-react';
 import { ProfileSheet } from './ProfileSheet';
 import { mockPlaces } from '../data';
 import { getBookmarkedPlaceIds } from '../profileStorage';
@@ -88,23 +87,6 @@ function AuthorAvatar({ picture, name, size = 'h-10 w-10' }: { picture?: string 
   </span>;
 }
 
-function StoriesRow({ posts, account, onCreate }: { posts: CommunityPost[]; account: AccountSummary | null; onCreate: () => void }) {
-  const storyPosts = posts.filter((post) => post.postType === 'day');
-  return <section aria-label="Momentos de la comunidad" className="mb-5">
-    <div className="mb-2 flex items-center justify-between px-1"><h2 className="text-sm font-bold text-white">Momentos</h2><span className="text-[10px] text-white/40">De Nochistlán</span></div>
-    <div className="flex gap-3 overflow-x-auto px-1 pb-1 scrollbar-hide">
-      <button type="button" onClick={onCreate} className="flex w-[66px] shrink-0 flex-col items-center gap-1.5 text-center">
-        <span className="relative flex h-[62px] w-[62px] items-center justify-center rounded-full border border-white/10 bg-[#24262a] p-1"><AuthorAvatar picture={account?.picture} name={account?.name} size="h-full w-full"/><span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-white text-black ring-2 ring-[#111214]"><Plus className="h-3 w-3" strokeWidth={2.8}/></span></span>
-        <span className="w-full truncate text-[10px] text-white/65">Tu momento</span>
-      </button>
-      {storyPosts.map((post) => <button type="button" key={post.id} onClick={() => document.getElementById(`community-post-${post.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className="flex w-[66px] shrink-0 flex-col items-center gap-1.5 text-center">
-        <span className="h-[62px] w-[62px] rounded-full bg-gradient-to-tr from-amber-400 via-pink-500 to-violet-500 p-[2px]"><span className="block h-full w-full rounded-full bg-[#111214] p-[2px]"><img src={post.imageUrl} alt="" loading="lazy" className="h-full w-full rounded-full object-cover"/></span></span>
-        <span className="w-full truncate text-[10px] text-white/65">{post.authorName || 'Comunidad'}</span>
-      </button>)}
-    </div>
-  </section>;
-}
-
 function CommunityPostCard({ post, onOpenProfile, onOpenImage }: { post: CommunityPost; onOpenProfile: (id: string) => void; onOpenImage: (url: string, alt: string) => void }) {
   const author = post.authorName || 'Comunidad de Nochistlán';
   return <article data-explore-corner id={`community-post-${post.id}`} className="explore-lazy-card community-feed-card overflow-hidden rounded-[26px] bg-[#1a1b1e]">
@@ -169,7 +151,6 @@ export function DiscoverPage({ onSelectBusiness, onPromoteBusiness, onOpenOwnPro
   onOpenOwnProfile?: () => void;
   account: AccountSummary | null;
 }) {
-  const [showCreateFlow, setShowCreateFlow] = useState(false);
   const [showProfile, setShowProfile] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return params.has('accountAuth') || params.has('accountAuthError');
@@ -319,7 +300,6 @@ export function DiscoverPage({ onSelectBusiness, onPromoteBusiness, onOpenOwnPro
         </AnimatePresence>
       </div>
       <div className="explore-top-right relative z-10 ml-auto flex items-center gap-2">
-        <button type="button" onClick={() => setShowCreateFlow(true)} aria-label="Crear publicación" title="Crear publicación" className="explore-round-control explore-top-create"><Plus className="h-5 w-5" strokeWidth={2.6}/></button>
         <button type="button" onClick={() => account && onOpenOwnProfile ? onOpenOwnProfile() : setShowProfile(true)} aria-label={account ? `Abrir perfil de ${account.name}` : 'Iniciar sesión o crear perfil'} className="explore-round-control explore-profile-button">
           {account?.picture ? <img src={account.picture} alt="" referrerPolicy="no-referrer" className="h-full w-full rounded-full object-cover"/> : account ? <span>{account.name.slice(0,1).toLocaleUpperCase('es-MX')}</span> : <UserRound className="h-5 w-5"/>}
         </button>
@@ -335,13 +315,12 @@ export function DiscoverPage({ onSelectBusiness, onPromoteBusiness, onOpenOwnPro
           {ambientImage ? <img aria-hidden="true" src={ambientImage} alt="" className="pointer-events-none absolute -inset-x-2 top-3 z-0 h-[calc(100%-8px)] w-[calc(100%+1rem)] scale-[.94] rounded-[55px] object-cover opacity-55 blur-[38px]" /> : <div aria-hidden="true" className="pointer-events-none absolute inset-x-2 top-5 z-0 h-[calc(100%-24px)] rounded-[55px] bg-[radial-gradient(ellipse_at_25%_20%,rgba(59,130,246,.34),transparent_45%),radial-gradient(ellipse_at_80%_80%,rgba(168,85,247,.32),transparent_48%)] blur-[38px]" />}
           <AnimatePresence initial={false} mode="popLayout" custom={cardDirection}><motion.div data-explore-corner key={discoveryCards[activeCardIndex]?.key} custom={cardDirection} variants={discoveryCardVariants} drag="x" dragDirectionLock dragConstraints={{ left: 0, right: 0 }} dragElastic={.12} onDragEnd={handleDragEnd} initial="enter" animate="center" exit="exit" transition={{ type: 'spring', stiffness: 190, damping: 27, mass: .9 }} className="absolute inset-x-0 top-0 z-10 h-[calc(100%-8px)] touch-pan-y cursor-grab overflow-hidden rounded-[55px] bg-[#1a1b1e] shadow-[0_22px_70px_rgba(0,0,0,.48)] active:cursor-grabbing">{discoveryCards[activeCardIndex] && renderDiscoveryCard(discoveryCards[activeCardIndex], onSelectBusiness, savePreferences, (url, alt) => setOpenedImage({ url, alt }), openEvent, (id) => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: id })), onPromoteBusiness)}</motion.div></AnimatePresence>
         </div>
-        : <div data-explore-corner className="flex min-h-[360px] flex-col items-center justify-center rounded-[55px] bg-[#1a1b1e] px-6 text-center"><p className="text-sm font-semibold text-white/85">{feedFilter === 'business' ? 'No encontramos negocios' : feedItems.length ? 'No hay contenido en esta categoría' : 'Aquí aparecerá la comunidad'}</p><p className="mt-2 max-w-xs text-xs leading-relaxed text-white/45">{feedFilter === 'business' ? 'Prueba con otro nombre o categoría.' : 'Comparte un momento o publica un evento para empezar.'}</p><button type="button" onClick={() => setShowCreateFlow(true)} className="mt-4 rounded-full bg-white px-4 py-2.5 text-xs font-bold text-black">Crear publicación</button></div>}
+        : <div data-explore-corner className="flex min-h-[360px] flex-col items-center justify-center rounded-[55px] bg-[#1a1b1e] px-6 text-center"><p className="text-sm font-semibold text-white/85">{feedFilter === 'business' ? 'No encontramos negocios' : feedItems.length ? 'No hay contenido en esta categoría' : 'Aquí aparecerá la comunidad'}</p><p className="mt-2 max-w-xs text-xs leading-relaxed text-white/45">{feedFilter === 'business' ? 'Prueba con otro nombre o categoría.' : 'Vuelve pronto para descubrir publicaciones y eventos de la comunidad.'}</p></div>}
         {discoveryCards.length > 1 && <div className="mt-4 flex items-center justify-center gap-6"><button type="button" aria-label="Anterior" onClick={() => moveCard(-1)} className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[.08] text-white/85 transition-colors hover:bg-white/[.14]"><ChevronLeft aria-hidden="true" className="h-6 w-6" strokeWidth={2}/></button><div className="flex min-h-12 items-center gap-2">{discoveryCards.slice(Math.max(0, activeCardIndex - 2), Math.min(discoveryCards.length, activeCardIndex + 3)).map((item) => <span key={item.key} className={`h-2 rounded-full transition-all ${item.key === discoveryCards[activeCardIndex]?.key ? 'w-6 bg-white' : 'w-2 bg-white/30'}`} />)}</div><button type="button" aria-label="Siguiente" onClick={() => moveCard(1)} className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[.08] text-white/85 transition-colors hover:bg-white/[.14]"><ChevronRight aria-hidden="true" className="h-6 w-6" strokeWidth={2}/></button></div>}
       </section>
     </div>
 
     <AnimatePresence>{openedImage && <motion.div role="dialog" aria-modal="true" aria-label={openedImage.alt} className="fixed inset-0 z-[100] flex cursor-zoom-out items-center justify-center bg-black/95 p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setOpenedImage(null)} onKeyDown={(event) => { if (event.key === 'Escape') setOpenedImage(null); }}><button type="button" data-sheet-close aria-label="Cerrar imagen" className="absolute right-4 top-[calc(env(safe-area-inset-top,0px)+16px)] z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white" onClick={() => setOpenedImage(null)}><X className="h-5 w-5"/></button><img src={openedImage.url} alt={openedImage.alt} className="max-h-full max-w-full cursor-default object-contain" onClick={(event) => event.stopPropagation()}/></motion.div>}</AnimatePresence>
-    <AnimatePresence>{showCreateFlow && <CreatePostFlow onClose={() => setShowCreateFlow(false)} onPromoteBusiness={() => setShowCreateFlow(false)} />}</AnimatePresence>
     <AnimatePresence>{showProfile && <ProfileSheet onClose={() => setShowProfile(false)} onSelectBusiness={onSelectBusiness} />}</AnimatePresence>
   </motion.main>;
 }

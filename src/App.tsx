@@ -18,7 +18,6 @@ import { AutoLayoutRoot } from './layout/AutoLayout';
 const VideosPage = React.lazy(() => import('./components/VideosPage').then((module) => ({ default: module.VideosPage })));
 const NewsPage = React.lazy(() => import('./components/NewsPage').then((module) => ({ default: module.NewsPage })));
 const ArticlesPage = React.lazy(() => import('./components/ArticlesPage').then((module) => ({ default: module.ArticlesPage })));
-const CreatePage = React.lazy(() => import('./components/CreatePage').then((module) => ({ default: module.CreatePage })));
 import { SearchPage, AskNochiPage } from './components/SearchPage';
 import { BusinessPromotionSheet } from './components/BusinessPromotionSheet';
 import { BusinessSubmissionSheet } from './components/BusinessSubmissionSheet';
@@ -165,7 +164,7 @@ export default function App() {
         initialTab = 'noticias';
       } else if (parts[0] === 'ask-nochi') {
         initialTab = 'ask-nochi';
-      } else if (parts[0] === 'explorar' || parts[0] === 'guardados' || parts[0] === 'videos' || parts[0] === 'mercado' || parts[0] === 'noticias' || parts[0] === 'mapa' || parts[0] === 'crear' || parts[0] === 'guias' || parts[0] === 'articulos') {
+      } else if (parts[0] === 'explorar' || parts[0] === 'guardados' || parts[0] === 'videos' || parts[0] === 'mercado' || parts[0] === 'noticias' || parts[0] === 'mapa' || parts[0] === 'guias' || parts[0] === 'articulos') {
         initialTab = parts[0] === 'mapa' || parts[0] === 'mercado' ? 'videos' : parts[0] === 'articulos' ? 'guias' : parts[0];
       } else if (parts[0] === 'negocio' && parts[1]) {
         initialBusiness = findBusinessByRouteSlug(parts[1], mockPlaces) || null;
@@ -322,7 +321,7 @@ export default function App() {
   const tabSwipeStart = useRef<{ x: number; y: number } | null>(null);
   const previousPrimaryTab = useRef(activeTab);
   const [tabDirection, setTabDirection] = useState(1);
-  const primaryTabs = ['inicio', 'explorar', 'videos', 'noticias', 'crear'] as const;
+  const primaryTabs = ['inicio', 'explorar', 'videos', 'noticias'] as const;
 
   useEffect(() => {
     const from = primaryTabs.indexOf(previousPrimaryTab.current as typeof primaryTabs[number]);
@@ -1120,9 +1119,6 @@ export default function App() {
         )}
         {activeTab === 'videos' && (
           <motion.div key="videos-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<PageLoadingSkeleton page="market"/>}><VideosPage key="videos" onSelectBusiness={(place) => setSelectedBusiness(place)} /></React.Suspense></motion.div>
-        )}
-        {activeTab === 'crear' && (
-          <motion.div key="create-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<PageLoadingSkeleton page="create"/>}><CreatePage account={signedInAccount}/></React.Suspense></motion.div>
         )}
         {activeTab === 'noticias' && (
           <motion.div key="news-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<PageLoadingSkeleton page="news"/>}><NewsPage key="noticias" /></React.Suspense></motion.div>

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useEffect, useRef, useState } from "react";
-import { AlarmClock, Bell, BookOpen, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Compass, Flag, Home, LayoutGrid, Mic, Newspaper, Pause, Play, Plus, Search, Square, Store, Timer, Trash2, UserRound, X } from "lucide-react";
+import { AlarmClock, Bell, BookOpen, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Compass, Flag, Home, LayoutGrid, Mic, Newspaper, Pause, Play, Search, Square, Store, Timer, Trash2, UserRound, X } from "lucide-react";
 import CornerKit from '@cornerkit/core';
 import { AnimatePresence, motion } from 'motion/react';
 import { getNavDesign, type NavDesign } from '../profileStorage';
@@ -281,7 +281,6 @@ const DEFAULT_MENU = [
   { id: "videos", label: "Mercado", icon: "storefront" },
   { id: "noticias", label: "Noticias", icon: "newspaper" },
   { id: "guias", label: "Artículos", icon: "menu_book" },
-  { id: "crear", label: "Crear", icon: "add" },
   { id: "ask-nochi", label: "Pregúntale a Nochi", icon: "auto_awesome" },
   { id: "voice-search", label: "Búsqueda por voz", icon: "mic" },
 ];
@@ -560,7 +559,7 @@ const OPEN_W = 480;
 const SEARCH_IDLE_W = 62;
 
 /* ---------- The navbar ---------- */
-export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch, onOpenProfile, onSelectBusiness, profilePicture, profileName, profileEmail, timerEndAt, onStartTimer, onPauseTimer, onResumeTimer, onStopTimer, searchQuery: externalSearchQuery, searchOpen: externalSearchOpen }) {
+export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch, onOpenProfile, onSelectBusiness, profilePicture, profileName, timerEndAt, onStartTimer, onPauseTimer, onResumeTimer, onStopTimer, searchQuery: externalSearchQuery, searchOpen: externalSearchOpen }) {
   const onChange = (id) => onChangeTab(({ home: 'inicio', explore: 'explorar' })[id] || id);
   const onSearchOpenChange = (open) => open ? onOpenSearch() : onCloseSearch();
   const avatarSrc = profilePicture;
@@ -575,8 +574,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
 
   const [active, setActive] = useState(appTab);
   const [navDesign, setCurrentNavDesign] = useState<NavDesign>(getNavDesign);
-  const isExperimentalAccount = profileEmail?.trim().toLocaleLowerCase('en-US') === 'survivalcreativeminecraftadven@gmail.com';
-  const experimentalNav = isExperimentalAccount && navDesign === 'experimental';
+  const experimentalNav = navDesign === 'experimental';
   const visibleTabs = experimentalNav
     ? [...TABS.slice(0, -1), { id: 'search', label: 'Search', icon: 'search' }, TABS[TABS.length - 1]]
     : TABS;
@@ -906,14 +904,13 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
             { id: 'guias', tab: 'guias', label: 'Artículos', Icon: BookOpen },
           ] as const).map(({ id, tab, label, Icon }) => {
             const selected = activeTab === tab;
-            return <button key={id} type="button" aria-label={label} aria-current={selected ? 'page' : undefined} title={label} onClick={() => select(id)} className={`relative flex min-w-[56px] max-w-[112px] flex-1 items-center justify-center text-white/60 transition-colors hover:text-white ${experimentalNav ? 'rounded-full bg-white/[.055] backdrop-blur-xl hover:bg-white/[.1]' : ''} ${selected ? 'text-white' : ''}`}>
+            return <button key={id} type="button" aria-label={label} aria-current={selected ? 'page' : undefined} title={label} onClick={() => select(id)} className={`relative flex min-w-[56px] max-w-[112px] flex-1 items-center justify-center text-white/60 transition-colors hover:text-white ${experimentalNav ? selected ? 'rounded-full bg-white/[.12] backdrop-blur-xl' : 'rounded-full bg-transparent' : ''} ${selected ? 'text-white' : ''}`}>
               <Icon aria-hidden="true" className="h-[23px] w-[23px]" strokeWidth={selected ? 2.25 : 1.8}/>
               {selected && !experimentalNav && <span className="absolute inset-x-1 bottom-0 h-[3px] rounded-t-full bg-[#6aa7ff]"/>}
             </button>;
           })}
         </div>
         <div className="flex flex-[1.1] items-center justify-end gap-2.5">
-          <button type="button" onClick={() => select('crear')} aria-label="Crear publicación" title="Crear" className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3a3b3c] text-white/80 transition-colors hover:bg-[#4b4c4d]"><Plus className="h-5 w-5"/></button>
           <button ref={desktopActionsRef} type="button" onClick={() => setMenuOpen((open) => !open)} aria-label="Acciones rápidas" aria-haspopup="menu" aria-expanded={menuOpen} title="Acciones rápidas" className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${menuOpen ? 'bg-[#4b4c4d] text-white' : 'bg-[#3a3b3c] text-white/80 hover:bg-[#4b4c4d]'}`}><LayoutGrid className="h-[19px] w-[19px]"/></button>
           {experimentalNav && <button type="button" onClick={() => onSearchOpenChange(true)} aria-label="Abrir búsqueda" title="Buscar" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[.08] text-white/85 backdrop-blur-xl transition-colors hover:bg-white/[.14]"><Search className="h-[19px] w-[19px]"/></button>}
           <button type="button" onClick={onOpenProfile} aria-label="Abrir perfil" title="Perfil" className={`flex h-10 w-10 items-center justify-center overflow-hidden rounded-full text-white/80 transition-colors ${experimentalNav ? 'bg-white/[.08] backdrop-blur-xl hover:bg-white/[.14]' : 'bg-[#3a3b3c] ring-2 ring-transparent hover:ring-white/20'}`}>
@@ -1027,9 +1024,9 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
                 placeItems: "center",
                 borderRadius: 999,
                 marginInline: experimentalNav ? 2 : 0,
-                background: experimentalNav ? (visualActive === id ? 'rgba(255,255,255,.17)' : 'rgba(255,255,255,.055)') : 'transparent',
-                backdropFilter: experimentalNav ? 'blur(14px) saturate(145%)' : undefined,
-                WebkitBackdropFilter: experimentalNav ? 'blur(14px) saturate(145%)' : undefined,
+                background: experimentalNav && visualActive === id ? 'rgba(255,255,255,.17)' : 'transparent',
+                backdropFilter: experimentalNav && visualActive === id ? 'blur(14px) saturate(145%)' : undefined,
+                WebkitBackdropFilter: experimentalNav && visualActive === id ? 'blur(14px) saturate(145%)' : undefined,
                 color: "#fff",
               }}
             >
