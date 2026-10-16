@@ -1,10 +1,10 @@
 import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ArrowRight, Bookmark, Clock3, Image as ImageIcon, MapPin, MessageCircle, Mic, Plus, Search, Star, X } from 'lucide-react';
+import { ArrowRight, Bookmark, CalendarDays, Clock3, Film, Image as ImageIcon, MapPin, MessageCircle, Mic, Plus, Search, Star, Users, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Place } from '../types';
 import CornerKit from '@cornerkit/core';
 import { VerifiedBusinessName } from './VerifiedBusinessName';
-import { isInstalledMobilePwa } from '../pwaDisplay';
+import { AYUNTAMIENTO_SHORTS } from '../shortsData';
 
 const ASK_RECENTS_KEY = 'puntonochi-ask-nochi-recent-v1';
 const AskNochiMap = lazy(() => import('./BusinessLocationMap').then((module) => ({ default: module.BusinessLocationMap })));
@@ -45,6 +45,16 @@ function allWordsMatch(words: string[], text: string) {
 }
 
 const SEARCH_RECENTS_KEY = 'puntonochi-recent-searches-v1';
+function shortSearchLabel(short: { id: string; title?: string; authorName?: string }) {
+  if (short.title?.trim()) return short.title.trim();
+  if (short.id === 'puntonochi-short-1') return 'Descubre Nochistlán';
+  if (short.id === 'puntonochi-short-2') return 'Nochistlán desde otra perspectiva';
+  if (short.id === 'puntonochi-short-3') return 'Expo Eventos 2026';
+  if (short.id.startsWith('ayuntamiento-short-')) return 'Ayuntamiento · actividades de la comunidad';
+  if (short.id.startsWith('hotel-nochistlan-')) return 'Hotel Nochistlán · hospedaje';
+  return short.authorName ? `Video de ${short.authorName}` : 'PuntoShorts';
+}
+
 function readRecentSearches() {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(SEARCH_RECENTS_KEY) || '[]');
@@ -71,7 +81,8 @@ type SearchPageProps = {
   onClose: () => void;
   onSelectBusiness: (place: Place) => void;
   onOpenEvents: () => void;
-  onOpenMarketplace: () => void;
+  onOpenShort: (id: string) => void;
+  onOpenProfile: (id: string) => void;
   places: Place[];
   categoryScoped: boolean;
   categoryName?: string;
@@ -346,10 +357,11 @@ function AskNochiSheet({ places, onClose, onSelectPlace }: { places: Place[]; on
   </AnimatePresence>;
 }
 
-export function SearchPage({ query, onClose, onSelectBusiness, onOpenEvents, onOpenMarketplace, places, categoryScoped, categoryName, onSearchTerm }: SearchPageProps) {
-  const [installedMobilePwa] = useState(isInstalledMobilePwa);
+export function SearchPage({ query, onClose, onSelectBusiness, onOpenEvents, onOpenShort, onOpenProfile, places, categoryScoped, categoryName, onSearchTerm }: SearchPageProps) {
+  const [activeKind, setActiveKind] = useState<'businesses' | 'events' | 'shorts' | 'profiles'>('businesses');
   const [events, setEvents] = useState<{ id: string; title: string; date: string; time?: string | null; location: string; description: string; imageUrl?: string }[]>([]);
-  const [listings, setListings] = useState<{ id: string; title: string; category: string; price: string; location: string; description: string; images?: { url: string }[] }[]>([]);
+  const [shorts, setShorts] = useState<{ id: string; videoUrl?: string; title?: string; description?: string; profileId?: string; authorName?: string; authorPicture?: string | null }[]>([]);
+  const [profiles, setProfiles] = useState<{ id: string; name: string; picture?: string | null; bio?: string }[]>([]);
   const touchStartY = useRef<number | null>(null);
   const deferredQuery = useDeferredValue(query);
   const normalized = normalizeSearchText(deferredQuery);
@@ -360,14 +372,25 @@ export function SearchPage({ query, onClose, onSelectBusiness, onOpenEvents, onO
     let active = true;
     void Promise.allSettled([
       fetch('/api/events').then((response) => response.ok ? response.json() : []),
-      fetch('/api/marketplace/listings').then((response) => response.ok ? response.json() : []),
-    ]).then(([eventResult, listingResult]) => {
+      fetch('/api/shorts').then((response) => response.ok ? response.json() : AYUNTAMIENTO_SHORTS.map((short) => ({ id: short.id, videoUrl: short.url, authorName: 'Ayuntamiento de Nochistlán' }))).catch(() => AYUNTAMIENTO_SHORTS.map((short) => ({ id: short.id, videoUrl: short.url, authorName: 'Ayuntamiento de Nochistlán' }))),
+    ]).then(([eventResult, shortResult]) => {
       if (!active) return;
       if (eventResult.status === 'fulfilled' && Array.isArray(eventResult.value)) setEvents(eventResult.value);
-      if (listingResult.status === 'fulfilled' && Array.isArray(listingResult.value)) setListings(listingResult.value);
+      if (shortResult.status === 'fulfilled' && Array.isArray(shortResult.value)) setShorts(shortResult.value);
     });
     return () => { active = false; };
   }, []);
+  useEffect(() => {
+    if (normalized.length < 2) { setProfiles([]); return; }
+    let active = true;
+    const timer = window.setTimeout(() => {
+      fetch(`/api/profiles/search?q=${encodeURIComponent(deferredQuery.trim())}`, { cache: 'no-store' })
+        .then((response) => response.ok ? response.json() : [])
+        .then((data) => { if (active && Array.isArray(data)) setProfiles(data); })
+        .catch(() => { if (active) setProfiles([]); });
+    }, 180);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [deferredQuery, normalized.length]);
   const indexedPlaces = useMemo(() => places.map((place) => ({
     place,
     name: normalizeSearchText(place.name),
@@ -390,9 +413,10 @@ export function SearchPage({ query, onClose, onSelectBusiness, onOpenEvents, onO
       .map(({ place }) => place);
   }, [indexedPlaces, normalized, words]);
 
-  const matchingEvents = useMemo(() => categoryScoped ? [] : events.filter((item) => allWordsMatch(words, normalizeSearchText([item.title, item.location, item.description].join(' ')))), [categoryScoped, events, words]);
-  const matchingListings = useMemo(() => categoryScoped ? [] : listings.filter((item) => allWordsMatch(words, normalizeSearchText([item.title, item.category, item.location, item.description].join(' ')))), [categoryScoped, listings, words]);
-  const totalResults = results.length + matchingEvents.length + matchingListings.length;
+  const matchingEvents = useMemo(() => events.filter((item) => allWordsMatch(words, normalizeSearchText([item.title, item.location, item.description].join(' ')))), [events, words]);
+  const matchingShorts = useMemo(() => shorts.filter((item) => allWordsMatch(words, normalizeSearchText([item.id, shortSearchLabel(item), item.description, item.authorName, 'Ayuntamiento Nochistlán PuntoNochi'].join(' ')))), [shorts, words]);
+  const matchingProfiles = profiles;
+  const visibleCount = activeKind === 'businesses' ? results.length : activeKind === 'events' ? matchingEvents.length : activeKind === 'shorts' ? matchingShorts.length : matchingProfiles.length;
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -400,34 +424,46 @@ export function SearchPage({ query, onClose, onSelectBusiness, onOpenEvents, onO
       cornerKit.applyAll('[data-search-image]', { radius: 19, smoothing: 1 });
     }, 80);
     return () => window.clearTimeout(timer);
-  }, [results.length, matchingEvents.length, matchingListings.length]);
+  }, [results.length, matchingEvents.length, matchingShorts.length, matchingProfiles.length]);
 
   return (
-    <motion.main onTouchStart={(event) => { touchStartY.current = event.touches[0]?.clientY ?? null; }} onTouchEnd={(event) => { const endY = event.changedTouches[0]?.clientY; if (touchStartY.current !== null && endY !== undefined && endY - touchStartY.current > 90) onClose(); touchStartY.current = null; }} style={installedMobilePwa ? { paddingTop: 'calc(max(env(safe-area-inset-top, 0px), 24px) + 12px)' } : undefined} className="fixed inset-0 z-[45] overflow-y-auto bg-[#101114]/75 pb-[calc(150px+env(safe-area-inset-bottom,0px))] pt-3 text-white backdrop-blur-2xl lg:pb-24 lg:pt-20" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-      <section className="mx-auto max-w-2xl px-4 pb-8">
-        <div className="fixed inset-x-0 bottom-[calc(74px+env(safe-area-inset-bottom,0px))] z-20 mx-auto w-full max-w-2xl px-4 lg:bottom-3">
-          <div role="search" className="flex h-[50px] items-center gap-3 rounded-full bg-white/[.08] px-4 text-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,.12),0_8px_24px_rgba(0,0,0,.16)] backdrop-blur-xl focus-within:bg-white/[.12]">
+    <>
+    <motion.button type="button" aria-label="Cerrar búsqueda" onClick={onClose} className="fixed inset-0 z-[44] bg-black/45 backdrop-blur-[3px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+    <motion.main role="dialog" aria-modal="true" aria-label="Buscar negocios, eventos, PuntoShorts y perfiles" onTouchStart={(event) => { touchStartY.current = event.touches[0]?.clientY ?? null; }} onTouchEnd={(event) => { const endY = event.changedTouches[0]?.clientY; if (touchStartY.current !== null && endY !== undefined && endY - touchStartY.current > 90) onClose(); touchStartY.current = null; }} className="fixed inset-x-0 bottom-0 z-[45] mx-auto flex h-[min(86dvh,760px)] max-w-2xl flex-col overflow-hidden rounded-t-[30px] border-t border-white/[.12] bg-[#202124]/90 pb-[env(safe-area-inset-bottom,0px)] text-white shadow-[0_-18px_70px_rgba(0,0,0,.5)] backdrop-blur-2xl" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 300 }}>
+      <section className="flex min-h-0 flex-1 flex-col">
+        <header className="shrink-0 px-4 pb-3 pt-3">
+          <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-white/25" />
+          <div className="flex items-center gap-2">
+          <div role="search" className="flex h-[50px] min-w-0 flex-1 items-center gap-3 rounded-full bg-white/[.09] px-4 text-white/70 backdrop-blur-xl focus-within:bg-white/[.13]">
             <Search aria-hidden="true" className="h-[18px] w-[18px] shrink-0 text-white/65" />
-            <input value={query} onChange={(event) => onSearchTerm(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') onClose(); }} placeholder="Buscar negocios, lugares o servicios" aria-label="Buscar negocios, lugares o servicios" autoComplete="off" className="min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-white/40" />
+            <input value={query} onChange={(event) => onSearchTerm(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') onClose(); }} placeholder="Buscar en Nochistlán" aria-label="Buscar negocios, eventos, videos y perfiles" autoComplete="off" className="min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-white/40" />
             <button type="button" aria-label="Buscar por voz" title="Buscar por voz" onClick={() => window.dispatchEvent(new Event('puntonochi-open-voice-search'))} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/65 transition-colors hover:bg-white/[.1] hover:text-white active:scale-95"><Mic aria-hidden="true" className="h-[18px] w-[18px]" /></button>
             {query && <button type="button" aria-label="Borrar búsqueda" onClick={() => onSearchTerm('')} className="flex h-7 w-7 items-center justify-center rounded-full text-white/55 hover:bg-white/[.08]"><X className="h-4 w-4" /></button>}
           </div>
-        </div>
-        {normalized.length < 2 ? <div className="space-y-5 rounded-[24px] bg-white/[0.06] p-5 text-sm text-white/65">
-          <p>{categoryScoped && categoryName ? `Busca negocios de ${categoryName}.` : 'Busca negocios, eventos o anuncios en México.'}</p>
-          {recentSearches.length > 0 && <div><p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/40"><Clock3 className="h-3.5 w-3.5"/>Búsquedas recientes</p><div className="flex flex-wrap gap-2">{recentSearches.map((term) => <button key={term} type="button" onClick={() => onSearchTerm(term)} className="rounded-full bg-white/[0.08] px-3 py-2 text-white/80 hover:bg-white/[0.13]">{term}</button>)}</div></div>}
-          <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/40">Lugares populares</p><div className="flex flex-wrap gap-2">{popularSuggestions.map((place) => <button key={place.id} type="button" onClick={() => { onClose(); onSelectBusiness(place); }} className="rounded-full bg-white/[0.08] px-3 py-2 text-white/80 hover:bg-white/[0.13]">{place.name}</button>)}</div></div>
-        </div> : <>
-          <h1 className="mb-4 text-xl font-bold">{categoryScoped && categoryName ? `${categoryName} · ${totalResults} resultados` : `Resultados (${totalResults})`}</h1>
-          <div className="space-y-3">
-            {results.map((place) => <BusinessCard key={`place-${place.id}`} place={place} onSelect={(item) => { onClose(); onSelectBusiness(item); }} />)}
-            {matchingEvents.map((item) => <button type="button" key={`event-${item.id}`} onClick={() => { onClose(); onOpenEvents(); }} className="w-full overflow-hidden rounded-[24px] bg-[#292a2d] text-left"><div className="flex items-center gap-3 p-3">{item.imageUrl ? <img src={item.imageUrl} alt="" className="h-20 w-24 shrink-0 rounded-2xl object-cover"/> : <span className="flex h-20 w-24 shrink-0 items-center justify-center rounded-2xl bg-white/10"><span className="material-symbols-rounded text-3xl">event</span></span>}<span className="min-w-0"><span className="block font-bold">{item.title}</span><span className="mt-1 block text-xs text-white/60">{item.date}{item.time ? ` · ${item.time}` : ''}</span><span className="mt-1 block truncate text-xs text-white/45">{item.location}</span></span></div></button>)}
-            {matchingListings.map((item) => <button type="button" key={`listing-${item.id}`} onClick={() => { onClose(); onOpenMarketplace(); }} className="w-full overflow-hidden rounded-[24px] bg-[#292a2d] text-left"><div className="flex items-center gap-3 p-3">{item.images?.[0]?.url ? <img src={item.images[0].url} alt="" className="h-20 w-24 shrink-0 rounded-2xl object-cover"/> : <span className="flex h-20 w-24 shrink-0 items-center justify-center rounded-2xl bg-white/10"><span className="material-symbols-rounded text-3xl">storefront</span></span>}<span className="min-w-0"><span className="block font-bold">{item.title}</span><span className="mt-1 block text-xs text-white/60">{item.category} · {item.price}</span><span className="mt-1 block truncate text-xs text-white/45">{item.location}</span></span></div></button>)}
-            {totalResults === 0 && <div className="rounded-[24px] bg-white/[0.06] px-4 py-7 text-center"><p className="text-sm font-semibold text-white/80">No encontramos resultados para “{deferredQuery.trim()}”.</p><p className="mt-1 text-sm text-white/55">Prueba con menos palabras o revisa la ortografía. También puedes explorar lugares populares.</p><div className="mt-4 flex flex-wrap justify-center gap-2">{popularSuggestions.slice(0, 3).map((place) => <button key={place.id} type="button" onClick={() => { onClose(); onSelectBusiness(place); }} className="rounded-full bg-white/[0.09] px-3 py-2 text-xs text-white/80">{place.name}</button>)}</div></div>}
+          <button type="button" aria-label="Cerrar búsqueda" onClick={onClose} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[.09] text-white/80 transition-colors hover:bg-white/[.15]"><X className="h-5 w-5"/></button>
           </div>
-        </>}
-        <button type="button" onClick={onClose} className="mx-auto mt-5 block rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-white/80">Cancelar búsqueda</button>
+          <div className="mt-3 flex gap-2 overflow-x-auto scrollbar-hide">
+            {([{ id: 'businesses', label: 'Negocios', Icon: MapPin }, { id: 'events', label: 'Eventos', Icon: CalendarDays }, { id: 'shorts', label: 'PuntoShorts', Icon: Film }, { id: 'profiles', label: 'Perfiles', Icon: Users }] as const).map(({ id, label, Icon }) => <button key={id} type="button" aria-pressed={activeKind === id} onClick={() => setActiveKind(id)} className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-xs font-semibold transition-colors ${activeKind === id ? 'bg-white text-[#17181a]' : 'bg-white/[.08] text-white/70 hover:bg-white/[.13]'}`}><Icon className="h-3.5 w-3.5"/>{label}</button>)}
+          </div>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6">
+          {normalized.length < 2 ? <div className="space-y-5 pt-2 text-sm text-white/65">
+            <p>{categoryScoped && categoryName ? `Busca negocios de ${categoryName}.` : 'Busca negocios, eventos, PuntoShorts y perfiles públicos.'}</p>
+            {recentSearches.length > 0 && <div><p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/40"><Clock3 className="h-3.5 w-3.5"/>Búsquedas recientes</p><div className="flex flex-wrap gap-2">{recentSearches.map((term) => <button key={term} type="button" onClick={() => onSearchTerm(term)} className="rounded-full bg-white/[0.08] px-3 py-2 text-white/80 hover:bg-white/[0.13]">{term}</button>)}</div></div>}
+            {activeKind === 'businesses' && <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/40">Lugares populares</p><div className="flex flex-wrap gap-2">{popularSuggestions.map((place) => <button key={place.id} type="button" onClick={() => { onClose(); onSelectBusiness(place); }} className="rounded-full bg-white/[0.08] px-3 py-2 text-white/80 hover:bg-white/[0.13]">{place.name}</button>)}</div></div>}
+          </div> : <>
+          <h1 className="mb-3 pt-2 text-sm font-semibold text-white/55">{activeKind === 'businesses' ? (categoryScoped && categoryName ? `${categoryName} · ${visibleCount}` : `Negocios · ${visibleCount}`) : `${({ events: 'Eventos', shorts: 'PuntoShorts', profiles: 'Perfiles públicos', businesses: 'Negocios' } as const)[activeKind]} · ${visibleCount}`}</h1>
+          <div className="space-y-3">
+            {activeKind === 'businesses' && results.map((place) => <BusinessCard key={`place-${place.id}`} place={place} onSelect={(item) => { onClose(); onSelectBusiness(item); }} />)}
+            {activeKind === 'events' && matchingEvents.map((item) => <button type="button" key={`event-${item.id}`} onClick={() => { onClose(); onOpenEvents(); }} className="w-full overflow-hidden rounded-[24px] bg-[#292a2d] text-left"><div className="flex items-center gap-3 p-3">{item.imageUrl ? <img src={item.imageUrl} alt="" className="h-20 w-24 shrink-0 rounded-2xl object-cover"/> : <span className="flex h-20 w-24 shrink-0 items-center justify-center rounded-2xl bg-white/10"><CalendarDays className="h-6 w-6"/></span>}<span className="min-w-0"><span className="block font-bold">{item.title}</span><span className="mt-1 block text-xs text-white/60">{item.date}{item.time ? ` · ${item.time}` : ''}</span><span className="mt-1 block truncate text-xs text-white/45">{item.location}</span></span></div></button>)}
+            {activeKind === 'shorts' && matchingShorts.map((item) => <button type="button" key={`short-${item.id}`} onClick={() => { onClose(); onOpenShort(item.id); }} className="flex w-full items-center gap-3 rounded-[22px] bg-[#292a2d] p-3 text-left"><span className="flex h-16 w-12 shrink-0 items-center justify-center rounded-[15px] bg-white/[.08]"><Film className="h-5 w-5 text-white/70"/></span><span className="min-w-0"><span className="block truncate font-bold">{shortSearchLabel(item)}</span><span className="mt-1 block line-clamp-2 text-xs text-white/55">{item.description || item.authorName || 'Videos de Nochistlán'}</span></span></button>)}
+            {activeKind === 'profiles' && matchingProfiles.map((profile) => <button type="button" key={profile.id} onClick={() => { onClose(); onOpenProfile(profile.id); }} className="flex w-full items-center gap-3 rounded-[22px] bg-[#292a2d] p-3 text-left"><span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/[.1] text-base font-bold">{profile.picture ? <img src={profile.picture} alt="" className="h-full w-full object-cover"/> : profile.name.slice(0, 1).toUpperCase()}</span><span className="min-w-0"><span className="block truncate font-bold">{profile.name}</span><span className="mt-1 block truncate text-xs text-white/55">{profile.bio || 'Perfil público de PuntoNochi'}</span></span></button>)}
+            {visibleCount === 0 && <div className="rounded-[24px] bg-white/[0.06] px-4 py-7 text-center"><p className="text-sm font-semibold text-white/80">No encontramos resultados para “{deferredQuery.trim()}”.</p><p className="mt-1 text-sm text-white/55">Prueba con otras palabras.</p></div>}
+          </div>
+          </>}
+        </div>
       </section>
     </motion.main>
+    </>
   );
 }

@@ -6,14 +6,13 @@ import { mockPlaces } from '../data';
 import { Place } from '../types';
 import { apiFetch } from '../api';
 import type { EventSummary } from './NewsPage';
+import { AYUNTAMIENTO_SHORTS } from '../shortsData';
 
 const FEED_VIDEOS = [
   { id: 'puntonochi-short-1', url: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1790910290/Untitled_video_4_edhg8f.mp4' },
   { id: 'puntonochi-short-2', url: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1790279115/Earth_zoomed_from_space_20260924134241_jkhbtw.mp4' },
   { id: 'puntonochi-short-3', url: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1790871656/Expo_Eventos_2026_qekh1y.mp4' },
-  { id: 'ayuntamiento-short-1', url: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1792028431/Video-37742_mqjpu6.mp4' },
-  { id: 'ayuntamiento-short-2', url: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1792028583/Video-38656_sc5f2h.mp4' },
-  { id: 'ayuntamiento-short-3', url: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1792028784/Video-75824_tev9f7.mp4' },
+  ...AYUNTAMIENTO_SHORTS,
   { id: 'hotel-nochistlan-short-1', url: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1792029646/Video-44459_hxywo3.mp4' },
 ];
 const COMMENT_EMOJIS = ['😍', '😂', '🥰', '✨', '❤️', '🔥', '😮', '🙌', '👏', '😊', '😢', '😎', '🎉', '🤔', '💯', '👀', '🤩', '🙏', '💙', '🌮'];
@@ -155,7 +154,17 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
       if (!response.ok) return;
       const rows = await response.json() as Array<{ id: string; videoUrl: string; likes: number; dislikes: number; commentCount: number; myReaction: Reaction }>;
       if (!Array.isArray(rows) || !rows.length) return;
-      setVideoUrls(rows.map((row) => ({ id: row.id, url: row.videoUrl })));
+      const nextVideos = rows.map((row) => ({ id: row.id, url: row.videoUrl }));
+      const requestedShortId = new URLSearchParams(window.location.search).get('short');
+      if (requestedShortId && !nextVideos.some((video) => video.id === requestedShortId)) {
+        const bundledShort = FEED_VIDEOS.find((video) => video.id === requestedShortId);
+        if (bundledShort) nextVideos.push(bundledShort);
+      }
+      setVideoUrls(nextVideos);
+      if (requestedShortId) {
+        const requestedIndex = nextVideos.findIndex((video) => video.id === requestedShortId);
+        if (requestedIndex >= 0) setVideoIndex(requestedIndex);
+      }
       setVideoStats(Object.fromEntries(rows.map((row) => [row.id, { likes: Number(row.likes) || 0, dislikes: Number(row.dislikes) || 0, commentCount: Number(row.commentCount) || 0, myReaction: row.myReaction || null }])));
     } catch { /* Keep the bundled feed available if the database is temporarily unavailable. */ }
   }, []);

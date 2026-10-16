@@ -1,4 +1,3 @@
-export const DAILY_USE_KEY = 'puntonochi-daily-use-v1';
 export const PROFILE_ACTIVITY_KEY = 'puntonochi-profile-activity-v1';
 export const BOOKMARKS_KEY = 'puntonochi-bookmarks-v1';
 export const NAV_DESIGN_KEY = 'puntonochi-nav-design-v1';

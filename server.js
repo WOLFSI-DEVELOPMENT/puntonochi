@@ -284,6 +284,21 @@ const useExperimentalCatalog = async (req) => {
 const normalizeBusinessMatchName = (value) => String(value || '')
   .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es')
   .replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+const HOTEL_NOCHISTLAN_DESCRIPTION = 'El Hotel Nochistlán es un acogedor alojamiento familiar, a cuatro cuadras de la plaza principal del Pueblo Mágico de Nochistlán de Mejía. Cuenta con 14 habitaciones en cuatro estilos, un ambiente tranquilo y libre de humo, y una terraza en la azotea con vistas panorámicas del centro histórico y sus atardeceres. También ofrece Wi-Fi de alta velocidad y estacionamiento gratuitos, ideal para parejas y familias.';
+const HOTEL_NOCHISTLAN_ROOM_IMAGES = [
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/a9/hotel-nochistlan.jpg?w=1400&h=-1&s=1',
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/a8/hotel-nochistlan.jpg?w=1400&h=-1&s=1',
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/a7/hotel-nochistlan.jpg?w=1400&h=-1&s=1',
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/a6/hotel-nochistlan.jpg?w=1400&h=-1&s=1',
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/a4/hotel-nochistlan.jpg?w=1400&h=-1&s=1',
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/a3/hotel-nochistlan.jpg?w=1400&h=-1&s=1',
+];
+const HOTEL_NOCHISTLAN_SERVICE_IMAGES = [
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/bc/hotel-nochistlan.jpg?w=1400&h=-1&s=1',
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/b9/hotel-nochistlan.jpg?w=1400&h=-1&s=1',
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/b7/hotel-nochistlan.jpg?w=2000&h=-1&s=1',
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/b3/hotel-nochistlan.jpg?w=1400&h=-1&s=1',
+];
 const safeCatalogLink = (value) => {
   const raw = typeof value === 'string' ? value.trim() : '';
   if (!raw) return '';
@@ -827,6 +842,22 @@ app.get('/api/profiles/:id/picture', requireNeon, async (req, res) => {
   } catch (error) {
     console.error('Could not load account profile picture:', error);
     res.status(404).end();
+  }
+});
+
+app.get('/api/profiles/search', requireNeon, async (req, res) => {
+  try {
+    await ensureSubmissionSchema();
+    const term = String(req.query.q || '').trim().replace(/[%_\\]/g, '').slice(0, 80).toLocaleLowerCase('es');
+    if (term.length < 2) return res.json([]);
+    const matches = await sql`SELECT google_sub AS id, display_name AS name, picture_url AS picture, bio
+      FROM user_accounts WHERE LOWER(display_name) LIKE ${`%${term}%`}
+      ORDER BY LOWER(display_name), created_at DESC LIMIT 20`;
+    res.set('Cache-Control', 'private, no-store');
+    res.json(matches);
+  } catch (error) {
+    console.error('Could not search public profiles:', error);
+    res.status(500).json({ error: 'No se pudieron buscar perfiles públicos.' });
   }
 });
 
@@ -2773,14 +2804,17 @@ app.get('/api/places', requireNeon, async (req, res) => {
     res.set('Cache-Control', 'private, no-store');
     const publicPlaces = places.map((place) => {
       const profile = publicBusinessProfiles.get(normalizeBusinessMatchName(place.name));
+      const isHotelNochistlan = normalizeBusinessMatchName(place.name) === 'hotel nochistlan';
       return {
         ...place,
+        ...(isHotelNochistlan ? { subtitle: 'Alojamiento familiar · Centro', description: HOTEL_NOCHISTLAN_DESCRIPTION } : {}),
+        ...(isHotelNochistlan ? { rating: 5 } : {}),
         logo: /\boxxo\b/i.test(place.name) ? 'https://soybacalar.com/img_logos/616c7c7e89651.png' : profile?.logo || place.logo,
         websiteUrl: profile?.websiteUrl || place.websiteUrl,
         instagramUrl: profile?.instagramUrl || place.instagramUrl,
         facebookUrl: profile?.facebookUrl || place.facebookUrl,
         tiktokUrl: profile?.tiktokUrl || place.tiktokUrl,
-        images: [...(Array.isArray(place.images) ? place.images : []), ...(postImagesByPlace.get(place.id) || [])],
+        images: isHotelNochistlan ? [...HOTEL_NOCHISTLAN_SERVICE_IMAGES, ...HOTEL_NOCHISTLAN_ROOM_IMAGES, ...(postImagesByPlace.get(place.id) || [])] : [...(Array.isArray(place.images) ? place.images : []), ...(postImagesByPlace.get(place.id) || [])],
         communityPosts: communityPostsByPlace.get(place.id) || [],
         goodToKnow: Array.isArray(place.goodToKnow) ? place.goodToKnow : [],
       };

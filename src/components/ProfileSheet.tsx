@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Activity, ArrowRight, Bookmark, CalendarDays, Fingerprint, Flame, Globe2, Hourglass, LogOut, UserRound, X } from 'lucide-react';
+import { Activity, ArrowRight, Bookmark, CalendarDays, Fingerprint, Globe2, LogOut, UserRound, X } from 'lucide-react';
 import type { Place } from '../types';
 import { mockPlaces } from '../data';
-import { DAILY_USE_KEY, getBookmarkedPlaceIds, getNavDesign, getProfileActivity, profileDateKey, setBookmarkedPlaceIds, setNavDesign, type NavDesign, type ProfileActivity } from '../profileStorage';
+import { getBookmarkedPlaceIds, getNavDesign, getProfileActivity, profileDateKey, setBookmarkedPlaceIds, setNavDesign, type NavDesign, type ProfileActivity } from '../profileStorage';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 import CornerKit from '@cornerkit/core';
 import { AccountAuthSheet, registerCurrentPasskey } from './AccountSheets';
@@ -11,7 +11,6 @@ import { APP_LANGUAGES, getAppLanguage, getAppLanguageSetting, setAppLanguage, t
 
 const profileCorners = new CornerKit();
 const AUTO_LANGUAGE_LABEL: Record<AppLanguage, string> = { es: 'Automático', en: 'Automatic' };
-type DailyUse = { totalDays: number; currentStreak: number };
 type UserAccount = { id: string; name: string; email: string; picture: string | null; phone?: string };
 type AccountContent = {
   reviews: { id: string; placeName: string; rating: number; text: string; createdAt: string }[];
@@ -19,15 +18,6 @@ type AccountContent = {
   events: { id: string; title: string; date: string; location: string; imageUrl: string }[];
   shorts: { id: string; videoUrl: string; title: string }[];
 };
-
-function readDailyUse(): DailyUse {
-  try {
-    const value = JSON.parse(localStorage.getItem(DAILY_USE_KEY) || '{}') as Partial<DailyUse>;
-    return { totalDays: Number(value.totalDays) || 0, currentStreak: Number(value.currentStreak) || 0 };
-  } catch {
-    return { totalDays: 0, currentStreak: 0 };
-  }
-}
 
 function formatActiveTime(totalSeconds: number) {
   const totalMinutes = Math.floor(totalSeconds / 60);
@@ -45,7 +35,6 @@ function recentDays() {
 }
 
 export function ProfileSheet({ onClose, onSelectBusiness, settingsOnly = false }: { onClose: () => void; onSelectBusiness: (place: Place) => void; settingsOnly?: boolean }) {
-  const [daily, setDaily] = useState(readDailyUse);
   const [activity, setActivity] = useState<ProfileActivity>(getProfileActivity);
   const [bookmarkIds, setBookmarkIds] = useState<string[]>(getBookmarkedPlaceIds);
   const [navDesign, setCurrentNavDesign] = useState<NavDesign>(getNavDesign);
@@ -70,7 +59,7 @@ export function ProfileSheet({ onClose, onSelectBusiness, settingsOnly = false }
   const recentSeconds = days.map(({ key }) => Number(activity.activeSecondsByDay[key] || 0));
   const totalSeconds = Object.values(activity.activeSecondsByDay).reduce<number>((total, value) => total + (Number(value) || 0), 0);
   const maxDailySeconds = Math.max(60, ...recentSeconds);
-  const isIndexing = daily.totalDays <= 1 && totalSeconds < 120;
+  const isIndexing = totalSeconds < 120;
   const bookmarks = bookmarkIds.map((id) => mockPlaces.find((place) => place.id === id)).filter((place): place is Place => Boolean(place));
 
   useEffect(() => {
@@ -135,7 +124,6 @@ export function ProfileSheet({ onClose, onSelectBusiness, settingsOnly = false }
 
   useEffect(() => {
     const refresh = () => {
-      setDaily(readDailyUse());
       setActivity(getProfileActivity());
       setBookmarkIds(getBookmarkedPlaceIds());
     };
@@ -205,14 +193,7 @@ export function ProfileSheet({ onClose, onSelectBusiness, settingsOnly = false }
 
         {isIndexing && <section data-profile-squircle className="rounded-[24px] bg-[#292a2d] p-4"><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-400/10 text-blue-200"><Activity className="h-5 w-5"/></span><div><h3 className="text-sm font-bold">Estamos conociendo tu actividad</h3><p className="mt-1 text-xs leading-relaxed text-white/55">Tu perfil se está preparando. Sigue usando PuntoNochi y pronto verás aquí tus estadísticas semanales.</p></div></div><div className="mt-4 grid grid-cols-3 gap-2">{[0, 1, 2].map((item) => <div key={item} className="h-16 animate-pulse rounded-2xl bg-white/[0.05]"/>)} </div></section>}
 
-        <section data-profile-squircle className="rounded-[24px] bg-[#292a2d] p-4">
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><Flame className="h-4 w-4 text-orange-300"/>Tu constancia</div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-2xl bg-[#202124] p-3"><p className="text-xs text-white/45">Racha actual</p>{isIndexing ? <div className="mt-2 h-7 w-14 animate-pulse rounded-lg bg-white/10"/> : <p className="mt-1 text-xl font-bold tabular-nums">{daily.currentStreak} <span className="text-xs font-medium text-white/50">días</span></p>}</div>
-            <div className="rounded-2xl bg-[#202124] p-3"><p className="text-xs text-white/45">Días usando la app</p>{isIndexing ? <div className="mt-2 h-7 w-14 animate-pulse rounded-lg bg-white/10"/> : <p className="mt-1 text-xl font-bold tabular-nums">{daily.totalDays} <span className="text-xs font-medium text-white/50">días</span></p>}</div>
-          </div>
-          <div className="mt-2 flex items-center justify-between rounded-2xl bg-[#202124] p-3"><span className="flex items-center gap-2 text-xs text-white/45"><Hourglass className="h-4 w-4"/>Tiempo activo en este dispositivo</span>{isIndexing ? <span className="h-5 w-16 animate-pulse rounded-md bg-white/10"/> : <strong className="text-sm tabular-nums">{formatActiveTime(totalSeconds)}</strong>}</div>
-        </section>
+        <section data-profile-squircle className="rounded-[24px] bg-[#292a2d] p-4"><div className="flex items-center justify-between gap-2"><div className="flex items-center gap-2 text-sm font-semibold"><Hourglass className="h-4 w-4 text-blue-200"/>Tiempo activo</div>{isIndexing ? <span className="h-5 w-16 animate-pulse rounded-md bg-white/10"/> : <strong className="text-sm tabular-nums">{formatActiveTime(totalSeconds)}</strong>}</div><p className="mt-2 text-xs text-white/45">Tiempo que has pasado usando PuntoNochi en este dispositivo.</p></section>
 
         <section data-profile-squircle className="rounded-[24px] bg-[#292a2d] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-semibold"><CalendarDays className="h-4 w-4 text-blue-200"/>Actividad semanal</div><div className="flex h-28 items-end justify-between gap-2">{days.map((day, index) => { const seconds = recentSeconds[index]; const height = isIndexing ? 18 + (index % 3) * 5 : seconds ? Math.max(10, (seconds / maxDailySeconds) * 100) : 5; return <div key={day.key} className="flex h-full flex-1 flex-col items-center justify-end gap-2"><div className="flex h-full w-full items-end"><div className={`w-full rounded-t-lg ${isIndexing ? 'animate-pulse bg-white/10' : seconds ? 'bg-blue-400' : 'bg-white/[0.07]'}`} style={{ height: `${height}%` }} /></div><span className="text-[10px] font-semibold uppercase text-white/40">{day.label}</span></div>; })}</div><div className="mt-3 flex items-center justify-between text-[11px] text-white/40"><span>Minutos que usaste la app</span><span>{Math.round(recentSeconds.reduce((sum, value) => sum + value, 0) / 60)} min esta semana</span></div></section>
 

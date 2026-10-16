@@ -3,6 +3,7 @@ export interface Place {
   name: string;
   category: string;
   subtitle?: string;
+  description?: string;
   location: string;
   address?: string;
   mapUrl?: string;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { categories, visits, mockPlaces, mergeRequestedCategories, replaceDirectoryData } from './data';
-import { Bookmark, ChevronRight, CloudSun, Flame, Instagram, Search, Settings2, Sparkles, MapPin, Star, Store, X, Timer } from 'lucide-react';
+import { Bookmark, ChevronRight, CloudSun, Flame, Instagram, Search, Settings2, MapPin, Star, Store, X, Timer } from 'lucide-react';
 import { BottomNav } from './components/BottomNav';
 import { ColoniasPage } from './components/ColoniasPage';
 const ExploreVideoWireframe = React.lazy(() => import('./components/ExploreVideoWireframe').then((module) => ({ default: module.ExploreVideoWireframe })));
@@ -31,12 +31,11 @@ import { WelcomePage } from './components/WelcomePage';
 import CornerKit from '@cornerkit/core';
 import { Category, Place, Colonia } from './types';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { DAILY_USE_KEY, getBookmarkedPlaceIds, recordProfileActiveSeconds } from './profileStorage';
+import { getBookmarkedPlaceIds, recordProfileActiveSeconds } from './profileStorage';
 import { PublicProfileSheet } from './components/PublicProfileSheet';
 import { SettingsSheet } from './components/SettingsSheet';
 import { BookmarksSheet } from './components/BookmarksSheet';
 import { AccountAuthSheet } from './components/AccountSheets';
-import { getStreakMilestone, StreakBadgeCelebration, StreakPage } from './components/StreakPage';
 
 import { PublicMenuPage } from './components/PublicMenuPage';
 import { HotelProfileClaimPage } from './components/HotelProfileClaimPage';
@@ -52,7 +51,6 @@ import { installAppLocalization } from './i18n';
 const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
 const HOME_SEARCH_PROMPTS = ['Busca un negocio…', '¿Se te antoja algo rico?', 'Encuentra servicios cerca', 'Explora lugares locales'];
 const WELCOME_SEEN_KEY = 'puntonochi-welcome-seen-v1';
-type DailyUse = { lastOpened: string; totalDays: number; currentStreak: number };
 type SignedInAccount = { id: string; name: string; email: string; picture: string | null; phone?: string };
 function distanceFromDevice(place: Place, location: DeviceLocation | null) {
   if (!location || typeof place.lat !== 'number' || typeof place.lng !== 'number') return null;
@@ -64,6 +62,7 @@ function distanceFromDevice(place: Place, location: DeviceLocation | null) {
 }
 const RECENT_SEARCHES_KEY = 'puntonochi-recent-searches-v1';
 const RECENT_PLACES_KEY = 'puntonochi-recent-places-v1';
+const WEATHER_UNIT_KEY = 'puntonochi-weather-unit-v1';
 const appCornerKit = new CornerKit();
 const appCornerTargets: [string, { radius: number; smoothing: number }][] = [
   ['.ck-app-card', { radius: 26, smoothing: 1 }],
@@ -81,28 +80,15 @@ function readLocalList(key: string): string[] {
   } catch { return []; }
 }
 
-function localDateKey(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+function readWeatherUnit(): 'C' | 'F' {
+  try { return localStorage.getItem(WEATHER_UNIT_KEY) === 'F' ? 'F' : 'C'; }
+  catch { return 'C'; }
 }
 
-function previousLocalDateKey(key: string) {
-  const [year, month, day] = key.split('-').map(Number);
-  const date = new Date(year, month - 1, day - 1);
-  return localDateKey(date);
-}
-
-function recordDailyUse(): DailyUse {
-  const today = localDateKey();
-  try {
-    const saved = JSON.parse(localStorage.getItem(DAILY_USE_KEY) || 'null') as DailyUse | null;
-    if (saved?.lastOpened === today) return saved;
-    const currentStreak = saved?.lastOpened === previousLocalDateKey(today) ? saved.currentStreak + 1 : 1;
-    const dailyUse = { lastOpened: today, totalDays: (saved?.totalDays || 0) + 1, currentStreak };
-    localStorage.setItem(DAILY_USE_KEY, JSON.stringify(dailyUse));
-    return dailyUse;
-  } catch {
-    return { lastOpened: today, totalDays: 1, currentStreak: 1 };
-  }
+function formatWeatherTemperature(value: number | null | undefined, unit: 'C' | 'F') {
+  if (value == null || !Number.isFinite(value)) return '--°';
+  const converted = unit === 'F' ? (value * 9) / 5 + 32 : value;
+  return `${Math.round(converted)}°${unit}`;
 }
 
 declare global {
@@ -252,7 +238,9 @@ export default function App() {
   const [heroSearchPromptIndex, setHeroSearchPromptIndex] = useState(0);
   const [heroSearchTypedLength, setHeroSearchTypedLength] = useState(0);
   const [showSponsorSheet, setShowSponsorSheet] = useState(false);
-  const [weatherSummary, setWeatherSummary] = useState<{ high: number | null; low: number | null; precipitationChance: number | null } | null>(null);
+  const [externalSiteToOpen, setExternalSiteToOpen] = useState<{ url: string; host: string } | null>(null);
+  const [weatherSummary, setWeatherSummary] = useState<{ current: number | null; high: number | null; low: number | null; precipitationChance: number | null } | null>(null);
+  const [weatherUnit, setWeatherUnit] = useState<'C' | 'F'>(readWeatherUnit);
   const timerActive = timerEndAt !== null || timerPausedFor !== null;
   const timerDisplay = `${String(Math.floor(Math.ceil(timerRemainingDisplay / 1000) / 60)).padStart(2, '0')}:${String(Math.ceil(timerRemainingDisplay / 1000) % 60).padStart(2, '0')}`;
   const startTimer = (duration: number) => {
@@ -296,7 +284,15 @@ export default function App() {
     void fetch('/api/weather').then(async (response) => {
       if (!response.ok) throw new Error('Weather forecast unavailable');
       const data = await response.json();
-      if (active && data.days?.[0]) setWeatherSummary(data.days[0]);
+      if (active && data.days?.[0]) {
+        const now = Date.now();
+        const currentHour = Array.isArray(data.hours) ? data.hours.reduce((closest: { temperature: number | null; dateTime: string } | null, hour: { temperature: number | null; dateTime: string }) => {
+          if (hour.temperature == null) return closest;
+          if (!closest || Math.abs(new Date(hour.dateTime).getTime() - now) < Math.abs(new Date(closest.dateTime).getTime() - now)) return hour;
+          return closest;
+        }, null) : null;
+        setWeatherSummary({ ...data.days[0], current: currentHour?.temperature ?? null });
+      }
     }).catch(() => undefined);
     return () => { active = false; };
   }, []);
@@ -334,8 +330,6 @@ export default function App() {
   const [showBookmarksSheet, setShowBookmarksSheet] = useState(false);
   const [showAccountAuth, setShowAccountAuth] = useState(() => new URLSearchParams(window.location.search).has('accountAuthError'));
   const [showProfileSettings, setShowProfileSettings] = useState(false);
-  const [showStreakPage, setShowStreakPage] = useState(false);
-  const [streakBadgeCelebration, setStreakBadgeCelebration] = useState<{ days: number; name: string } | null>(null);
   const [marketplaceDetailOpen, setMarketplaceDetailOpen] = useState(false);
   const [signedInAccount, setSignedInAccount] = useState<SignedInAccount | null>(null);
   const [directoryVersion, setDirectoryVersion] = useState(0);
@@ -343,21 +337,6 @@ export default function App() {
   const [popularPlaces, setPopularPlaces] = useState<Place[]>([]);
   const [recentlyAddedPlaces, setRecentlyAddedPlaces] = useState<Place[]>([]);
   const [deviceLocation, setDeviceLocation] = useState<DeviceLocation | null>(() => readDeviceLocation());
-  const [dailyUse, setDailyUse] = useState<DailyUse>(() => recordDailyUse());
-  const streakDateRef = useRef(dailyUse.lastOpened);
-
-  useEffect(() => {
-    if (loading || showWelcome || !welcomeTransitionDone) return;
-    const earnedBadge = getStreakMilestone(dailyUse.currentStreak);
-    if (!earnedBadge) return;
-    const today = localDateKey();
-    const seenKey = `puntonochi-streak-badge-shown-${earnedBadge.days}`;
-    try {
-      if (localStorage.getItem(seenKey) === today) return;
-      localStorage.setItem(seenKey, today);
-    } catch { /* Avoid repeating the celebration during this app session. */ }
-    setStreakBadgeCelebration({ days: earnedBadge.days, name: earnedBadge.name });
-  }, [dailyUse.currentStreak, loading, showWelcome, welcomeTransitionDone]);
   const tabSwipeStart = useRef<{ x: number; y: number } | null>(null);
   const previousPrimaryTab = useRef(activeTab);
   const [tabDirection, setTabDirection] = useState(1);
@@ -371,7 +350,7 @@ export default function App() {
   }, [activeTab]);
 
   const onPageTouchStart = (event: React.TouchEvent<HTMLElement>) => {
-    if (event.touches.length !== 1 || showSearch || showAdminPage || showStreakPage || selectedBusiness || selectedCategory || showAllCategories || showColonias) { tabSwipeStart.current = null; return; }
+    if (event.touches.length !== 1 || showSearch || showAdminPage || selectedBusiness || selectedCategory || showAllCategories || showColonias) { tabSwipeStart.current = null; return; }
     const target = event.target as HTMLElement;
     if (target.closest('input, textarea, select, [role="dialog"], [data-no-tab-swipe], .snap-x, .overflow-x-auto')) { tabSwipeStart.current = null; return; }
     const touch = event.touches[0]; tabSwipeStart.current = { x: touch.clientX, y: touch.clientY };
@@ -470,17 +449,10 @@ export default function App() {
 
   useEffect(() => {
     let lastActivityCheck = Date.now();
-    const refreshDailyUse = () => {
-      const today = localDateKey();
-      if (streakDateRef.current === today) return;
-      streakDateRef.current = today;
-      setDailyUse(recordDailyUse());
-    };
     const accountForActiveTime = () => {
       const now = Date.now();
       if (document.visibilityState === 'visible' && document.hasFocus()) recordProfileActiveSeconds((now - lastActivityCheck) / 1000);
       lastActivityCheck = now;
-      refreshDailyUse();
     };
     window.addEventListener('focus', accountForActiveTime);
     document.addEventListener('visibilitychange', accountForActiveTime);
@@ -700,7 +672,7 @@ export default function App() {
       description = 'Consulta el menú digital de un negocio local en Nochistlán.';
     } else if (selectedBusiness) {
       title = `${selectedBusiness.name} | ${selectedBusiness.category} en Nochistlán | PuntoNochi`;
-      description = `${selectedBusiness.name}: ${selectedBusiness.subtitle || selectedBusiness.category} en ${selectedBusiness.location || 'Nochistlán de Mejía, Zacatecas'}. Consulta horario, contacto, fotos y ubicación en PuntoNochi.`;
+      description = selectedBusiness.description || `${selectedBusiness.name}: ${selectedBusiness.subtitle || selectedBusiness.category} en ${selectedBusiness.location || 'Nochistlán de Mejía, Zacatecas'}. Consulta horario, contacto, fotos y ubicación en PuntoNochi.`;
     } else if (showAdminPage) {
       title = 'Administración | PuntoNochi';
       description = 'Panel privado de administración de PuntoNochi.';
@@ -896,9 +868,58 @@ export default function App() {
     };
   }, []);
 
-  if (publicMenuId) return <PublicMenuPage id={publicMenuId}/>;
-  if (window.location.pathname === '/punto-nochi-vs-nochisgo' || window.location.pathname === '/punto-nochi-vs-nochisgo/') return <PuntoNochiComparisonPage />;
-  if (window.location.pathname === '/reclamar/hotelnochistlan') return <><HotelProfileClaimPage onRequireAccount={() => setShowAccountAuth(true)} onClose={() => { window.history.pushState({}, '', '/explorar'); setActiveTab('explorar'); }} />{showAccountAuth && <AccountAuthSheet onClose={() => setShowAccountAuth(false)}/>}</>;
+  useEffect(() => {
+    const confirmExternalLink = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const link = target.closest('a[href], [data-external-url]') as HTMLElement | null;
+      if (!link || (link instanceof HTMLAnchorElement && link.hasAttribute('download'))) return;
+      let destination: URL;
+      const href = link instanceof HTMLAnchorElement ? link.href : link.dataset.externalUrl;
+      if (!href) return;
+      try { destination = new URL(href, window.location.href); } catch { return; }
+      if (!['http:', 'https:'].includes(destination.protocol) || destination.origin === window.location.origin) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setExternalSiteToOpen({ url: destination.href, host: destination.hostname.replace(/^www\./, '') });
+    };
+    document.addEventListener('click', confirmExternalLink, true);
+    const requestExternalSite = (event: Event) => {
+      const requestedUrl = (event as CustomEvent<string>).detail;
+      if (typeof requestedUrl !== 'string') return;
+      try {
+        const destination = new URL(requestedUrl, window.location.href);
+        if (['http:', 'https:'].includes(destination.protocol) && destination.origin !== window.location.origin) {
+          setExternalSiteToOpen({ url: destination.href, host: destination.hostname.replace(/^www\./, '') });
+        }
+      } catch { /* Ignore malformed external destinations. */ }
+    };
+    window.addEventListener('request-external-site', requestExternalSite);
+    return () => {
+      document.removeEventListener('click', confirmExternalLink, true);
+      window.removeEventListener('request-external-site', requestExternalSite);
+    };
+  }, []);
+
+  const externalSiteConfirmation = <AnimatePresence>
+    {externalSiteToOpen && <>
+      <motion.button type="button" data-sheet-close aria-label="Cerrar confirmación" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setExternalSiteToOpen(null)} className="fixed inset-0 z-[140] cursor-default bg-black/65 backdrop-blur-sm" />
+      <motion.section data-desktop-sheet="popup" role="dialog" aria-modal="true" aria-labelledby="external-site-title" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 330 }} className="fixed inset-x-0 bottom-0 z-[141] mx-auto w-full max-w-lg rounded-t-[30px] bg-[#202124] px-5 pb-[max(24px,env(safe-area-inset-bottom))] pt-5 text-white shadow-2xl">
+        <button type="button" onClick={() => setExternalSiteToOpen(null)} data-sheet-close aria-label="Cerrar hoja" className="absolute right-4 top-3 flex h-9 w-9 items-center justify-center rounded-full text-white/55 hover:bg-white/10 hover:text-white"><X className="h-5 w-5"/></button>
+        <h2 id="external-site-title" className="pr-10 text-xl font-extrabold">Vas a salir de PuntoNochi</h2>
+        <p className="mt-2 text-sm leading-relaxed text-white/65">Se abrirá un sitio externo: <span className="font-semibold text-white/85">{externalSiteToOpen.host}</span>. ¿Quieres continuar?</p>
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <button type="button" onClick={() => setExternalSiteToOpen(null)} className="min-h-12 rounded-full bg-white/[.1] px-4 text-sm font-semibold text-white transition hover:bg-white/[.16]">Cancelar</button>
+          <button type="button" onClick={() => { const destination = externalSiteToOpen.url; setExternalSiteToOpen(null); window.open(destination, '_blank', 'noopener,noreferrer'); }} className="min-h-12 rounded-full bg-[#1683f8] px-4 text-sm font-bold text-white transition hover:bg-[#0d74e8]">Continuar</button>
+        </div>
+      </motion.section>
+    </>}
+  </AnimatePresence>;
+
+  if (publicMenuId) return <><PublicMenuPage id={publicMenuId}/>{externalSiteConfirmation}</>;
+  if (window.location.pathname === '/punto-nochi-vs-nochisgo' || window.location.pathname === '/punto-nochi-vs-nochisgo/') return <><PuntoNochiComparisonPage />{externalSiteConfirmation}</>;
+  if (window.location.pathname === '/reclamar/hotelnochistlan') return <><HotelProfileClaimPage onRequireAccount={() => setShowAccountAuth(true)} onClose={() => { window.history.pushState({}, '', '/explorar'); setActiveTab('explorar'); }} />{showAccountAuth && <AccountAuthSheet onClose={() => setShowAccountAuth(false)}/>} {externalSiteConfirmation}</>;
 
   return (
     <AutoLayoutRoot id="app-root" className={`auto-layout-root relative min-h-screen bg-[#f8f9fa] lg:pt-16 ${activeTab === 'explorar' || activeTab === 'inicio' ? 'pb-0' : 'pb-36'} font-sans text-neutral-900 selection:bg-blue-100`} style={{ fontFamily: "'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif" }}>
@@ -916,10 +937,7 @@ export default function App() {
               <button type="button" onClick={() => setShowProfileSettings(true)} aria-label="Abrir ajustes" title="Ajustes" className="flex h-8 w-10 items-center justify-center rounded-full text-white/85 transition-colors hover:bg-white/[.08] active:scale-95"><Settings2 aria-hidden="true" className="h-[17px] w-[17px]" strokeWidth={2}/></button>
             </div>
             <div className="absolute right-[25px] top-[calc(max(1rem,env(safe-area-inset-top))+1px)] z-20 flex items-center gap-2 lg:top-[13px]">
-            <button type="button" onClick={() => setShowStreakPage(true)} aria-label={`${dailyUse.totalDays} días usando PuntoNochi. Racha actual de ${dailyUse.currentStreak} días. Ver actividad`} title={`${dailyUse.totalDays} días usando PuntoNochi · racha de ${dailyUse.currentStreak} días`} className="relative z-20 flex min-h-9 touch-manipulation items-center gap-2 rounded-full bg-white/[.08] px-2 text-left text-white backdrop-blur-xl transition-transform active:scale-95">
-              <Flame aria-hidden="true" className="h-[19px] w-[19px] shrink-0 fill-orange-400 text-orange-400" />
-              <span className="flex min-h-9 items-center gap-1.5 py-1 leading-none"><span className="text-xs font-bold tabular-nums">{dailyUse.totalDays}</span><span className="text-[10px] font-semibold text-white/55">D</span></span>
-            </button>
+            <button type="button" onClick={() => setWeatherUnit((unit) => { const next = unit === 'C' ? 'F' : 'C'; try { localStorage.setItem(WEATHER_UNIT_KEY, next); } catch { /* Keep the unit for this session if storage is unavailable. */ } return next; })} aria-label={`Temperatura actual en grados ${weatherUnit === 'C' ? 'Celsius' : 'Fahrenheit'}. Toca para cambiar a grados ${weatherUnit === 'C' ? 'Fahrenheit' : 'Celsius'}`} title={`Cambiar a °${weatherUnit === 'C' ? 'F' : 'C'}`} className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-white/[.08] px-2.5 text-white/85 backdrop-blur-xl transition-colors hover:bg-white/[.13] active:scale-95"><CloudSun aria-hidden="true" className="h-[17px] w-[17px] text-amber-200" strokeWidth={1.8}/><span className="min-w-[30px] text-[12px] font-semibold tabular-nums">{formatWeatherTemperature(weatherSummary?.current, weatherUnit)}</span></button>
             {signedInAccount && <button type="button" onClick={() => setPublicProfileId(signedInAccount.id)} aria-label="Abrir mi perfil público" title="Mi perfil" className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-[#292a2d] p-[2px] text-white shadow-sm ring-1 ring-white/15 transition-transform active:scale-95">
               {signedInAccount.picture ? <img src={signedInAccount.picture} alt="" referrerPolicy="no-referrer" className="h-full w-full rounded-full object-cover"/> : <span className="flex h-full w-full items-center justify-center rounded-full bg-blue-500 text-sm font-bold">{signedInAccount.name.slice(0, 1).toUpperCase()}</span>}
             </button>}
@@ -963,7 +981,7 @@ export default function App() {
                     </button>}
                   </div>
                   <div className="flex h-full w-1/4 shrink-0 items-center justify-between gap-4 px-6 py-5">
-                    <div><span className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Pronóstico de hoy</span><p className="mt-2 text-lg font-semibold">Nochistlán, Zacatecas</p><p className="mt-1 text-sm text-white/65">{weatherSummary?.high != null && weatherSummary?.low != null ? `${Math.round(weatherSummary.high)}° / ${Math.round(weatherSummary.low)}° · máxima y mínima` : 'Consulta el clima local de hoy'}</p>{weatherSummary?.precipitationChance != null && <p className="mt-1 text-xs text-white/40">Lluvia: {weatherSummary.precipitationChance}%</p>}</div>
+                    <div><span className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Pronóstico de hoy</span><p className="mt-2 text-lg font-semibold">Nochistlán, Zacatecas</p><p className="mt-1 text-sm text-white/65">{weatherSummary?.high != null && weatherSummary?.low != null ? `${formatWeatherTemperature(weatherSummary.high, weatherUnit)} / ${formatWeatherTemperature(weatherSummary.low, weatherUnit)} · máxima y mínima` : 'Consulta el clima local de hoy'}</p>{weatherSummary?.precipitationChance != null && <p className="mt-1 text-xs text-white/40">Lluvia: {weatherSummary.precipitationChance}%</p>}</div>
                     <CloudSun aria-hidden="true" className="h-12 w-12 shrink-0 text-amber-200" strokeWidth={1.5}/>
                   </div>
                   <div className="flex h-full w-1/4 shrink-0 flex-col items-start justify-center px-6 py-4">
@@ -1047,7 +1065,7 @@ export default function App() {
           {/* Personalized suggestions */}
           <section className="mb-10">
             <div className="px-5 mb-4">
-              <h2 className="text-2xl font-bold flex items-center gap-2"><Sparkles className="h-5 w-5 text-[#1a73e8]"/>{deviceLocation ? 'Cerca de ti' : 'Sugeridos'}</h2>
+              <h2 className="text-2xl font-bold">{deviceLocation ? 'Cerca de ti' : 'Sugeridos'}</h2>
               <p className="text-[15px] text-neutral-500 font-medium mt-0.5">{deviceLocation ? 'Negocios ordenados por distancia a tu ubicación' : 'Negocios para ti, según lo que buscas y guardas'}</p>
             </div>
 
@@ -1103,7 +1121,7 @@ export default function App() {
           </section>}
 
           <div ref={articlesSectionRef} className="min-h-[220px]">{articlesNearView && <React.Suspense fallback={<div className="h-[180px] animate-pulse rounded-[24px] bg-white/[.04]"/>}><HomeArticlesSection onViewAll={() => setActiveTab('guias')} onOpenArticle={(slug) => { window.history.pushState({}, '', `/articulos/${encodeURIComponent(slug)}`); setActiveTab('guias'); }} /></React.Suspense>}</div>
-          <div ref={videosSectionRef} className="min-h-[220px]">{videosNearView && <React.Suspense fallback={<div className="h-[180px] animate-pulse rounded-[24px] bg-white/[.04]"/>}><HomeVideosSection onViewAll={() => setActiveTab('noticias')} /></React.Suspense>}</div>
+          <div ref={videosSectionRef} className="min-h-[220px]">{videosNearView && <React.Suspense fallback={<div className="h-[180px] animate-pulse rounded-[24px] bg-white/[.04]"/>}><HomeVideosSection onViewAll={() => setActiveTab('puntoshorts')} onSelectShort={(shortId) => { window.history.pushState({}, '', `/puntoshorts?short=${encodeURIComponent(shortId)}`); setActiveTab('puntoshorts'); }} /></React.Suspense>}</div>
 
           <section className="mb-10">
             <div className="mb-4 px-5">
@@ -1284,9 +1302,6 @@ export default function App() {
         {activeTab === 'guias' && <motion.div key="articles-page" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .18 }}><React.Suspense fallback={<div className="min-h-screen bg-[#111214]"/>}><ArticlesPage /></React.Suspense></motion.div>}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showStreakPage && <StreakPage key="streak-page" totalDays={dailyUse.totalDays} currentStreak={dailyUse.currentStreak} onClose={() => setShowStreakPage(false)} />}
-      </AnimatePresence>
       <AnimatePresence>{activeTab === 'explorar' && openEventCreatorOnPage && <React.Suspense fallback={null}><EventsPage embedded autoCreate onClose={() => setOpenEventCreatorOnPage(false)} /></React.Suspense>}</AnimatePresence>
       <AnimatePresence>
         {showSponsorSheet && <>
@@ -1298,11 +1313,10 @@ export default function App() {
           </motion.section>
         </>}
       </AnimatePresence>
-      <AnimatePresence>{streakBadgeCelebration && <StreakBadgeCelebration key={`streak-badge-${streakBadgeCelebration.days}`} days={streakBadgeCelebration.days} name={streakBadgeCelebration.name} onDone={() => setStreakBadgeCelebration(null)}/>}</AnimatePresence>
       <AnimatePresence>{legalDocument && <LegalPage document={legalDocument} onClose={() => { setLegalDocument(null); window.history.replaceState({}, '', '/'); }}/>}</AnimatePresence>
 
       {/* Bottom Navigation & Search */}
-      {activeTab !== 'ask-nochi' && activeTab !== 'puntoshorts' && !showAdminPage && !showStreakPage && !legalDocument && !(activeTab === 'videos' && marketplaceDetailOpen) && (
+      {activeTab !== 'ask-nochi' && activeTab !== 'puntoshorts' && !showAdminPage && !legalDocument && !(activeTab === 'videos' && marketplaceDetailOpen) && (
         <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchCategory(null); setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => { setSearchQuery(''); setShowSearch(false); }} onOpenProfile={() => { if (signedInAccount) setPublicProfileId(signedInAccount.id); else setShowAccountAuth(true); }} onSelectBusiness={(place) => setSelectedBusiness(place)} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} profileEmail={signedInAccount?.email} timerEndAt={timerEndAt} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onStopTimer={stopTimer} onTimerComplete={completeTimer} searchQuery={searchQuery} searchOpen={showSearch} />
       )}
 
@@ -1318,8 +1332,9 @@ export default function App() {
             query={searchQuery}
             onSearchTerm={(term) => setSearchQuery(term)}
             onClose={() => { setSearchCategory(null); setSearchQuery(''); setShowSearch(false); }}
-            onOpenEvents={() => setActiveTab('noticias')}
-            onOpenMarketplace={() => setActiveTab('videos')}
+            onOpenEvents={() => setActiveTab('eventos')}
+            onOpenShort={(shortId) => { window.history.pushState({}, '', `/puntoshorts?short=${encodeURIComponent(shortId)}`); setActiveTab('puntoshorts'); }}
+            onOpenProfile={(profileId) => setPublicProfileId(profileId)}
             places={searchCategory ? mockPlaces.filter((place) => place.category === searchCategory.name) : selectedCategory ? mockPlaces.filter((place) => place.category === selectedCategory.name) : mockPlaces}
             categoryScoped={Boolean(searchCategory || selectedCategory)}
             categoryName={searchCategory?.name || selectedCategory?.name}
@@ -1389,6 +1404,7 @@ export default function App() {
       </AnimatePresence>
       <AnimatePresence>{showBookmarksSheet && <BookmarksSheet key="bookmarks-sheet" onClose={() => setShowBookmarksSheet(false)} onSelectBusiness={(place) => setSelectedBusiness(place)} />}</AnimatePresence>
       <AnimatePresence>{showProfileSettings && <SettingsSheet key="settings-sheet" account={signedInAccount} onClose={() => setShowProfileSettings(false)} onRequireAuth={() => { setShowProfileSettings(false); setShowAccountAuth(true); }} />}</AnimatePresence>
+      {externalSiteConfirmation}
       <Analytics />
     </AutoLayoutRoot>
   );

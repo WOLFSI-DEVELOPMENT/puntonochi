@@ -69,7 +69,7 @@ const englishToSpanish: Record<string, string> = {
   'Health Esp.': 'Salud Especializada', 'Entertainment': 'Entretenimiento', 'Lifestyle': 'Estilo de Vida', 'Construction': 'Construcción',
   'Technology': 'Tecnología', 'City Hall': 'Ayuntamiento', 'Events': 'Eventos', 'Search': 'Buscar', 'Profile': 'Perfil',
   'Open search': 'Abrir búsqueda', 'Browse by category': 'Por Categoría', 'Find what you need': 'Encuentra lo que necesitas',
-  'days': 'días', 'day': 'día', 'streak': 'racha', 'Open': 'Abierto', 'Closed': 'Cerrado', 'Verified Business': 'Negocio verificado',
+  'days': 'días', 'day': 'día', 'Open': 'Abierto', 'Closed': 'Cerrado', 'Verified Business': 'Negocio verificado',
   'See all': 'Ver todos', 'See more': 'Ver más', 'Read more': 'Leer más', 'Show more': 'Mostrar más', 'Show less': 'Mostrar menos',
   'Cancel': 'Cancelar', 'Save': 'Guardar', 'Close': 'Cerrar', 'Back': 'Volver', 'Continue': 'Continuar', 'Loading…': 'Cargando…',
   'No results': 'No hay resultados', 'Try another search': 'Intenta otra búsqueda', 'Search for a place, service, or anything you need': 'Busca un lugar, servicio o lo que necesitas',

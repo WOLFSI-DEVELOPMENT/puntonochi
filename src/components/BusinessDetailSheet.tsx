@@ -14,6 +14,61 @@ import { canHypePlaceToday, getTotalHypes, HYPES_UPDATED_EVENT, hypePlace } from
 const BusinessLocationMap = lazy(() => import('./BusinessLocationMap').then((module) => ({ default: module.BusinessLocationMap })));
 const BusinessMapOverlay = lazy(() => import('./BusinessLocationMap').then((module) => ({ default: module.BusinessMapOverlay })));
 
+const HOTEL_ROOM_IMAGES = [
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/a9/hotel-nochistlan.jpg?w=1400&h=-1&s=1',
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/a8/hotel-nochistlan.jpg?w=1400&h=-1&s=1',
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/a7/hotel-nochistlan.jpg?w=1400&h=-1&s=1',
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/a6/hotel-nochistlan.jpg?w=1400&h=-1&s=1',
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/a4/hotel-nochistlan.jpg?w=1400&h=-1&s=1',
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/a3/hotel-nochistlan.jpg?w=1400&h=-1&s=1',
+];
+const HOTEL_SERVICE_IMAGES = [
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/bc/hotel-nochistlan.jpg?w=1400&h=-1&s=1',
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/b9/hotel-nochistlan.jpg?w=1400&h=-1&s=1',
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/b7/hotel-nochistlan.jpg?w=2000&h=-1&s=1',
+  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/b3/hotel-nochistlan.jpg?w=1400&h=-1&s=1',
+];
+const HOTEL_TRIPADVISOR_REVIEWS = [
+  {
+    author: 'fbanuelo',
+    avatar: 'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1a/f6/e2/11/default-avatar-2020-41.jpg?w=100&h=-1&s=1',
+    profileUrl: 'https://www.tripadvisor.com.mx/Profile/fbanuelo',
+    title: 'Viaje de enero',
+    reviewUrl: 'https://www.tripadvisor.com.mx/ClientLink?value=Z3Q5Xy9TaG93VXNlclJldmlld3MtZzMxODEwODMtZDIxMzM3NTQ0LXIxMDU0MDk1NzQ5LUhvdGVsX05vY2hpc3RsYW4tTm9jaGlzdGxhbl9DZW50cmFsX01leGljb19hbmRfR3VsZl9Db2FzdC5odG1sX1hMQg%3D%3D',
+    date: 'enero de 2026',
+    details: 'Sacramento, California · 30 aportes · 12 votos útiles',
+    text: '3 noches (17, 18 y 19 de enero) La Fiesta de Sebastián. Uno de los Papaquis estaba frente al hotel. Gran ubicación muy limpia! Esta es la segunda estancia y estará de vuelta.',
+  },
+  {
+    author: 'Abbie',
+    avatar: '',
+    profileUrl: 'https://www.tripadvisor.com.mx/Profile/abigailmU9319JD',
+    title: 'Recomendable',
+    reviewUrl: 'https://www.tripadvisor.com.mx/ShowUserReviews-g3181083-d21337544-r1027932657-Hotel_Nochistlan-Nochistlan_Central_Mexico_and_Gulf_Coast.html',
+    date: 'septiembre de 2025',
+    details: 'Ciudad de México, México · 1 aporte',
+    text: 'Limpio y las camas son cómodas. Buena ubicación, con sala de estar con acceso a todo los huéspedes y terraza en el hotel. Recomendado para viajes cortos. Consejo: Está en remodelación, pero aún así está limpio y silencioso.',
+  },
+  {
+    author: 'Viajero de TripAdvisor', avatar: '', profileUrl: '', title: 'Acerca de Nochistlán, Zacatecas',
+    reviewUrl: 'https://www.tripadvisor.com.mx/ShowUserReviews-g3181083-d21337544-r935257855-Hotel_Nochistlan-Nochistlan_Central_Mexico_and_Gulf_Coast.html',
+    date: 'enero de 2024', details: '',
+    text: 'Aunque está en reparación, el hotel es muy agradable, bien atendido y muy económico. De la ciudad no puedo más que decir que es la provincia en vivo y a todo color, un festival impresionante de bellos colores, olores y sabores. Una muy recomendable experiencia. Consejo: La terraza del hotel ofrece un muy rico café, con una espectacular vista de la ciudad. Muy recomendable por la mañana.',
+  },
+  {
+    author: 'Viajero de TripAdvisor', avatar: '', profileUrl: '', title: 'Encantado con la vista',
+    reviewUrl: 'https://www.tripadvisor.com.mx/ShowUserReviews-g3181083-d21337544-r812373664-Hotel_Nochistlan-Nochistlan_Central_Mexico_and_Gulf_Coast.html',
+    date: 'septiembre de 2021', details: '',
+    text: 'Las instalaciones muy modernas, habitaciones confortables, la atención muy buena, y es de mencionar su terraza, la cual con la altura que tiene regala al visitante vistas hermosas de Mágico Nochistlán desde el amanecer hasta la puesta de sol.',
+  },
+  {
+    author: 'Viajero de TripAdvisor', avatar: '', profileUrl: '', title: 'Hotel Nochistlán Excelente',
+    reviewUrl: 'https://www.tripadvisor.com.mx/ShowUserReviews-g3181083-d21337544-r785155816-Hotel_Nochistlan-Nochistlan_Central_Mexico_and_Gulf_Coast.html',
+    date: 'febrero de 2021', details: '',
+    text: 'Es un hotel completo en todos los sentidos, buenas habitaciones, cien por ciento recomendable para hospedarse. Limpieza 100%, amabilidad 100% y habitaciones 100% espaciosas. Te recomiendo que te hospedes porque es una mezcla entre moderno y antiguo. Consejo: Elegir cualquiera, porque tiene una vista extraordinaria.',
+  },
+];
+
 type GoogleReview = {
   rating: number;
   text: string;
@@ -25,6 +80,10 @@ type GoogleReview = {
 type GooglePlaceDetails = { weekdayDescriptions: string[]; reviews: GoogleReview[]; googleMapsUri: string };
 
 export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { place: Place, onClose: () => void, onSelectBusiness: (place: Place) => void }) {
+  const isHotelProfile = place.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es').includes('hotel nochistlan');
+  const galleryImages = isHotelProfile
+    ? [...HOTEL_SERVICE_IMAGES, ...HOTEL_ROOM_IMAGES, ...(place.communityPosts || []).map((post) => post.imageUrl)]
+    : place.images;
   const [communityReviews, setCommunityReviews] = useState<Review[]>([]);
   const [hypeCount, setHypeCount] = useState(() => getTotalHypes(place.id));
   const [canHypeToday, setCanHypeToday] = useState(() => canHypePlaceToday(place.id));
@@ -198,8 +257,11 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
       return order.indexOf(a.toLocaleLowerCase('es')) - order.indexOf(b.toLocaleLowerCase('es'));
     }).map(([day, schedule]) => `${day}: ${is24Hours ? 'Abierto 24 horas' : schedule.closed ? 'Cerrado' : schedule.intervals.map(({ open, close }) => `${formatTime(open)}–${formatTime(close)}`).join(', ') || 'Horario no disponible'}`)
     : [];
-  const reviewSamples = communityReviews.length ? communityReviews : (googleDetails?.reviews || []);
-  const reviewAverage = communityReviews.length
+  const bestGoogleReviews = [...(googleDetails?.reviews || [])]
+    .sort((a, b) => b.rating - a.rating || (b.text?.length || 0) - (a.text?.length || 0));
+  const displayedRating = isHotelProfile ? 5 : place.rating;
+  const reviewSamples = communityReviews.length ? communityReviews : bestGoogleReviews;
+  const reviewAverage = isHotelProfile ? 5 : communityReviews.length
     ? communityReviews.reduce((sum, review) => sum + review.rating, 0) / communityReviews.length
     : place.rating || (reviewSamples.length ? reviewSamples.reduce((sum, review) => sum + review.rating, 0) / reviewSamples.length : 0);
   const reviewTotal = communityReviews.length + (place.reviewCount || 0);
@@ -233,8 +295,8 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
   };
 
   const shareTo = (url: string) => {
-    window.open(url, '_blank', 'noopener,noreferrer');
-    setShareFeedback('Se abrió la opción para compartir.');
+    window.dispatchEvent(new CustomEvent('request-external-site', { detail: url }));
+    setShareFeedback('Confirma para abrir el sitio externo.');
   };
 
   useEffect(() => {
@@ -253,8 +315,8 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
   const paginate = (newDirection: number) => {
     if (!viewerState) return;
     let nextIndex = viewerState.index + newDirection;
-    if (nextIndex < 0) nextIndex = place.images.length - 1;
-    if (nextIndex >= place.images.length) nextIndex = 0;
+    if (nextIndex < 0) nextIndex = galleryImages.length - 1;
+    if (nextIndex >= galleryImages.length) nextIndex = 0;
     setViewerState({ index: nextIndex, direction: newDirection });
   };
 
@@ -285,9 +347,9 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
   const openMap = (app: 'google' | 'apple') => {
     const query = encodeURIComponent(place.address || place.name);
     if (app === 'google') {
-      window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+      window.dispatchEvent(new CustomEvent('request-external-site', { detail: `https://www.google.com/maps/search/?api=1&query=${query}` }));
     } else {
-      window.open(`http://maps.apple.com/?q=${query}`, '_blank');
+      window.dispatchEvent(new CustomEvent('request-external-site', { detail: `http://maps.apple.com/?q=${query}` }));
     }
     setShowMapSelector(false);
   };
@@ -316,12 +378,16 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
         className="fixed inset-x-0 bottom-0 z-[61] h-[min(92dvh,900px)] max-h-[calc(100dvh-env(safe-area-inset-top))] overflow-hidden rounded-t-[32px] [corner-shape:squircle] bg-[#171717] flex flex-col [will-change:transform]"
       >
         <SheetDragHandle controls={detailDrag.dragControls} tone="dark" className="absolute inset-x-0 top-0 z-20" />
+        {isHotelProfile && <>
+          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-28 bg-gradient-to-t from-[#171717]/80 via-[#171717]/35 to-transparent backdrop-blur-[8px] [mask-image:linear-gradient(to_bottom,transparent,black_85%)]" />
+          <button type="button" data-external-url="https://www.tripadvisor.com.mx/Hotel_Review-g3181083-d21337544-Reviews-Hotel_Nochistlan-Nochistlan_Central_Mexico_and_Gulf_Coast.html" className="absolute bottom-[max(18px,env(safe-area-inset-bottom))] left-5 right-5 z-20 flex h-12 items-center justify-center rounded-full bg-[#1683f8] text-[15px] font-bold text-white transition-colors hover:bg-[#0d74e8] active:scale-[.99]">Reservar en TripAdvisor</button>
+        </>}
 
         <div data-no-tab-swipe className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-8">
           {/* Hero Section */}
           <div className="relative w-full h-[240px]">
             <img 
-              src={place.images[0]} 
+              src={galleryImages[0]}
               alt={place.name} 
               className="w-full h-full object-cover cursor-pointer" 
               onPointerDownCapture={(e) => e.stopPropagation()}
@@ -355,10 +421,10 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
             <p className="text-[15px] font-medium text-neutral-600">
               {place.category} • <span className="text-[#1a73e8] hover:underline cursor-pointer">{place.location}</span>
             </p>
-            {place.subtitle && place.subtitle.toLocaleLowerCase('es') !== 'establishment' && <p className="mt-1 text-[13px] text-white/55">{place.subtitle}</p>}
-            <div className="mt-1.5 flex items-center gap-1.5 text-[13px]" aria-label={`${place.rating > 0 ? `Calificación ${place.rating.toFixed(1)}, ` : ''}${place.reviewCount || 0} reseñas`}>
-              <Star aria-hidden="true" className={`h-3.5 w-3.5 ${place.rating > 0 ? 'fill-amber-400 text-amber-400' : 'text-white/35'}`} />
-              <span className="font-semibold text-white/85">{place.rating > 0 ? place.rating.toFixed(1) : 'Nuevo'}</span>
+            {isHotelProfile && place.description ? <p className="mt-2 text-[13px] leading-relaxed text-white/65">{place.description}</p> : place.subtitle && place.subtitle.toLocaleLowerCase('es') !== 'establishment' && <p className="mt-1 text-[13px] text-white/55">{place.subtitle}</p>}
+            <div className="mt-1.5 flex items-center gap-1.5 text-[13px]" aria-label={`${displayedRating > 0 ? `Calificación ${displayedRating.toFixed(1)}, ` : ''}${place.reviewCount || 0} reseñas`}>
+              <Star aria-hidden="true" className={`h-3.5 w-3.5 ${displayedRating > 0 ? 'fill-amber-400 text-amber-400' : 'text-white/35'}`} />
+              <span className="font-semibold text-white/85">{displayedRating > 0 ? displayedRating.toFixed(1) : 'Nuevo'}</span>
               <span className="text-white/45">· {place.reviewCount || 0} {(place.reviewCount || 0) === 1 ? 'reseña' : 'reseñas'}</span>
             </div>
             <p className="mt-1 text-[13px]" aria-label={place.isOpen ? 'Abierto ahora' : 'Cerrado ahora'}><span className={place.isOpen ? 'font-semibold text-emerald-400' : 'font-semibold text-white/60'}>{place.isOpen ? 'Abierto ahora' : 'Cerrado ahora'}</span>{place.isOpen && closingTime && <span className="text-white/55"> hasta las {formatTime(closingTime)}</span>}</p>
@@ -412,23 +478,34 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
                   <span className="text-[15px] font-medium leading-snug">{place.address || place.location || 'Dirección no disponible'}</span>
                 </div>
               </div>
+              {isHotelProfile && <section aria-labelledby="hotel-services-title" className="pt-1 text-white">
+                <h3 id="hotel-services-title" className="mb-3 text-[17px] font-bold">Fotos</h3>
+                <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/45">Habitaciones</h4>
+                <div className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-3 scrollbar-hide">
+                  {HOTEL_ROOM_IMAGES.map((image, index) => <button key={image} type="button" data-detail-squircle aria-label={`Ver foto de habitación ${index + 1}`} onPointerDownCapture={(event) => event.stopPropagation()} onClick={() => openViewer(HOTEL_SERVICE_IMAGES.length + index)} className="h-[150px] w-[72%] max-w-[280px] shrink-0 snap-start overflow-hidden rounded-[20px] bg-[#292a2d]"><img src={image} alt={`Habitación ${index + 1} de Hotel Nochistlán`} loading="lazy" className="h-full w-full object-cover"/></button>)}
+                </div>
+                <h4 className="mb-2 mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/45">Espacios y servicios</h4>
+                <div className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 scrollbar-hide">
+                  {HOTEL_SERVICE_IMAGES.map((image, index) => <button key={image} type="button" data-detail-squircle aria-label={`Ver foto del hotel ${index + 1}`} onPointerDownCapture={(event) => event.stopPropagation()} onClick={() => openViewer(index)} className="h-[150px] w-[72%] max-w-[280px] shrink-0 snap-start overflow-hidden rounded-[20px] bg-[#292a2d]"><img src={image} alt={`Hotel y servicios ${index + 1} de Hotel Nochistlán`} loading="lazy" className="h-full w-full object-cover"/></button>)}
+                </div>
+              </section>}
               <section aria-labelledby="place-hours-title" className="pt-1 text-white">
                 <h3 id="place-hours-title" className="mb-2 text-[17px] font-bold">Horario</h3>
-                <div className="divide-y divide-white/[0.07]">
+                <div className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 scrollbar-hide">
                   {(is24Hours ? fallbackSchedule : googleDetails?.weekdayDescriptions?.length ? googleDetails.weekdayDescriptions : fallbackSchedule.length ? fallbackSchedule : [place.hours || 'Horario no disponible'])
                     .map((entry, index) => {
                       const separator = entry.indexOf(':');
                       const day = separator >= 0 ? entry.slice(0, separator).trim() : (fallbackSchedule.length ? '' : 'Horario regular');
                       const time = separator >= 0 ? entry.slice(separator + 1).trim() : entry;
                       const isToday = day && day.toLocaleLowerCase('es').startsWith(todayName.slice(0, 3).toLocaleLowerCase('es'));
-                      return <div key={`${entry}-${index}`} className="flex min-h-10 items-center justify-between gap-4 py-2 text-[14px]">
+                      return <div key={`${entry}-${index}`} data-detail-squircle className="flex min-h-[68px] w-[78%] max-w-[320px] shrink-0 snap-start flex-col justify-center gap-1 rounded-[18px] bg-[#202124] px-4 py-3 text-[14px]">
                         <span className={isToday ? 'font-semibold text-white' : 'text-white/65'}>{day || 'Horario regular'}{isToday ? ' · Hoy' : ''}</span>
-                        <span className={`text-right ${/cerrado|closed/i.test(time) ? 'text-white/45' : 'text-white/85'}`}>{time}</span>
+                        <span className={`text-left ${/cerrado|closed/i.test(time) ? 'text-white/45' : 'text-white/85'}`}>{time}</span>
                       </div>;
                     })}
                 </div>
                 {googleDetails?.googleMapsUri && <a href={googleDetails.googleMapsUri} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-[12px] font-medium text-white/55 underline decoration-white/25 underline-offset-2" translate="no">Google Maps</a>}
-                {!place.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es').includes('hotel nochistlan') && <p className="mt-3 text-[12px] leading-relaxed text-white/45">Tip: Muchos negocios suelen cerrar cerca de las 3:00 p. m. y abrir de nuevo alrededor de las 4:00 p. m.; algunos no vuelven a abrir ese día. Confirma el horario antes de ir.</p>}
+                {!isHotelProfile && <p className="mt-3 text-[12px] leading-relaxed text-white/45">Tip: Muchos negocios suelen cerrar cerca de las 3:00 p. m. y abrir de nuevo alrededor de las 4:00 p. m.; algunos no vuelven a abrir ese día. Confirma el horario antes de ir.</p>}
               </section>
               <section aria-labelledby="community-reviews-title" className="pt-1 text-white">
                 <div className="mb-3 flex items-baseline justify-between gap-3"><h3 id="community-reviews-title" className="text-[18px] font-bold">Opiniones</h3><span className="text-[12px] text-white/45">{reviewTotal} reseñas</span></div>
@@ -441,19 +518,27 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
                 </div>
                 <button type="button" data-detail-squircle onClick={() => { setCommunityReviewMode('reviews'); setShowCommunityActions(true); }} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-[16px] bg-[#1683f8] px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#0d74e8]"><MessageCircle className="h-4 w-4"/>Escribir reseña</button>
                 {reviewsLoading ? <div className="mt-4 space-y-3 animate-pulse" role="status" aria-label="Cargando reseñas"><div className="h-3 w-1/3 rounded-full bg-white/10"/><div className="h-3 w-full rounded-full bg-white/[0.07]"/><div className="h-3 w-4/5 rounded-full bg-white/[0.07]"/></div>
-                  : communityReviews.length ? <div className="mt-4 space-y-4">{communityReviews.map((review) => <article key={review.id} className="border-b border-white/[0.07] pb-4 last:border-0">
+                  : communityReviews.length ? <div className="-mx-5 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 scrollbar-hide">{communityReviews.map((review) => <article key={review.id} data-detail-squircle className="w-[82%] max-w-[340px] shrink-0 snap-start rounded-[20px] bg-[#202124] p-4">
                     <div className="mb-1 flex items-center justify-between gap-3">{review.profileId ? <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: review.profileId }))} className="flex min-w-0 items-center gap-2 text-left text-[14px] font-semibold"><span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/10 text-[11px]">{review.avatar ? <img src={review.avatar} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover"/> : review.author.slice(0, 1)}</span><span className="truncate">{review.author}</span></button> : <span className="text-[14px] font-semibold">{review.author}</span>}<span className="flex shrink-0 items-center gap-1 text-[12px] font-semibold text-blue-300"><Star className="h-3 w-3 fill-current"/>{review.rating}</span></div>
                     <p className="text-[14px] leading-relaxed text-white/75">{review.text}</p>
                     {review.createdAt && <time className="mt-1 block text-[11px] text-white/40">{new Date(review.createdAt).toLocaleDateString('es-MX')}</time>}
                   </article>)}</div>
                   : <div data-detail-squircle className="mt-4 rounded-[24px] bg-[#202124] px-4 py-3.5"><p className="text-[13px] font-semibold text-white/70">Todavía no hay reseñas de la comunidad</p><div className="mt-3 space-y-2" aria-hidden="true"><div className="h-2.5 w-[82%] animate-pulse rounded-full bg-blue-300/10"/><div className="h-2.5 w-[60%] animate-pulse rounded-full bg-white/[0.06]"/></div><p className="mt-3 text-xs text-white/45">Sé la primera persona en contar cómo te fue.</p></div>}
               </section>
-              {googleDetails?.reviews?.length ? <section aria-labelledby="google-reviews-title" className="pt-1 text-white">
-                <div className="mb-3 flex items-baseline justify-between gap-3"><h3 id="google-reviews-title" className="text-[17px] font-bold">Reseñas de Google Maps</h3><a href={googleDetails.googleMapsUri} target="_blank" rel="noreferrer" className="text-[12px] text-white/55 underline underline-offset-2" translate="no">Google Maps</a></div>
-                <div className="space-y-4">{googleDetails.reviews.map((review, index) => <article key={`${review.author.name}-${index}`} className="border-b border-white/[0.07] pb-4 last:border-0">
-                  <div className="mb-1 flex items-center gap-2.5">{review.author.photoUri && <img src={review.author.photoUri} alt="" className="h-7 w-7 rounded-full object-cover"/>}<div className="min-w-0 flex-1"><a href={review.author.uri || review.googleMapsUri || googleDetails.googleMapsUri} target="_blank" rel="noreferrer" className="block truncate text-[13px] font-semibold">{review.author.name}</a>{review.relativePublishTimeDescription && <span className="text-[11px] text-white/45">{review.relativePublishTimeDescription}</span>}</div><span className="flex shrink-0 items-center gap-1 text-[12px] text-white/70"><Star className="h-3 w-3 fill-amber-400 text-amber-400"/>{review.rating}</span></div>
+              {isHotelProfile ? <section aria-labelledby="tripadvisor-reviews-title" className="pt-1 text-white">
+                <div className="mb-3 flex items-baseline justify-between gap-3"><h3 id="tripadvisor-reviews-title" className="text-[17px] font-bold">Reseñas de TripAdvisor</h3><a href="https://www.tripadvisor.com.mx/Profile/fbanuelo" target="_blank" rel="noreferrer" className="text-[12px] text-white/55 underline underline-offset-2">TripAdvisor</a></div>
+                <div className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 scrollbar-hide">{HOTEL_TRIPADVISOR_REVIEWS.map((review) => <article key={review.reviewUrl} className="w-[82%] max-w-[340px] shrink-0 snap-start rounded-[20px] bg-[#292a2d] p-4">
+                  <div className="mb-3 flex items-center gap-2.5">{review.avatar && <img src={review.avatar} alt="" className="h-8 w-8 rounded-full object-cover"/>}<div className="min-w-0 flex-1">{review.profileUrl ? <a href={review.profileUrl} target="_blank" rel="noreferrer" className="block truncate text-[13px] font-semibold">{review.author}</a> : <span className="block truncate text-[13px] font-semibold">{review.author}</span>}{review.details && <span className="block truncate text-[11px] text-white/45">{review.details}</span>}</div></div>
+                  <a href={review.reviewUrl} target="_blank" rel="noreferrer" className="text-[15px] font-semibold text-white">{review.title}</a>
+                  <p className="mt-2 text-[14px] leading-relaxed text-white/75">{review.text}</p>
+                  <div className="mt-3 flex items-center justify-between gap-2"><time className="text-[11px] text-white/40">{review.date}</time><a href={review.reviewUrl} target="_blank" rel="noreferrer" className="shrink-0 text-[11px] text-white/45 underline underline-offset-2">Ver en TripAdvisor</a></div>
+                </article>)}</div>
+              </section> : bestGoogleReviews.length ? <section aria-labelledby="google-reviews-title" className="pt-1 text-white">
+                <div className="mb-3 flex items-baseline justify-between gap-3"><h3 id="google-reviews-title" className="text-[17px] font-bold">Reseñas de Google Maps</h3><a href={googleDetails?.googleMapsUri} target="_blank" rel="noreferrer" className="text-[12px] text-white/55 underline underline-offset-2" translate="no">Google Maps</a></div>
+                <div className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 scrollbar-hide">{bestGoogleReviews.map((review, index) => <article key={`${review.author.name}-${index}`} data-detail-squircle className="w-[82%] max-w-[340px] shrink-0 snap-start rounded-[20px] bg-[#202124] p-4">
+                  <div className="mb-1 flex items-center gap-2.5">{review.author.photoUri && <img src={review.author.photoUri} alt="" className="h-7 w-7 rounded-full object-cover"/>}<div className="min-w-0 flex-1"><a href={review.author.uri || review.googleMapsUri || googleDetails?.googleMapsUri} target="_blank" rel="noreferrer" className="block truncate text-[13px] font-semibold">{review.author.name}</a>{review.relativePublishTimeDescription && <span className="text-[11px] text-white/45">{review.relativePublishTimeDescription}</span>}</div><span className="flex shrink-0 items-center gap-1 text-[12px] text-white/70"><Star className="h-3 w-3 fill-amber-400 text-amber-400"/>{review.rating}</span></div>
                   {review.text && <p className="text-[14px] leading-relaxed text-white/75">{review.text}</p>}
-                  <a href={review.googleMapsUri || googleDetails.googleMapsUri} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-white/45 underline underline-offset-2">Ver reseña en Google Maps</a>
+                  <a href={review.googleMapsUri || googleDetails?.googleMapsUri} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-white/45 underline underline-offset-2">Ver reseña en Google Maps</a>
                 </article>)}</div>
                 <p className="mt-2 text-[11px] leading-relaxed text-white/40">Reseñas ordenadas por relevancia. Google no verifica todas las reseñas.</p>
               </section> : null}
@@ -475,7 +560,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
             </Suspense>
 
             {/* Photos */}
-            {place.images.length > 0 && <section className="pb-4">
+            {!isHotelProfile && place.images.length > 0 && <section className="pb-4">
               <h3 className="mb-3 text-[18px] font-bold text-neutral-900">Fotos</h3>
               {place.images.length > 1 ? <div className="grid aspect-[4/3] grid-cols-2 grid-rows-2 gap-1.5 overflow-hidden rounded-[24px]" data-detail-squircle>
                 {place.images.slice(0, 3).map((img, index) => (
@@ -494,7 +579,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
               </div> : <button type="button" data-detail-squircle aria-label="Abrir foto del negocio" className="h-[240px] w-[180px] overflow-hidden bg-[#292a2d] active:opacity-80" onPointerDownCapture={(event) => event.stopPropagation()} onClick={() => openViewer(0)}>
                 <img src={place.images[0]} alt={`Foto de ${place.name}`} loading="lazy" className="h-full w-full object-cover" />
               </button>}
-              {!!place.communityPosts?.length && <div className="mt-3 space-y-2">{place.communityPosts.slice(0, 6).map((post) => <article key={post.id} className="flex items-center gap-3 rounded-[18px] bg-[#202124] p-2.5">{post.profileId ? <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: post.profileId }))} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">{post.authorPicture ? <img src={post.authorPicture} alt="" referrerPolicy="no-referrer" className="h-8 w-8 shrink-0 rounded-full object-cover"/> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs">{(post.authorName || '?').slice(0, 1)}</span>}<span className="min-w-0"><span className="block truncate text-xs font-semibold">Foto de {post.authorName || 'la comunidad'}</span><span className="mt-0.5 block line-clamp-1 text-[11px] text-white/45">{post.caption || 'Ver perfil y publicaciones'}</span></span></button> : <span className="min-w-0 flex-1 truncate text-xs text-white/45">Foto compartida por la comunidad</span>}<button type="button" aria-label="Abrir foto compartida" onPointerDownCapture={(event) => event.stopPropagation()} onClick={() => { const imageIndex = place.images.findIndex((image) => image === post.imageUrl); if (imageIndex >= 0) openViewer(imageIndex); }} className="h-11 w-11 shrink-0 overflow-hidden rounded-xl"><img src={post.imageUrl} alt="" className="h-full w-full object-cover"/></button></article>)}</div>}
+              {!!place.communityPosts?.length && <div className="mt-3 space-y-2">{place.communityPosts.slice(0, 6).map((post) => <article key={post.id} className="flex items-center gap-3 rounded-[18px] bg-[#202124] p-2.5">{post.profileId ? <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: post.profileId }))} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">{post.authorPicture ? <img src={post.authorPicture} alt="" referrerPolicy="no-referrer" className="h-8 w-8 shrink-0 rounded-full object-cover"/> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs">{(post.authorName || '?').slice(0, 1)}</span>}<span className="min-w-0"><span className="block truncate text-xs font-semibold">Foto de {post.authorName || 'la comunidad'}</span><span className="mt-0.5 block line-clamp-1 text-[11px] text-white/45">{post.caption || 'Ver perfil y publicaciones'}</span></span></button> : <span className="min-w-0 flex-1 truncate text-xs text-white/45">Foto compartida por la comunidad</span>}<button type="button" aria-label="Abrir foto compartida" onPointerDownCapture={(event) => event.stopPropagation()} onClick={() => { const imageIndex = galleryImages.findIndex((image) => image === post.imageUrl); if (imageIndex >= 0) openViewer(imageIndex); }} className="h-11 w-11 shrink-0 overflow-hidden rounded-xl"><img src={post.imageUrl} alt="" className="h-full w-full object-cover"/></button></article>)}</div>}
             </section>}
 
             {suggestedBusinesses.length > 0 && <section className="mt-2 pb-5" aria-labelledby="suggested-businesses-title">
@@ -569,16 +654,16 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
                     paginate(-1);
                   }
                 }}
-                src={place.images[viewerState.index]}
+                src={galleryImages[viewerState.index]}
                 alt="Fullscreen Viewer"
                 className="absolute m-auto max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl cursor-grab active:cursor-grabbing will-change-transform"
                 onClick={(e) => e.stopPropagation()}
               />
             </AnimatePresence>
 
-            {place.images.length > 1 && (
+            {galleryImages.length > 1 && (
               <div className="absolute bottom-10 left-0 right-0 flex justify-center gap-2 z-[85]" onClick={e => e.stopPropagation()}>
-                {place.images.map((_, idx) => (
+                {galleryImages.map((_, idx) => (
                   <div 
                     key={idx} 
                     className={`w-2 h-2 rounded-full transition-all duration-300 ${idx === viewerState.index ? 'bg-white scale-125' : 'bg-white/40'}`} 
@@ -702,7 +787,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
                     } else if (!place.websiteUrl && (place.name.toLowerCase().includes('hotel nochistlán') || place.name.toLowerCase().includes('hotel nochistlan'))) {
                       url = 'https://hotelnochistlan.com/';
                     }
-                    window.open(url, '_blank');
+                    window.open(url, '_blank', 'noopener,noreferrer');
                   }}
                   className="flex-1 bg-[#1a73e8] text-white font-bold py-3.5 rounded-xl hover:bg-[#1557b0] active:opacity-80 transition-colors"
                 >

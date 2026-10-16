@@ -83,7 +83,7 @@ export function BusinessExplorePage({ places, directoryVersion, onSelectBusiness
 
     <section className="mx-auto max-w-5xl">
       <div className="mb-4 flex items-end justify-between gap-3 px-1">
-        <div><p className="text-[9px] font-bold uppercase tracking-[.2em] text-white/40">PuntoNochi · Nochistlán</p><h1 className="mt-1 text-[23px] font-bold tracking-[-.045em] sm:text-[27px]">Explora negocios</h1></div>
+        <div><h1 className="text-[23px] font-bold tracking-[-.045em] sm:text-[27px]">Explora negocios</h1></div>
         <span className="mb-1 flex shrink-0 items-center gap-1.5 text-[10px] font-medium text-white/40"><SlidersHorizontal aria-hidden="true" className="h-3.5 w-3.5"/>{filteredPlaces.length} lugares</span>
       </div>
 
