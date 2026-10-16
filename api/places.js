@@ -12,6 +12,9 @@ export default function placesHandler(req, res) {
   const popularWeek = requestUrl.searchParams.get('__popularWeek');
 
   if (businessApplicationPath) {
+    if (!/^(?:import-maps|[A-Za-z0-9-]+\/(?:photos(?:\/[A-Za-z0-9-]+)?|submit))$/.test(businessApplicationPath)) {
+      return res.status(404).json({ error: 'Business application route not found.' });
+    }
     requestUrl.searchParams.delete('__businessApplicationPath');
     req.url = `/api/business-applications/${businessApplicationPath}${requestUrl.search}`;
   } else if (overviewPlaceId) {
