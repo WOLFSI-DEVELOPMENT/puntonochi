@@ -7,9 +7,9 @@ export type NavDesign = 'dynamic' | 'simple' | 'experimental';
 export function getNavDesign(): NavDesign {
   try {
     const value = localStorage.getItem(NAV_DESIGN_KEY);
-    return value === 'dynamic' || value === 'experimental' ? value : 'simple';
+    return value === 'dynamic' || value === 'simple' || value === 'experimental' ? value : 'experimental';
   }
-  catch { return 'simple'; }
+  catch { return 'experimental'; }
 }
 
 export function setNavDesign(design: NavDesign) {

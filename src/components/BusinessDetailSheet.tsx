@@ -302,17 +302,18 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[60] bg-black/20 backdrop-blur-sm"
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+        className="fixed inset-0 z-[60] bg-black/35"
         onClick={onClose}
       />
       <motion.div
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
-        transition={{ type: "spring", damping: 32, stiffness: 360, mass: 0.82 }}
+        transition={{ type: 'tween', duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
         {...detailDrag}
         data-no-tab-swipe data-desktop-sheet="side-right" data-business-sheet-squircle
-        className="fixed inset-x-0 bottom-0 z-[61] h-[min(92dvh,900px)] max-h-[calc(100dvh-env(safe-area-inset-top))] overflow-hidden rounded-t-[32px] [corner-shape:squircle] bg-[#171717] flex flex-col"
+        className="fixed inset-x-0 bottom-0 z-[61] h-[min(92dvh,900px)] max-h-[calc(100dvh-env(safe-area-inset-top))] overflow-hidden rounded-t-[32px] [corner-shape:squircle] bg-[#171717] flex flex-col [will-change:transform]"
       >
         <SheetDragHandle controls={detailDrag.dragControls} tone="dark" className="absolute inset-x-0 top-0 z-20" />
 

@@ -1,88 +1,57 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronLeft, MoreHorizontal, Star } from 'lucide-react';
-import { Category, Place } from '../types';
+import { Bookmark, ChevronLeft, MousePointerClick } from 'lucide-react';
+import type { Category, Place } from '../types';
 import { mockPlaces } from '../data';
-import CornerKit from '@cornerkit/core';
-import { VerifiedBusinessName } from './VerifiedBusinessName';
+import { getBookmarkedPlaceIds, setBookmarkedPlaceIds } from '../profileStorage';
 
-const categoryCorners = new CornerKit();
+type ClickCounts = Record<string, number>;
 
-export function CategoryPage({ category, onClose, onSelectBusiness }: { category: Category, onClose: () => void, onSelectBusiness: (place: Place) => void }) {
-  const places = mockPlaces.filter((place) => {
-    if (place.category !== category.name) return false;
-    return true;
-  });
+export function CategoryPage({ category, onClose, onSelectBusiness }: { category: Category; onClose: () => void; onSelectBusiness: (place: Place) => void }) {
+  const places = mockPlaces.filter((place) => place.category === category.name);
+  const [clickCounts, setClickCounts] = useState<ClickCounts>({});
+  const [bookmarks, setBookmarks] = useState(getBookmarkedPlaceIds);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      categoryCorners.applyAll('[data-category-place-card]', { radius: 28, smoothing: 1 });
-      categoryCorners.applyAll('[data-category-place-image]', { radius: 23, smoothing: 1 });
-    }, 50);
-    return () => window.clearTimeout(timer);
-  }, [category.id, places.length]);
+    let active = true;
+    fetch('/api/activity/clicks', { cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : {})
+      .then((data: ClickCounts) => { if (active && data && typeof data === 'object') setClickCounts(data); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
-  return (
-    <motion.div 
-      initial={{ opacity: 0, scale: 0.96 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.96 }}
-      transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
-      className="fixed inset-0 z-[45] bg-[#f8f9fa] overflow-y-auto"
-    >
-      <div className="sticky top-0 z-10 bg-[#f8f9fa]/80 backdrop-blur-xl border-b border-black/[0.05] px-4 py-3 flex items-center justify-between">
-        <button 
-          onClick={onClose}
-          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-black/5 active:bg-black/10 transition-colors"
-        >
-          <ChevronLeft className="w-7 h-7 text-neutral-800" strokeWidth={1.5} />
-        </button>
-        <div className="font-semibold text-lg flex items-center gap-2">
-          {category.emoji && (category.emoji.startsWith('http') || category.emoji.startsWith('/')) ? (
-            <img src={category.emoji} alt="" className="h-7 w-7 object-contain" />
-          ) : (
-            <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center text-xl leading-none">{category.emoji || '🏷️'}</span>
-          )}
-          {category.name}
-        </div>
-        <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-black/5 active:bg-black/10 transition-colors">
-          <MoreHorizontal className="w-6 h-6 text-neutral-800" strokeWidth={1.5} />
-        </button>
-      </div>
+  useEffect(() => {
+    const refresh = () => setBookmarks(getBookmarkedPlaceIds());
+    window.addEventListener('puntonochi-bookmarks-updated', refresh);
+    window.addEventListener('storage', refresh);
+    return () => { window.removeEventListener('puntonochi-bookmarks-updated', refresh); window.removeEventListener('storage', refresh); };
+  }, []);
 
-      <div className="p-5 pb-32">
-        <div className="flex flex-col gap-4">
-          {places.map((place) => (
-            <motion.button
-              key={place.id}
-              data-category-place-card
-              whileTap={{ scale: 0.97 }}
-              onClick={() => onSelectBusiness(place)}
-              className="flex flex-col rounded-[28px] bg-[#292a2d] p-[5px] text-left text-white active:opacity-80 transition-opacity"
-            >
-              <div data-category-place-image className="relative h-[180px] w-full overflow-hidden rounded-[23px] bg-[#35363a]">
-                  {place.images?.[0] && <img src={place.images[0]} alt={place.name} loading="lazy" className="h-full w-full object-cover" />}
-                  <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-black/25 px-2.5 py-1 text-xs font-bold text-white backdrop-blur-xl">
-                    <Star className="w-3.5 h-3.5 fill-orange-400 text-orange-400" />
-                    {place.rating > 0 ? place.rating.toFixed(1) : 'Nuevo'}
-                  </div>
-              </div>
-              <div className="flex items-center gap-3 px-3 pb-3 pt-3">
-                {place.logo && <img src={place.logo} alt="" loading="lazy" className="h-11 w-11 shrink-0 rounded-full bg-[#35363a] object-cover" />}
-                <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-[17px] font-bold text-white"><VerifiedBusinessName name={place.name}/></h3>
-                  <p className="truncate text-[14px] font-medium text-white/55">{place.subtitle || `${place.category} • ${place.location}`}</p>
-                </div>
-              </div>
-            </motion.button>
-          ))}
-          {places.length === 0 && (
-            <div className="text-center text-neutral-400 py-10">
-              No hay negocios listados en esta categoría aún.
-            </div>
-          )}
-        </div>
-      </div>
-    </motion.div>
-  );
+  const toggleBookmark = (place: Place) => {
+    const next = bookmarks.includes(place.id) ? bookmarks.filter((id) => id !== place.id) : [...bookmarks, place.id];
+    setBookmarks(next);
+    setBookmarkedPlaceIds(next);
+  };
+
+  return <motion.main initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: .2 }} className="fixed inset-0 z-[45] overflow-y-auto bg-black text-white">
+    <header className="sticky top-0 z-10 isolate flex items-center gap-3 px-4 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
+      <div aria-hidden="true" className="pointer-events-none absolute -inset-x-2 -top-3 z-0 h-[128px] bg-gradient-to-b from-black/85 via-black/50 to-transparent backdrop-blur-[12px] [mask-image:linear-gradient(to_bottom,black_0%,black_46%,transparent_100%)]"/>
+      <button type="button" onClick={onClose} aria-label="Volver a categorías" className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1b1b1d] text-white transition-colors hover:bg-[#29292c] active:scale-95"><ChevronLeft className="h-6 w-6"/></button>
+      <div className="relative z-10 min-w-0 flex-1"><p className="text-[10px] font-semibold uppercase tracking-[.17em] text-white/40">CATEGORÍA</p><h1 className="truncate text-xl font-bold tracking-tight">{category.name}</h1></div>
+      <span className="relative z-10 shrink-0 text-xs text-white/45">{places.length} {places.length === 1 ? 'negocio' : 'negocios'}</span>
+    </header>
+    <section className="mx-auto grid w-full max-w-3xl grid-cols-2 gap-2.5 px-3 pb-[calc(env(safe-area-inset-bottom)+110px)] pt-2 sm:gap-3 sm:px-5">
+      {places.map((place, index) => <motion.article key={place.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index * .012, .18), duration: .2 }} className="group relative min-w-0 overflow-hidden rounded-[20px] bg-[#151516] sm:rounded-[24px]">
+        <button type="button" onClick={() => onSelectBusiness(place)} aria-label={`Abrir ${place.name}`} className="relative block aspect-[1.13] w-full overflow-hidden bg-[#202022] text-left">
+          {place.images?.[0] ? <img src={place.images[0]} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.025]"/> : <span aria-hidden="true" className="flex h-full w-full items-center justify-center text-3xl text-white/20">{category.emoji || '🏷️'}</span>}
+          <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/85 via-black/25 to-transparent"/>
+          <span className="absolute inset-x-3 bottom-3 line-clamp-2 text-[13px] font-bold leading-snug text-white sm:text-sm">{place.name}</span>
+        </button>
+        <span aria-label={`${Number(clickCounts[place.id] || 0)} clics totales`} title="Clics totales" className="absolute bottom-[52px] left-2.5 flex h-6 items-center gap-1 rounded-full bg-black/65 px-2 text-[10px] font-semibold text-white/90 backdrop-blur-sm sm:bottom-[56px]"><MousePointerClick aria-hidden="true" className="h-3 w-3"/>{Number(clickCounts[place.id] || 0).toLocaleString()}</span>
+        <button type="button" onClick={() => toggleBookmark(place)} aria-pressed={bookmarks.includes(place.id)} aria-label={bookmarks.includes(place.id) ? `Quitar ${place.name} de guardados` : `Guardar ${place.name}`} title={bookmarks.includes(place.id) ? 'Quitar de guardados' : 'Guardar'} className="absolute right-2.5 top-2.5 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white opacity-100 backdrop-blur-md transition duration-150 hover:scale-105 hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100"><Bookmark aria-hidden="true" className={`h-4 w-4 ${bookmarks.includes(place.id) ? 'fill-current' : ''}`}/></button>
+      </motion.article>)}
+      {places.length === 0 && <div className="col-span-2 py-16 text-center"><p className="text-sm font-semibold text-white/75">Aún no hay negocios en esta categoría</p><p className="mt-1 text-xs text-white/40">Vuelve pronto para ver nuevos lugares.</p></div>}
+    </section>
+  </motion.main>;
 }

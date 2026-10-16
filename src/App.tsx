@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { categories, visits, mockPlaces, mergeRequestedCategories, replaceDirectoryData } from './data';
-import { Bookmark, ChevronRight, CloudSun, Flame, Instagram, Sparkles, MapPin, Star, Store, X, Timer } from 'lucide-react';
+import { Bookmark, ChevronRight, CloudSun, Flame, Instagram, Search, Settings2, Sparkles, MapPin, Star, Store, X, Timer } from 'lucide-react';
 import { BottomNav } from './components/BottomNav';
 import { ColoniasPage } from './components/ColoniasPage';
 const ExploreVideoWireframe = React.lazy(() => import('./components/ExploreVideoWireframe').then((module) => ({ default: module.ExploreVideoWireframe })));
+const BusinessExplorePage = React.lazy(() => import('./components/BusinessExplorePage').then((module) => ({ default: module.BusinessExplorePage })));
 const ReelCreatorPage = React.lazy(() => import('./components/ReelCreatorPage').then((module) => ({ default: module.ReelCreatorPage })));
 import { CategoryPage } from './components/CategoryPage';
 import { AllCategoriesPage } from './components/AllCategoriesPage';
@@ -25,7 +26,6 @@ import { SearchPage, AskNochiPage } from './components/SearchPage';
 import { BusinessPromotionSheet } from './components/BusinessPromotionSheet';
 import { BusinessSubmissionSheet } from './components/BusinessSubmissionSheet';
 import { AdminPage } from './components/AdminPage';
-import { InstallAppPrompt } from './components/InstallAppPrompt';
 import { SmartOnboarding, readDeviceLocation, type DeviceLocation } from './components/SmartOnboarding';
 import { WelcomePage } from './components/WelcomePage';
 import CornerKit from '@cornerkit/core';
@@ -33,9 +33,11 @@ import { Category, Place, Colonia } from './types';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { DAILY_USE_KEY, getBookmarkedPlaceIds, recordProfileActiveSeconds } from './profileStorage';
 import { PublicProfileSheet } from './components/PublicProfileSheet';
-import { ProfileSheet } from './components/ProfileSheet';
+import { SettingsSheet } from './components/SettingsSheet';
+import { BookmarksSheet } from './components/BookmarksSheet';
 import { AccountAuthSheet } from './components/AccountSheets';
 import { getStreakMilestone, StreakBadgeCelebration, StreakPage } from './components/StreakPage';
+
 import { PublicMenuPage } from './components/PublicMenuPage';
 import { HotelProfileClaimPage } from './components/HotelProfileClaimPage';
 import { PuntoNochiComparisonPage } from './components/PuntoNochiComparisonPage';
@@ -48,6 +50,7 @@ import { findBusinessByRouteSlug, getBusinessPath } from './businessLinks';
 import { installAppLocalization } from './i18n';
 
 const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
+const HOME_SEARCH_PROMPTS = ['Busca un negocio…', '¿Se te antoja algo rico?', 'Encuentra servicios cerca', 'Explora lugares locales'];
 const WELCOME_SEEN_KEY = 'puntonochi-welcome-seen-v1';
 type DailyUse = { lastOpened: string; totalDays: number; currentStreak: number };
 type SignedInAccount = { id: string; name: string; email: string; picture: string | null; phone?: string };
@@ -149,6 +152,7 @@ export default function App() {
     let initShowAllCategories = false;
     let initShowColonias = false;
     let initShowAdmin = false;
+    let initShowSearch = false;
     let initialLegalDocument: LegalDocument | null = null;
     const initShowWelcome = path === '/' || /^\/inicio\/?$/.test(path);
 
@@ -161,6 +165,10 @@ export default function App() {
         initialMenuId = parts[1];
       } else if (parts[0] === 'admin') {
         initShowAdmin = true;
+      } else if (parts[0] === 'buscar') {
+        initShowSearch = true;
+      } else if (parts[0] === 'puntoshorts') {
+        initialTab = 'puntoshorts';
       } else if (parts[0] === 'categories') {
         initShowAllCategories = true;
       } else if (parts[0] === 'colonias') {
@@ -189,7 +197,7 @@ export default function App() {
       }
     }
     
-    return { initialTab, initialCategory, initialBusiness, initialMenuId, initShowAllCategories, initShowColonias, initShowAdmin, initShowWelcome, initialLegalDocument };
+    return { initialTab, initialCategory, initialBusiness, initialMenuId, initShowAllCategories, initShowColonias, initShowAdmin, initShowSearch, initShowWelcome, initialLegalDocument };
   };
 
   const init = getInitialState();
@@ -236,10 +244,13 @@ export default function App() {
   const [timerPausedFor, setTimerPausedFor] = useState<number | null>(null);
   const [timerRemainingDisplay, setTimerRemainingDisplay] = useState(0);
   const timerAudioContext = useRef<AudioContext | null>(null);
-  const [showSearch, setShowSearch] = useState(false);
+  const [showSearch, setShowSearch] = useState(init.initShowSearch);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchCategory, setSearchCategory] = useState<Category | null>(null);
   const [dailyDropFlipped, setDailyDropFlipped] = useState(false);
   const [homeHighlightIndex, setHomeHighlightIndex] = useState(0);
+  const [heroSearchPromptIndex, setHeroSearchPromptIndex] = useState(0);
+  const [heroSearchTypedLength, setHeroSearchTypedLength] = useState(0);
   const [showSponsorSheet, setShowSponsorSheet] = useState(false);
   const [weatherSummary, setWeatherSummary] = useState<{ high: number | null; low: number | null; precipitationChance: number | null } | null>(null);
   const timerActive = timerEndAt !== null || timerPausedFor !== null;
@@ -290,6 +301,28 @@ export default function App() {
     return () => { active = false; };
   }, []);
   useEffect(() => setDailyDropFlipped(false), [homeHighlightIndex]);
+  useEffect(() => {
+    let promptIndex = 0;
+    let typingTimer = 0;
+    const typePrompt = (index: number) => {
+      window.clearTimeout(typingTimer);
+      setHeroSearchPromptIndex(index);
+      setHeroSearchTypedLength(0);
+      let length = 0;
+      const typeNext = () => {
+        length += 1;
+        setHeroSearchTypedLength(length);
+        if (length < HOME_SEARCH_PROMPTS[index].length) typingTimer = window.setTimeout(typeNext, 42);
+      };
+      typingTimer = window.setTimeout(typeNext, 90);
+    };
+    typePrompt(promptIndex);
+    const interval = window.setInterval(() => {
+      promptIndex = (promptIndex + 1) % HOME_SEARCH_PROMPTS.length;
+      typePrompt(promptIndex);
+    }, 3000);
+    return () => { window.clearInterval(interval); window.clearTimeout(typingTimer); };
+  }, []);
   const loading = false;
   const [showWelcome, setShowWelcome] = useState(() => {
     if (!init.initShowWelcome) return false;
@@ -298,7 +331,7 @@ export default function App() {
   });
   const [welcomeTransitionDone, setWelcomeTransitionDone] = useState(true);
   const [publicProfileId, setPublicProfileId] = useState<string | null>(null);
-  const [showProfileSheet, setShowProfileSheet] = useState(false);
+  const [showBookmarksSheet, setShowBookmarksSheet] = useState(false);
   const [showAccountAuth, setShowAccountAuth] = useState(() => new URLSearchParams(window.location.search).has('accountAuthError'));
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [showStreakPage, setShowStreakPage] = useState(false);
@@ -631,7 +664,7 @@ export default function App() {
     } else if (((activeTab === 'noticias' || activeTab === 'eventos') && /^\/eventos\/[^/]+\/?$/.test(window.location.pathname)) || (activeTab === 'guias' && /^\/articulos\/[^/]+\/?$/.test(window.location.pathname))) {
       path = window.location.pathname;
     } else if (activeTab !== 'inicio') {
-      path = activeTab === 'videos' ? '/mercado' : activeTab === 'guias' ? '/articulos' : `/${activeTab}`;
+      path = activeTab === 'videos' ? '/mercado' : activeTab === 'guias' ? '/articulos' : activeTab === 'puntoshorts' ? '/puntoshorts' : `/${activeTab}`;
     }
     
     if (window.location.pathname !== path) {
@@ -693,8 +726,11 @@ export default function App() {
       title = 'Colonias y zonas de Nochistlán | PuntoNochi';
       description = 'Descubre lugares y negocios por colonia en Nochistlán de Mejía, Zacatecas.';
     } else if (activeTab === 'explorar') {
-      title = 'Explorar negocios y lugares en Nochistlán | PuntoNochi';
-      description = 'Explora fotos, negocios y lugares recomendados en Nochistlán de Mejía, Zacatecas.';
+      title = 'Explora negocios en Nochistlán | PuntoNochi';
+      description = 'Descubre negocios, lugares y servicios de Nochistlán en una galería visual.';
+    } else if (activeTab === 'puntoshorts') {
+      title = 'PuntoShorts | Videos cortos de Nochistlán | PuntoNochi';
+      description = 'Mira PuntoShorts: videos, lugares y momentos de la comunidad de Nochistlán.';
     } else if (activeTab === 'videos') {
       if (routePath.startsWith('/mapa')) {
         title = 'Mapa de negocios y lugares en Nochistlán | PuntoNochi';
@@ -869,26 +905,48 @@ export default function App() {
       {/* Dynamic Main Content based on activeTab */}
       <AnimatePresence mode="wait" initial={false}>
       {activeTab === 'inicio' && (
-        <motion.main key="home-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }} className={`pt-8 ${timerActive ? 'pt-14' : ''}`}>
+        <motion.main key="home-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }} className={`${timerActive ? 'pt-14' : ''}`}>
           {timerActive && <motion.div layout initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="fixed left-[5px] right-[5px] top-[max(5px,env(safe-area-inset-top))] z-40 mx-auto flex max-w-[520px] items-center gap-2 rounded-full border border-[#ff9f0a] bg-[#171719]/85 px-3 py-2 text-white shadow-lg backdrop-blur-xl"><Timer className="h-3.5 w-3.5 text-[#ff9f0a]"/><span className="text-[9px] font-semibold uppercase tracking-wider text-white/55">Temporizador</span><motion.span key={timerDisplay} initial={{ opacity: .6, y: 2 }} animate={{ opacity: 1, y: 0 }} className="ml-auto font-mono text-sm font-bold tabular-nums text-[#ffb347]">{timerDisplay}</motion.span></motion.div>}
           {/* Header Section */}
-          <section className="relative px-5 mb-8">
-            <div className="absolute right-5 top-[-4px] z-20 flex items-center gap-2">
-            <button type="button" onClick={() => setShowStreakPage(true)} aria-label={`${dailyUse.totalDays} días usando PuntoNochi. Racha actual de ${dailyUse.currentStreak} días. Ver actividad`} title={`${dailyUse.totalDays} días usando PuntoNochi · racha de ${dailyUse.currentStreak} días`} className="relative z-20 flex min-h-9 touch-manipulation items-center gap-1.5 rounded-full bg-[#292a2d] px-2.5 py-1 text-left text-white shadow-sm transition-transform active:scale-95">
-              <Flame aria-hidden="true" className="h-4 w-4 shrink-0 fill-orange-400 text-orange-400" />
-              <span className="leading-tight"><span className="block text-xs font-bold tabular-nums">{dailyUse.totalDays} días</span><span className="block text-[8px] font-medium text-white/55">racha {dailyUse.currentStreak}</span></span>
+          <div className="sticky top-0 z-30 -mx-5 isolate px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-2 lg:top-16 lg:pt-3">
+            <div aria-hidden="true" className="pointer-events-none absolute -left-5 -right-5 -top-8 z-0 h-[108px] bg-gradient-to-b from-[#161719]/80 via-[#161719]/45 to-transparent backdrop-blur-[10px] [mask-image:linear-gradient(to_bottom,black_0%,black_42%,transparent_100%)]" />
+            <div className="absolute left-[25px] top-[calc(max(1rem,env(safe-area-inset-top))+1px)] z-20 flex h-10 items-center gap-0.5 rounded-full bg-white/[.08] p-1 backdrop-blur-xl lg:top-[13px]">
+              <button type="button" onClick={() => setShowBookmarksSheet(true)} aria-label="Abrir guardados" title="Guardados" className="flex h-8 w-10 items-center justify-center rounded-full text-white/85 transition-colors hover:bg-white/[.08] active:scale-95"><Bookmark aria-hidden="true" className="h-[17px] w-[17px]" strokeWidth={2}/></button>
+              <span aria-hidden="true" className="h-4 w-px shrink-0 bg-white/15" />
+              <button type="button" onClick={() => setShowProfileSettings(true)} aria-label="Abrir ajustes" title="Ajustes" className="flex h-8 w-10 items-center justify-center rounded-full text-white/85 transition-colors hover:bg-white/[.08] active:scale-95"><Settings2 aria-hidden="true" className="h-[17px] w-[17px]" strokeWidth={2}/></button>
+            </div>
+            <div className="absolute right-[25px] top-[calc(max(1rem,env(safe-area-inset-top))+1px)] z-20 flex items-center gap-2 lg:top-[13px]">
+            <button type="button" onClick={() => setShowStreakPage(true)} aria-label={`${dailyUse.totalDays} días usando PuntoNochi. Racha actual de ${dailyUse.currentStreak} días. Ver actividad`} title={`${dailyUse.totalDays} días usando PuntoNochi · racha de ${dailyUse.currentStreak} días`} className="relative z-20 flex min-h-9 touch-manipulation items-center gap-2 rounded-full bg-white/[.08] px-2 text-left text-white backdrop-blur-xl transition-transform active:scale-95">
+              <Flame aria-hidden="true" className="h-[19px] w-[19px] shrink-0 fill-orange-400 text-orange-400" />
+              <span className="flex min-h-9 items-center gap-1.5 py-1 leading-none"><span className="text-xs font-bold tabular-nums">{dailyUse.totalDays}</span><span className="text-[10px] font-semibold text-white/55">D</span></span>
             </button>
             {signedInAccount && <button type="button" onClick={() => setPublicProfileId(signedInAccount.id)} aria-label="Abrir mi perfil público" title="Mi perfil" className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-[#292a2d] p-[2px] text-white shadow-sm ring-1 ring-white/15 transition-transform active:scale-95">
               {signedInAccount.picture ? <img src={signedInAccount.picture} alt="" referrerPolicy="no-referrer" className="h-full w-full rounded-full object-cover"/> : <span className="flex h-full w-full items-center justify-center rounded-full bg-blue-500 text-sm font-bold">{signedInAccount.name.slice(0, 1).toUpperCase()}</span>}
             </button>}
             </div>
-            <div className="relative mt-2 max-w-[560px]">
-              <h1 className="text-[clamp(42px,11vw,64px)] font-extrabold leading-[.91] tracking-[-.055em] text-white">
-                <FlipText>Descubre</FlipText><br/>
-                <FlipText className="text-[#d8e7ff]">Nochistlán</FlipText>
-              </h1>
+            <div className="pointer-events-none relative z-20 flex h-10 items-center justify-center gap-2 pt-0.5 text-white" aria-label="PuntoNochi">
+              <span aria-hidden="true" className="h-[9px] w-[9px] rounded-full bg-white" />
+              <span className="text-[15px] font-bold tracking-[-0.035em]">PuntoNochi</span>
             </div>
-            <p className="mt-2 max-w-[430px] pl-1 text-[17px] font-medium leading-[1.22] tracking-[-.02em] text-[#d8e7ff] sm:text-[19px]">Negocios, lugares, eventos y más...<br/>todo en un solo lugar.</p>
+          </div>
+          <section className="relative mx-auto mb-8 w-full max-w-3xl px-5">
+            <div className="mt-3 mb-4">
+              <h1 className="mb-2 px-1 text-[clamp(34px,9vw,46px)] font-extrabold leading-[.96] tracking-[-.055em] text-white">Descubre Nochistlán</h1>
+              <p className="mb-4 px-1 text-[15px] font-medium leading-snug text-white/60">Negocios, lugares, eventos y más, todo en un solo lugar.</p>
+              <button type="button" onClick={() => { setSearchCategory(null); setSearchQuery(''); setShowSearch(true); }} aria-label="Abrir búsqueda" className="flex h-[50px] w-full items-center gap-3 rounded-full bg-[#38393c]/85 px-4 text-left text-white/55 backdrop-blur-[12px] backdrop-saturate-125 transition-colors hover:bg-[#404145]/90 active:bg-[#47484c]/90">
+                <Search aria-hidden="true" className="h-[18px] w-[18px] shrink-0 text-white/60" />
+                <span aria-hidden="true" className="min-w-0 truncate text-[13px]">{HOME_SEARCH_PROMPTS[heroSearchPromptIndex].slice(0, heroSearchTypedLength)}<span className="ml-px animate-pulse text-white/65">|</span></span>
+              </button>
+              <div aria-label="Explorar categorías" className="mt-3 flex snap-x snap-mandatory gap-2 overflow-x-auto scroll-smooth pb-1 scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch', maskImage: 'linear-gradient(to right, transparent 0, #000 20px, #000 calc(100% - 20px), transparent 100%)', WebkitMaskImage: 'linear-gradient(to right, transparent 0, #000 20px, #000 calc(100% - 20px), transparent 100%)' }}>
+                {categories.slice(0, 12).map((category) => {
+                  const emojiCode = Array.from(category.emoji).map((character) => character.codePointAt(0)?.toString(16)).filter((point) => point && point !== 'fe0f').join('-');
+                  return <button key={category.id} type="button" onClick={() => { setSearchCategory(category); setSearchQuery(category.name); setShowSearch(true); }} className="flex h-9 shrink-0 snap-start items-center gap-2 rounded-full bg-[#292a2d] px-3 text-[11px] font-semibold text-white/85 transition-colors hover:bg-[#303135] active:bg-[#35363a]">
+                    <img src={`https://cdn.jsdelivr.net/npm/@svgmoji/twemoji@2.0.0/svg/${emojiCode.toUpperCase()}.svg`} alt="" aria-hidden="true" loading="lazy" className="h-[17px] w-[17px] object-contain" />
+                    <span>{category.name}</span>
+                  </button>;
+                })}
+              </div>
+            </div>
             <div className="mt-4">
               <motion.div role="group" aria-label="Pregunta del día, pronóstico, patrocinadores e Instagram" className="ck-home-daily-drop-card relative min-h-[156px] overflow-hidden rounded-[24px] bg-[#292a2d] text-white">
                 <div className={`absolute inset-0 flex transition-transform duration-500 ${reduceMotion ? 'transition-none' : '[transition-timing-function:cubic-bezier(.22,1,.36,1)]'}`} style={{ width: '400%', transform: `translateX(-${homeHighlightIndex * 25}%)` }}>
@@ -1204,8 +1262,9 @@ export default function App() {
         </motion.main>
       )}
 
-        {activeTab === 'explorar' && (
-          <React.Suspense fallback={<div className="fixed inset-0 z-[80] bg-[#08090b]"/>}>
+        {activeTab === 'explorar' && <React.Suspense key="explore-page" fallback={<div className="min-h-[70dvh] bg-[#111214]"/>}><BusinessExplorePage places={mockPlaces} directoryVersion={directoryVersion} onSelectBusiness={(business) => setSelectedBusiness(business)} onOpenSearch={(query) => { setSearchQuery(query || ''); setShowSearch(true); }}/></React.Suspense>}
+        {activeTab === 'puntoshorts' && (
+          <React.Suspense key="puntoshorts-page" fallback={<div className="fixed inset-0 z-[80] bg-[#08090b]"/>}>
             <ExploreVideoWireframe onClose={() => setActiveTab('inicio')} onRequireAccount={() => setShowAccountAuth(true)} onCreateShort={async () => { const response = await fetch('/api/account/session', { cache: 'no-store', credentials: 'same-origin' }); const session = await response.json().catch(() => ({})); if (session.authenticated) setShowReelCreator(true); else setShowAccountAuth(true); }} onCreateEvent={async () => { const response = await fetch('/api/account/session', { cache: 'no-store', credentials: 'same-origin' }); const session = await response.json().catch(() => ({})); if (session.authenticated) { setOpenEventCreatorOnPage(true); setActiveTab('eventos'); } else setShowAccountAuth(true); }} onOpenEvent={(id) => { window.history.pushState({}, '', `/eventos/${encodeURIComponent(id)}`); setActiveTab('eventos'); }} onOpenBusiness={(business) => {
               setActiveTab('inicio');
               setSelectedBusiness(business);
@@ -1243,8 +1302,8 @@ export default function App() {
       <AnimatePresence>{legalDocument && <LegalPage document={legalDocument} onClose={() => { setLegalDocument(null); window.history.replaceState({}, '', '/'); }}/>}</AnimatePresence>
 
       {/* Bottom Navigation & Search */}
-      {activeTab !== 'ask-nochi' && activeTab !== 'explorar' && !showAdminPage && !showStreakPage && !legalDocument && !(activeTab === 'videos' && marketplaceDetailOpen) && (
-        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => { setSearchQuery(''); setShowSearch(false); }} onOpenProfile={() => setShowProfileSheet(true)} onSelectBusiness={(place) => setSelectedBusiness(place)} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} profileEmail={signedInAccount?.email} timerEndAt={timerEndAt} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onStopTimer={stopTimer} onTimerComplete={completeTimer} searchQuery={searchQuery} searchOpen={showSearch} />
+      {activeTab !== 'ask-nochi' && activeTab !== 'puntoshorts' && !showAdminPage && !showStreakPage && !legalDocument && !(activeTab === 'videos' && marketplaceDetailOpen) && (
+        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchCategory(null); setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => { setSearchQuery(''); setShowSearch(false); }} onOpenProfile={() => { if (signedInAccount) setPublicProfileId(signedInAccount.id); else setShowAccountAuth(true); }} onSelectBusiness={(place) => setSelectedBusiness(place)} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} profileEmail={signedInAccount?.email} timerEndAt={timerEndAt} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onStopTimer={stopTimer} onTimerComplete={completeTimer} searchQuery={searchQuery} searchOpen={showSearch} />
       )}
 
       {/* Pages & Overlays */}
@@ -1258,14 +1317,15 @@ export default function App() {
             key="search-page"
             query={searchQuery}
             onSearchTerm={(term) => setSearchQuery(term)}
-            onClose={() => { setSearchQuery(''); setShowSearch(false); }}
+            onClose={() => { setSearchCategory(null); setSearchQuery(''); setShowSearch(false); }}
             onOpenEvents={() => setActiveTab('noticias')}
             onOpenMarketplace={() => setActiveTab('videos')}
-            places={selectedCategory ? mockPlaces.filter((place) => place.category === selectedCategory.name) : mockPlaces}
-            categoryScoped={Boolean(selectedCategory)}
-            categoryName={selectedCategory?.name}
+            places={searchCategory ? mockPlaces.filter((place) => place.category === searchCategory.name) : selectedCategory ? mockPlaces.filter((place) => place.category === selectedCategory.name) : mockPlaces}
+            categoryScoped={Boolean(searchCategory || selectedCategory)}
+            categoryName={searchCategory?.name || selectedCategory?.name}
             onSelectBusiness={(place) => {
               setSelectedCategory(null);
+              setSearchCategory(null);
               setSelectedBusiness(place);
               setSearchQuery('');
               setShowSearch(false);
@@ -1322,14 +1382,13 @@ export default function App() {
           />
         )}
 
-        <InstallAppPrompt enabled={!loading} />
         <SmartOnboarding enabled={!loading && !showWelcome && welcomeTransitionDone && !showAdminPage} onLocation={setDeviceLocation} />
         {showWelcome && !showAdminPage && <WelcomePage onContinue={finishWelcome} />}
         {publicProfileId && <PublicProfileSheet profileId={publicProfileId} onClose={() => setPublicProfileId(null)} onCreateShort={() => { setPublicProfileId(null); setShowReelCreator(true); }} />}
-        {showProfileSheet && <ProfileSheet onClose={() => setShowProfileSheet(false)} onSelectBusiness={(place) => setSelectedBusiness(place)} />}
         {showAccountAuth && <AccountAuthSheet onClose={() => setShowAccountAuth(false)}/>}
-        {showProfileSettings && <ProfileSheet settingsOnly onClose={() => setShowProfileSettings(false)} onSelectBusiness={(place) => setSelectedBusiness(place)} />}
       </AnimatePresence>
+      <AnimatePresence>{showBookmarksSheet && <BookmarksSheet key="bookmarks-sheet" onClose={() => setShowBookmarksSheet(false)} onSelectBusiness={(place) => setSelectedBusiness(place)} />}</AnimatePresence>
+      <AnimatePresence>{showProfileSettings && <SettingsSheet key="settings-sheet" account={signedInAccount} onClose={() => setShowProfileSettings(false)} onRequireAuth={() => { setShowProfileSettings(false); setShowAccountAuth(true); }} />}</AnimatePresence>
       <Analytics />
     </AutoLayoutRoot>
   );

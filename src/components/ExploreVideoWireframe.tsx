@@ -128,7 +128,7 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
       ? { kind: 'ayuntamiento', name: 'Ayuntamiento Nochistlán', handle: '@ayuntamiento.nochistlan', description: AYUNTAMIENTO_DESCRIPTION, avatar: AYUNTAMIENTO_AVATAR, location: 'Nochistlán de Mejía, Zacatecas', business: null }
       : { kind: 'puntonochi', name: 'PuntoNochi', handle: '@puntonochi', description: PUNTONOCHI_DESCRIPTION, avatar: PUNTONOCHI_AVATAR, location: 'Nochistlán, Zacatecas', business: null };
   const currentStats = videoStats[currentVideo.id] || emptyStats;
-  const shareUrl = `${window.location.origin}/explorar?short=${encodeURIComponent(currentVideo.id)}`;
+  const shareUrl = `${window.location.origin}/puntoshorts?short=${encodeURIComponent(currentVideo.id)}`;
   const formatTime = (seconds: number) => `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
   const formatCount = (count: number) => new Intl.NumberFormat('es-MX', { notation: 'compact', maximumFractionDigits: 1 }).format(count);
   useEffect(() => {
@@ -384,13 +384,13 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
     touchStartY.current = null;
   };
 
-  return <motion.main initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: .22 }} className="fixed inset-0 z-[80] overflow-hidden bg-[#08090b] text-white">
+  return <motion.main initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'tween', duration: .46, ease: [0.22, 1, 0.36, 1] }} className="fixed inset-0 z-[80] overflow-hidden bg-[#08090b] text-white [will-change:transform]">
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 hidden overflow-hidden md:block">
       <div className="absolute left-1/2 top-1/2 h-[min(82vh,920px)] w-[min(80vw,1100px)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(ellipse,rgba(111,76,167,.3)_0%,rgba(46,91,136,.2)_40%,rgba(8,9,11,0)_72%)] blur-[100px]"/>
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_5%,rgba(8,9,11,.28)_76%)]"/>
     </div>
 
-    <button type="button" onClick={onClose} aria-label="Cerrar explorar" className="absolute left-4 top-[max(14px,env(safe-area-inset-top))] z-30 flex h-11 w-11 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-md transition-transform active:scale-90 md:left-6 md:top-6"><X className="h-5 w-5"/></button>
+    <button type="button" onClick={onClose} aria-label="Cerrar PuntoShorts" className="absolute left-4 top-[max(14px,env(safe-area-inset-top))] z-30 flex h-11 w-11 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-md transition-transform active:scale-90 md:left-6 md:top-6"><X className="h-5 w-5"/></button>
     <div aria-label="PuntoShorts" className="pointer-events-none absolute inset-x-0 top-[max(22px,env(safe-area-inset-top))] z-30 text-center text-[14px] font-semibold tracking-tight text-white">PuntoShorts</div>
     <button type="button" onClick={() => setCreateMenuOpen((open) => !open)} aria-label="Crear" aria-expanded={createMenuOpen} aria-haspopup="menu" className="absolute right-4 top-[max(14px,env(safe-area-inset-top))] z-40 flex h-11 w-11 items-center justify-center text-white transition-transform active:scale-90 md:right-6 md:top-6"><Plus className="h-6 w-6" strokeWidth={2}/></button>
     <AnimatePresence>{createMenuOpen && <>

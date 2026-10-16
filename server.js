@@ -2867,6 +2867,20 @@ app.post('/api/activity/click', requireNeon, async (req, res) => {
   }
 });
 
+app.get('/api/activity/clicks', requireNeon, async (_req, res) => {
+  try {
+    await ensurePlaceActivitySchema();
+    const rows = await sql`SELECT place_id AS "placeId", COUNT(*)::INTEGER AS clicks
+      FROM place_activity WHERE action = 'click' AND place_id IS NOT NULL GROUP BY place_id`;
+    const counts = Object.fromEntries(rows.map((row) => [row.placeId, Number(row.clicks) || 0]));
+    res.set('Cache-Control', 'private, no-store');
+    res.json(counts);
+  } catch (error) {
+    console.error('Could not load business click totals:', error);
+    res.status(503).json({ error: 'No se pudieron cargar los clics de los negocios.' });
+  }
+});
+
 app.get('/api/places/popular-week', requireNeon, async (req, res) => {
   try {
     if (await useExperimentalCatalog(req)) {

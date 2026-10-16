@@ -1,5 +1,4 @@
 export const APP_LANGUAGE_KEY = 'puntonochi-language-v1';
-const TRANSLATION_CACHE_KEY = 'puntonochi-ui-translation-cache-v1';
 
 export const APP_LANGUAGES = [
   { code: 'es', name: 'Español', nativeName: 'Español' },
@@ -14,6 +13,8 @@ const translations: Record<string, Record<string, string>> = {
     'Elige el idioma de toda la interfaz. En automático usamos el idioma preferido de tu navegador y lo actualizamos si cambia.': 'Choose the language for the entire interface. Automatic uses your browser’s preferred language and updates if it changes.',
     'Inicio': 'Home', 'Explorar': 'Explore', 'Noticias': 'News', 'Artículos': 'Articles', 'Crear': 'Create', 'Buscar': 'Search',
     'Buscar en PuntoNochi': 'Search PuntoNochi', 'Buscar en PuntoNochi...': 'Search PuntoNochi...', 'Perfil': 'Profile', 'Ajustes': 'Settings', 'Cerrar': 'Close',
+    'Todas las categorías': 'All categories', 'CATEGORÍA': 'CATEGORY', 'negocio': 'business', 'negocios': 'businesses', 'clics': 'clicks', 'Quitar de guardados': 'Remove from saved',
+    'Aún no hay negocios en esta categoría': 'There are no businesses in this category yet', 'Vuelve pronto para ver nuevos lugares.': 'Check back soon for new places.', 'Aún no hay negocios guardados': 'No saved businesses yet', 'Toca el marcador de un negocio para encontrarlo aquí después.': 'Tap a business bookmark to find it here later.',
     'Idioma de la aplicación': 'App language', 'Elige el idioma de toda la interfaz.': 'Choose the language for the app interface.', 'Idioma': 'Language',
     'PREFERENCIAS': 'PREFERENCES', 'TU ESPACIO': 'YOUR SPACE', 'Diseño de navegación': 'Navigation style', 'Elige cómo quieres ver la barra inferior.': 'Choose how you want the navigation bar to look.',
     'Brillo y movimiento': 'Glow and motion', 'Cristal esmerilado': 'Frosted glass', 'Acceso con passkey': 'Passkey sign-in', 'Usa huella, rostro o el bloqueo de tu dispositivo.': 'Use your fingerprint, face, or device screen lock.',
@@ -29,9 +30,55 @@ const translations: Record<string, Record<string, string>> = {
     'Notas rápidas': 'Quick Notes', 'Más usados': 'Most used', 'Próximamente': 'Coming soon', 'Pregunta del día': 'Question of the day', 'Patrocinadores': 'Sponsors',
     'Sin eventos para este día': 'No events for this day', 'Agenda': 'Schedule', 'Nombre del evento': 'Event name', 'Nuevo evento': 'New event', 'Nuevo recordatorio': 'New reminder',
     'Notas': 'Notes', 'Buscar un lugar, servicio o lo que necesitas': 'Search for a place, service, or anything you need', 'O escribe lo que necesitas': 'Or type what you need',
+    'Busca un negocio…': 'Search for a business…', '¿Se te antoja algo rico?': 'Craving something good?', 'Encuentra servicios cerca': 'Find services nearby', 'Explora lugares locales': 'Explore local places',
+    'Comida': 'Food', 'Vinos y Licores': 'Wine and Liquor', 'Bebidas y Depósitos': 'Drinks and Deposits', 'Farmacia': 'Pharmacy', 'Hogar': 'Home', 'Oficios': 'Trades', 'Mecánica': 'Auto Repair', 'Educación': 'Education',
+    'Servicios Pro.': 'Professional Services', 'Fiestas': 'Parties', 'Música y Audio': 'Music and Audio', 'Viajes y Vehículos': 'Travel and Vehicles', 'Agricultura': 'Agriculture', 'Supermercados': 'Supermarkets',
+    'Moda y Regalos': 'Fashion and Gifts', 'Belleza': 'Beauty', 'Salud Especializada': 'Specialized Health', 'Entretenimiento': 'Entertainment', 'Estilo de Vida': 'Lifestyle', 'Construcción': 'Construction', 'Tecnología': 'Technology', 'Hoteles y Rentas': 'Hotels and Rentals', 'Ayuntamiento': 'City Hall',
+    'PUNTONOCHI EN': 'PUNTONOCHI IN', 'Buscar negocios, lugares o servicios': 'Search businesses, places, or services', 'Abrir búsqueda': 'Open search',
   },
 
 };
+
+const englishToSpanish: Record<string, string> = {
+  ...Object.fromEntries(Object.entries(translations.en).map(([spanish, english]) => [english, spanish])),
+  'Browse businesses': 'Explorar negocios', 'Search businesses, places, or services': 'Buscar negocios, lugares o servicios',
+  'Search businesses, places, or services…': 'Buscar negocios, lugares o servicios…', 'Search a business…': 'Busca un negocio…',
+  'Craving something good?': '¿Se te antoja algo rico?', 'Find services nearby': 'Encuentra servicios cerca',
+  'Explore local places': 'Explora lugares locales', 'Explore categories': 'Explorar categorías',
+  'PuntoNochi in': 'PuntoNochi en', 'Today’s forecast': 'Pronóstico de hoy', "Today's forecast": 'Pronóstico de hoy',
+  'Suggested for you': 'Sugeridos para ti', 'Business for you, based on what you’re looking for and saving': 'Negocios para ti, según lo que buscas y guardas',
+  'Business for you, based on what you\'re looking for and saving': 'Negocios para ti, según lo que buscas y guardas',
+  'Recently Viewed': 'Vistos recientemente', 'Quickly get back to the stores you visited': 'Vuelve rápido a los negocios que visitaste',
+  'The stores you visit will appear here.': 'Los negocios que visites aparecerán aquí.', 'Popular this week': 'Popular esta semana',
+  'What the community is looking for and visiting': 'Lo que la comunidad está buscando y visitando', 'New in Nochistlán': 'Nuevo en Nochistlán',
+  'Recently Added Businesses': 'Negocios agregados recientemente', 'Any new stores we add will appear here.': 'Los negocios nuevos que agreguemos aparecerán aquí.',
+  'Your Saved Businesses': 'Tus negocios guardados', 'You don’t have any favorites yet. Save a store with the bookmark to find it here.': 'Aún no tienes favoritos. Guarda un negocio con el marcador para encontrarlo aquí.',
+  'You don\'t have any favorites yet. Save a store with the bookmark to find it here.': 'Aún no tienes favoritos. Guarda un negocio con el marcador para encontrarlo aquí.',
+  'Featured Places': 'Lugares destacados', 'Recommendations for you': 'Recomendaciones para ti', 'Add your business': 'Agrega tu negocio',
+  'Share your business with the Nochistlán community.': 'Comparte tu negocio con la comunidad de Nochistlán.',
+  'I want to be a sponsor': 'Quiero ser patrocinador', 'Tap to see the answer of the day': 'Toca para ver la respuesta del día',
+  'Flip to see the answer of the day': 'Voltear para ver la respuesta del día', 'Tap to go back': 'Toca para volver',
+  'Question of the day, forecast, sponsors and Instagram': 'Pregunta del día, pronóstico, patrocinadores e Instagram',
+  'Which do you prefer: corn tortillas or flour tortillas?': '¿Qué prefieres: tortillas de maíz o de harina?',
+  'Services': 'Servicios', 'Restaurants': 'Restaurantes', 'Hotels': 'Hoteles', 'Hotels and Rentals': 'Hoteles y Rentas',
+  'Pharmacies': 'Farmacias', 'Banks': 'Bancos', 'Emergencies': 'Emergencias', 'Schools': 'Escuelas', 'Tourism': 'Turismo',
+  'Parks': 'Parques', 'Food': 'Comida', 'Wines and Spirits': 'Vinos y Licores', 'Beverages and Deposits': 'Bebidas y Depósitos',
+  'Home': 'Inicio', 'Marketplace': 'Mercado', 'Trades': 'Oficios', 'Mechanics': 'Mecánica', 'Education': 'Educación',
+  'Pro Services.': 'Servicios Profesionales', 'Parties': 'Fiestas', 'Music & Audio': 'Música y Audio', 'Trips & Vehicles': 'Viajes y Vehículos',
+  'Agriculture': 'Agricultura', 'Supermarkets': 'Supermercados', 'Fashion & Gifts': 'Moda y Regalos', 'Beauty': 'Belleza',
+  'Health Esp.': 'Salud Especializada', 'Entertainment': 'Entretenimiento', 'Lifestyle': 'Estilo de Vida', 'Construction': 'Construcción',
+  'Technology': 'Tecnología', 'City Hall': 'Ayuntamiento', 'Events': 'Eventos', 'Search': 'Buscar', 'Profile': 'Perfil',
+  'Open search': 'Abrir búsqueda', 'Browse by category': 'Por Categoría', 'Find what you need': 'Encuentra lo que necesitas',
+  'days': 'días', 'day': 'día', 'streak': 'racha', 'Open': 'Abierto', 'Closed': 'Cerrado', 'Verified Business': 'Negocio verificado',
+  'See all': 'Ver todos', 'See more': 'Ver más', 'Read more': 'Leer más', 'Show more': 'Mostrar más', 'Show less': 'Mostrar menos',
+  'Cancel': 'Cancelar', 'Save': 'Guardar', 'Close': 'Cerrar', 'Back': 'Volver', 'Continue': 'Continuar', 'Loading…': 'Cargando…',
+  'No results': 'No hay resultados', 'Try another search': 'Intenta otra búsqueda', 'Search for a place, service, or anything you need': 'Busca un lugar, servicio o lo que necesitas',
+  'Or type what you need': 'O escribe lo que necesitas', 'No events for this day': 'Sin eventos para este día', 'Schedule': 'Agenda',
+  'Event name': 'Nombre del evento', 'New event': 'Nuevo evento', 'New reminder': 'Nuevo recordatorio', 'Quick Notes': 'Notas rápidas',
+  'Reminders': 'Recordatorios', 'Calendar': 'Calendario', 'Timer': 'Temporizador', 'Stopwatch': 'Cronómetro', 'Alarms': 'Alarmas',
+  'Most used': 'Más usados', 'Coming soon': 'Próximamente', 'Sponsors': 'Patrocinadores', 'Question of the day': 'Pregunta del día',
+};
+translations.es = englishToSpanish;
 
 export function detectAppLanguage(): AppLanguage {
   const preferred = typeof navigator !== 'undefined' ? navigator.languages?.length ? navigator.languages : [navigator.language] : [];
@@ -73,108 +120,14 @@ export function installAppLocalization() {
   let language = getAppLanguage();
   const textEntries = new WeakMap<Node, { source: string; target: string }>();
   const attributeEntries = new WeakMap<Element, Map<string, { source: string; target: string }>>();
-  const pending = new Map<string, { node: Node; attribute?: string }[]>();
-  const translationCache = new Map<string, string>();
-  try {
-    const saved = JSON.parse(localStorage.getItem(TRANSLATION_CACHE_KEY) || '{}') as Record<string, string>;
-    Object.entries(saved).forEach(([key, value]) => { if (typeof value === 'string') translationCache.set(key, value); });
-  } catch { /* Missing translation cache is fine. */ }
-  let translationTimer: number | undefined;
-  let translating = false;
-  let disposed = false;
-  const cacheKey = (source: string, targetLanguage = language) => `${targetLanguage}\u0000${source}`;
-  const lookupTranslation = (source: string) => translations[language]?.[source.replace(/\s+/g, ' ').trim()] || translationCache.get(cacheKey(source));
-  const isAlreadyInTargetLanguage = (source: string, targetLanguage: AppLanguage) => {
-    const normalized = source.replace(/\s+/g, ' ').trim().toLocaleLowerCase();
-    if (targetLanguage === 'es') {
-      if (Object.keys(translations.en).some((key) => key.toLocaleLowerCase() === normalized)) return true;
-      return /[áéíóúñ¿¡]/i.test(source) || /\b(el|la|los|las|de|del|que|y|en|para|con|una|uno|por|como|tu|tus|sus|es|no|más|aquí|este|esta)\b/i.test(source);
-    }
-    if (Object.values(translations.en).some((value) => value.toLocaleLowerCase() === normalized)) return true;
-    return /\b(the|and|for|with|from|your|you|this|that|are|was|were|what|where|when|how|please|click|tap|save|close|cancel|settings|search|home|profile)\b/i.test(source);
-  };
-  const needsTranslation = (source: string, targetLanguage: AppLanguage) => !isAlreadyInTargetLanguage(source, targetLanguage);
-  const scheduleTranslation = () => {
-    if (translationTimer !== undefined || translating || !pending.size || disposed) return;
-    translationTimer = window.setTimeout(() => { translationTimer = undefined; void translatePending(); }, 280);
-  };
-  const queueTranslation = (source: string, node: Node, attribute?: string) => {
-    if (!source.trim() || source.length > 300 || !/[\p{L}]{2}/u.test(source)) return;
-    const key = cacheKey(source);
-    if (translationCache.has(key)) return;
-    const entries = pending.get(source) || [];
-    if (!entries.some((entry) => entry.node === node && entry.attribute === attribute)) entries.push({ node, attribute });
-    pending.set(source, entries);
-    scheduleTranslation();
-  };
-  const translatePending = async () => {
-    if (translating || disposed || !pending.size || language === 'es') return;
-    const targetLanguage = language;
-    translating = true;
-    const batch = [...pending.entries()].slice(0, 32);
-    batch.forEach(([source]) => pending.delete(source));
-    try {
-      const translationsForBatch: (string | null)[] = new Array(batch.length).fill(null);
-      let nextIndex = 0;
-      const workers = Array.from({ length: Math.min(4, batch.length) }, async () => {
-        while (nextIndex < batch.length) {
-          const index = nextIndex++;
-          const [source] = batch[index];
-          try {
-            const url = new URL('https://api.mymemory.translated.net/get');
-            url.searchParams.set('q', source);
-            url.searchParams.set('langpair', `autodetect|${targetLanguage}`);
-            const response = await fetch(url, { signal: AbortSignal.timeout(9000) });
-            if (!response.ok) continue;
-            const result = await response.json() as { responseStatus?: number; responseData?: { translatedText?: string } };
-            const translated = result.responseData?.translatedText;
-            if (result.responseStatus === 200 && typeof translated === 'string' && translated.trim()) translationsForBatch[index] = translated;
-          } catch { /* Keep the source text if the free translator is offline or rate limited. */ }
-        }
-      });
-      await Promise.all(workers);
-      batch.forEach(([source, entries], index) => {
-        const translated = translationsForBatch[index];
-        if (typeof translated !== 'string' || !translated.trim()) return;
-        translationCache.set(cacheKey(source, targetLanguage), translated);
-        if (language !== targetLanguage) return;
-        entries.forEach(({ node, attribute }) => {
-          if (!node.isConnected) return;
-          if (attribute && node instanceof Element) {
-            const current = node.getAttribute(attribute);
-            const entryMap = attributeEntries.get(node);
-            const previous = entryMap?.get(attribute);
-            if (current !== source && current !== previous?.target) return;
-            let entriesByAttribute = entryMap;
-            if (!entriesByAttribute) { entriesByAttribute = new Map(); attributeEntries.set(node, entriesByAttribute); }
-            entriesByAttribute.set(attribute, { source, target: translated });
-            if (current !== translated) node.setAttribute(attribute, translated);
-          } else if (!attribute && node.nodeType === Node.TEXT_NODE) {
-            const current = node.nodeValue;
-            const previous = textEntries.get(node);
-            if (current !== source && current !== previous?.target) return;
-            textEntries.set(node, { source, target: translated });
-            if (current !== translated) node.nodeValue = translated;
-          }
-        });
-      });
-      try { localStorage.setItem(TRANSLATION_CACHE_KEY, JSON.stringify(Object.fromEntries([...translationCache.entries()].slice(-1600)))); } catch { /* Cache is an optimization. */ }
-    } catch (error) {
-      console.warn('Some interface text could not be translated.', error);
-    } finally {
-      translating = false;
-      scheduleTranslation();
-    }
-  };
   const applyTextNode = (node: Node) => {
     const current = node.nodeValue;
     if (current === null) return;
     const previous = textEntries.get(node);
     const source = previous && current === previous.target ? previous.source : current;
-    const target = language === 'es' ? source : lookupTranslation(source) || source;
+    const target = translatedText(source, language);
     textEntries.set(node, { source, target });
     if (current !== target) node.nodeValue = target;
-    if (target === source && needsTranslation(source, language)) queueTranslation(source, node);
   };
   const applyAttribute = (element: Element, attribute: string) => {
     const current = element.getAttribute(attribute);
@@ -183,10 +136,9 @@ export function installAppLocalization() {
     if (!entries) { entries = new Map(); attributeEntries.set(element, entries); }
     const previous = entries.get(attribute);
     const source = previous && current === previous.target ? previous.source : current;
-    const target = language === 'es' ? source : lookupTranslation(source) || source;
+    const target = translatedText(source, language);
     entries.set(attribute, { source, target });
     if (current !== target) element.setAttribute(attribute, target);
-    if (target === source && needsTranslation(source, language)) queueTranslation(source, element, attribute);
   };
   const applyElement = (element: Element) => {
     for (const attribute of ['placeholder', 'aria-label', 'title']) applyAttribute(element, attribute);
@@ -202,7 +154,7 @@ export function installAppLocalization() {
   const updateLanguage = (nextLanguage = getAppLanguage()) => {
     language = nextLanguage;
     document.documentElement.lang = language;
-    document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
+    document.documentElement.dir = 'ltr';
     applyTree(document.body);
   };
 
@@ -226,8 +178,6 @@ export function installAppLocalization() {
   window.addEventListener('languagechange', handleBrowserLanguageChange);
   updateLanguage(language);
   return () => {
-    disposed = true;
-    if (translationTimer !== undefined) window.clearTimeout(translationTimer);
     observer.disconnect();
     window.removeEventListener('puntonochi-language-changed', handleLanguageChange);
     window.removeEventListener('languagechange', handleBrowserLanguageChange);

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useEffect, useRef, useState } from "react";
-import { AlarmClock, Bell, BookOpen, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Compass, Flag, Home, LayoutGrid, Mic, Newspaper, Pause, Play, Search, Square, Store, Timer, Trash2, UserRound, X } from "lucide-react";
+import { AlarmClock, Bell, BookOpen, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Compass, Flag, Home, Mic, Newspaper, Pause, Play, Search, Square, Store, Timer, Trash2, UserRound, X } from "lucide-react";
 import CornerKit from '@cornerkit/core';
 import { AnimatePresence, motion } from 'motion/react';
 import { getNavDesign, type NavDesign } from '../profileStorage';
@@ -169,7 +169,7 @@ const CSS_TEXT = `
 }
 .pn-progressive-nav { isolation: isolate; background: transparent !important; border: 0 !important; box-shadow: none !important; }
 .pn-progressive-nav::before { content: ""; position: absolute; inset: 0 -24px -34px; z-index: -1; pointer-events: none; background: linear-gradient(to bottom, rgba(27,28,30,.8), rgba(27,28,30,.42) 64%, transparent); -webkit-backdrop-filter: blur(18px) saturate(145%); backdrop-filter: blur(18px) saturate(145%); -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 50%, transparent 100%); mask-image: linear-gradient(to bottom, #000 0%, #000 50%, transparent 100%); }
-.pn-progressive-mobile::before { content: ""; position: absolute; inset: -32px 0 0; z-index: 0; pointer-events: none; background: linear-gradient(to top, rgba(27,28,30,.88), rgba(27,28,30,.4) 58%, transparent); -webkit-backdrop-filter: blur(18px) saturate(145%); backdrop-filter: blur(18px) saturate(145%); -webkit-mask-image: linear-gradient(to top, #000 0%, #000 50%, transparent 100%); mask-image: linear-gradient(to top, #000 0%, #000 50%, transparent 100%); }
+.pn-progressive-mobile::before { content: ""; position: absolute; inset: -47px 0 0; z-index: 0; pointer-events: none; background: linear-gradient(to top, rgba(27,28,30,.88), rgba(27,28,30,.4) 58%, transparent); -webkit-backdrop-filter: blur(18px) saturate(145%); backdrop-filter: blur(18px) saturate(145%); -webkit-mask-image: linear-gradient(to top, #000 0%, #000 50%, transparent 100%); mask-image: linear-gradient(to top, #000 0%, #000 50%, transparent 100%); }
 @media (min-width: 1024px) { .pn-progressive-mobile::before { display: none; } }
 `;
 
@@ -180,6 +180,8 @@ const PATHS = {
     "m333.83-312.43 204.63-61.7q16.95-5.22 29.07-17.34 12.12-12.12 17.34-29.07l61.7-204.63q3.23-9.96-4.1-17.3-7.34-7.33-17.3-4.1l-204.63 61.7q-16.95 5.22-29.07 17.34-12.12 12.12-17.34 29.07l-61.7 204.63q-3.23 9.96 4.1 17.3 7.34 7.33 17.3 4.1Zm146.11-131.16q-15.27 0-25.81-10.6t-10.54-25.87q0-15.27 10.6-25.81t25.87-10.54q15.27 0 25.81 10.6t10.54 25.87q0 15.27-10.6 25.81t-25.87 10.54Zm.09 369.57q-83.46 0-157.54-31.88-74.07-31.88-129.39-87.2-55.32-55.32-87.2-129.36-31.88-74.04-31.88-157.51 0-84.46 31.88-158.54 31.88-74.07 87.16-128.9 55.28-54.84 129.34-86.82 74.06-31.99 157.55-31.99 84.48 0 158.59 31.97 74.1 31.97 128.91 86.77 54.82 54.8 86.79 128.88 31.98 74.08 31.98 158.6 0 83.5-31.99 157.57-31.98 74.07-86.82 129.36-54.83 55.29-128.87 87.17-74.04 31.88-158.51 31.88Z",
   grid_view:
     "M182.15-510q-28.09 0-48.11-20.02t-20.02-48.35v-199.48q0-28.09 20.02-48.23 20.02-20.14 48.11-20.14h199.72q28.09 0 48.11 20.14T450-777.85v199.48q0 28.33-20.02 48.35Q409.96-510 381.87-510H182.15Zm0 395.98q-28.09 0-48.11-20.02t-20.02-48.11v-199.72q0-28.09 20.02-48.11T182.15-450h199.72q28.09 0 48.11 20.02T450-381.87v199.72q0 28.09-20.02 48.11t-48.11 20.02H182.15ZM578.37-510q-28.33 0-48.35-20.02Q510-550.04 510-578.37v-199.48q0-28.09 20.02-48.23 20.02-20.14 48.35-20.14h199.48q28.09 0 48.23 20.14 20.14 20.14 20.14 48.23v199.48q0 28.33-20.14 48.35Q805.94-510 777.85-510H578.37Zm0 395.98q-28.33 0-48.35-20.02Q510-154.06 510-182.15v-199.72q0-28.09 20.02-48.11T578.37-450h199.48q28.09 0 48.23 20.02 20.14 20.02 20.14 48.11v199.72q0 28.09-20.14 48.11t-48.23 20.02H578.37Z",
+  video_library:
+    "M4 20H20V22H4C2.9 22 2 21.1 2 20V6H4V20ZM20 2C21.1 2 22 2.9 22 4V16C22 17.1 21.1 18 20 18H8C6.9 18 6 17.1 6 16V4C6 2.9 6.9 2 8 2H20ZM11 6V14L17 10L11 6Z",
   search:
     "M376.57-324.93q-109.84 0-185.96-76.2Q114.5-477.33 114.5-585t76.2-183.87q76.19-76.2 184.37-76.2 108.17 0 183.86 76.2 75.7 76.2 75.7 184.02 0 43.33-13.64 82.97t-40.92 74.4l240.56 238.57q10.2 9.99 10.2 24.76 0 14.78-10.2 24.98-10.43 10.43-25.21 10.43-14.78 0-24.53-10.43L531.33-378.5q-29.76 25.28-69.6 39.42-39.84 14.15-85.16 14.15Zm-1-68.14q79.81 0 135.37-56.18T566.5-585q0-79.57-55.56-135.75-55.56-56.18-135.37-56.18-80.41 0-136.68 56.18-56.26 56.18-56.26 135.75t56.26 135.75q56.27 56.18 136.68 56.18Z",
   storefront:
@@ -208,7 +210,7 @@ const Icon = ({ name, size = 22 }) => (
       <path
         d={PATHS[name]}
         fill="url(#lgn-glass)"
-        transform={name === "auto_awesome" ? "translate(0 -960) scale(40)" : undefined}
+        transform={name === "auto_awesome" || name === "video_library" ? "translate(0 -960) scale(40)" : undefined}
       />
     </svg>
   </span>
@@ -272,12 +274,13 @@ const darkGlass = (tint) => ({
 const TABS = [
   { id: "home", label: "Home", icon: "home" },
   { id: "explore", label: "Explore", icon: "explore" },
-  { id: "browse", label: "Browse", icon: "grid_view", menu: true },
+  { id: "puntoshorts", label: "PuntoShorts", icon: "video_library" },
   { id: "profile", label: "Profile", avatar: true },
 ];
 
 const MENU_W = 236;
 const DEFAULT_MENU = [
+  { id: 'puntoshorts', label: 'PuntoShorts', icon: 'video_library' },
   { id: "eventos", label: "Eventos", icon: "event" },
   { id: "videos", label: "Mercado", icon: "storefront" },
   { id: "noticias", label: "Noticias", icon: "newspaper" },
@@ -785,6 +788,11 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
     const session = ++voiceSessionRef.current;
     startVoiceRecognition(session);
   };
+  useEffect(() => {
+    const openVoiceSearch = () => beginVoiceSearch();
+    window.addEventListener('puntonochi-open-voice-search', openVoiceSearch);
+    return () => window.removeEventListener('puntonochi-open-voice-search', openVoiceSearch);
+  }, [beginVoiceSearch]);
   const toggleVoiceRecognition = () => {
     if (voiceListeningRef.current) {
       const recognition = voiceRecognitionRef.current;
@@ -912,8 +920,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
           })}
         </div>
         <div className="flex flex-[1.1] items-center justify-end gap-2.5">
-          <button ref={desktopActionsRef} type="button" onClick={() => setMenuOpen((open) => !open)} aria-label="Acciones rápidas" aria-haspopup="menu" aria-expanded={menuOpen} title="Acciones rápidas" className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${menuOpen ? 'bg-[#4b4c4d] text-white' : 'bg-[#3a3b3c] text-white/80 hover:bg-[#4b4c4d]'}`}><LayoutGrid className="h-[19px] w-[19px]"/></button>
-          {experimentalNav && <button type="button" onClick={() => onSearchOpenChange(true)} aria-label="Abrir búsqueda" title="Buscar" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[.08] text-white/85 backdrop-blur-xl transition-colors hover:bg-white/[.14]"><Search className="h-[19px] w-[19px]"/></button>}
+          <button ref={desktopActionsRef} type="button" onClick={() => { setMenuOpen(false); onSearchOpenChange(true); }} aria-label="Buscar" title="Buscar" className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${experimentalNav ? 'bg-white/[.08] text-white/85 backdrop-blur-xl hover:bg-white/[.14]' : 'bg-[#3a3b3c] text-white/80 hover:bg-[#4b4c4d]'}`}><Search className="h-[19px] w-[19px]"/></button>
           <button type="button" onClick={onOpenProfile} aria-label="Abrir perfil" title="Perfil" className={`flex h-10 w-10 items-center justify-center overflow-hidden rounded-full text-white/80 transition-colors ${experimentalNav ? 'bg-white/[.08] backdrop-blur-xl hover:bg-white/[.14]' : 'bg-[#3a3b3c] ring-2 ring-transparent hover:ring-white/20'}`}>
             {avatarSrc ? <img src={avatarSrc} alt={profileName || 'Perfil'} referrerPolicy="no-referrer" className="h-full w-full object-cover"/> : <UserRound aria-hidden="true" className="h-[21px] w-[21px]"/>}
           </button>
@@ -1025,13 +1032,13 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
                 placeItems: "center",
                 borderRadius: 999,
                 marginInline: experimentalNav ? 2 : 0,
-                background: experimentalNav && visualActive === id ? 'rgba(255,255,255,.17)' : 'transparent',
-                backdropFilter: experimentalNav && visualActive === id ? 'blur(14px) saturate(145%)' : undefined,
-                WebkitBackdropFilter: experimentalNav && visualActive === id ? 'blur(14px) saturate(145%)' : undefined,
+                isolation: 'isolate',
+                background: 'transparent',
                 color: "#fff",
               }}
             >
-              {avatar ? <Avatar src={avatarSrc} alt={label} timerActive={timerActive} /> : <Icon name={icon} />}
+              {experimentalNav && visualActive === id && <motion.span layoutId="pn-bottom-nav-active-tab" initial={false} transition={{ type: 'spring', stiffness: 420, damping: 36, mass: .72 }} aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 rounded-full bg-white/[.17] backdrop-blur-[14px]" />}
+              <span className="relative z-10">{avatar ? <Avatar src={avatarSrc} alt={label} timerActive={timerActive} /> : <Icon name={icon} />}</span>
             </button>
           ))}
         </div>

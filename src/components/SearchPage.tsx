@@ -1,9 +1,10 @@
 import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ArrowRight, Bookmark, Clock3, Image as ImageIcon, MapPin, MessageCircle, Plus, Search, Star, X } from 'lucide-react';
+import { ArrowRight, Bookmark, Clock3, Image as ImageIcon, MapPin, MessageCircle, Mic, Plus, Search, Star, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Place } from '../types';
 import CornerKit from '@cornerkit/core';
 import { VerifiedBusinessName } from './VerifiedBusinessName';
+import { isInstalledMobilePwa } from '../pwaDisplay';
 
 const ASK_RECENTS_KEY = 'puntonochi-ask-nochi-recent-v1';
 const AskNochiMap = lazy(() => import('./BusinessLocationMap').then((module) => ({ default: module.BusinessLocationMap })));
@@ -346,6 +347,7 @@ function AskNochiSheet({ places, onClose, onSelectPlace }: { places: Place[]; on
 }
 
 export function SearchPage({ query, onClose, onSelectBusiness, onOpenEvents, onOpenMarketplace, places, categoryScoped, categoryName, onSearchTerm }: SearchPageProps) {
+  const [installedMobilePwa] = useState(isInstalledMobilePwa);
   const [events, setEvents] = useState<{ id: string; title: string; date: string; time?: string | null; location: string; description: string; imageUrl?: string }[]>([]);
   const [listings, setListings] = useState<{ id: string; title: string; category: string; price: string; location: string; description: string; images?: { url: string }[] }[]>([]);
   const touchStartY = useRef<number | null>(null);
@@ -401,8 +403,16 @@ export function SearchPage({ query, onClose, onSelectBusiness, onOpenEvents, onO
   }, [results.length, matchingEvents.length, matchingListings.length]);
 
   return (
-    <motion.main onTouchStart={(event) => { touchStartY.current = event.touches[0]?.clientY ?? null; }} onTouchEnd={(event) => { const endY = event.changedTouches[0]?.clientY; if (touchStartY.current !== null && endY !== undefined && endY - touchStartY.current > 90) onClose(); touchStartY.current = null; }} className="fixed inset-0 z-[45] overflow-y-auto bg-[#101114]/75 pb-28 pt-24 text-white backdrop-blur-2xl" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+    <motion.main onTouchStart={(event) => { touchStartY.current = event.touches[0]?.clientY ?? null; }} onTouchEnd={(event) => { const endY = event.changedTouches[0]?.clientY; if (touchStartY.current !== null && endY !== undefined && endY - touchStartY.current > 90) onClose(); touchStartY.current = null; }} style={installedMobilePwa ? { paddingTop: 'calc(max(env(safe-area-inset-top, 0px), 24px) + 12px)' } : undefined} className="fixed inset-0 z-[45] overflow-y-auto bg-[#101114]/75 pb-[calc(150px+env(safe-area-inset-bottom,0px))] pt-3 text-white backdrop-blur-2xl lg:pb-24 lg:pt-20" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
       <section className="mx-auto max-w-2xl px-4 pb-8">
+        <div className="fixed inset-x-0 bottom-[calc(74px+env(safe-area-inset-bottom,0px))] z-20 mx-auto w-full max-w-2xl px-4 lg:bottom-3">
+          <div role="search" className="flex h-[50px] items-center gap-3 rounded-full bg-white/[.08] px-4 text-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,.12),0_8px_24px_rgba(0,0,0,.16)] backdrop-blur-xl focus-within:bg-white/[.12]">
+            <Search aria-hidden="true" className="h-[18px] w-[18px] shrink-0 text-white/65" />
+            <input value={query} onChange={(event) => onSearchTerm(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') onClose(); }} placeholder="Buscar negocios, lugares o servicios" aria-label="Buscar negocios, lugares o servicios" autoComplete="off" className="min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-white/40" />
+            <button type="button" aria-label="Buscar por voz" title="Buscar por voz" onClick={() => window.dispatchEvent(new Event('puntonochi-open-voice-search'))} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/65 transition-colors hover:bg-white/[.1] hover:text-white active:scale-95"><Mic aria-hidden="true" className="h-[18px] w-[18px]" /></button>
+            {query && <button type="button" aria-label="Borrar búsqueda" onClick={() => onSearchTerm('')} className="flex h-7 w-7 items-center justify-center rounded-full text-white/55 hover:bg-white/[.08]"><X className="h-4 w-4" /></button>}
+          </div>
+        </div>
         {normalized.length < 2 ? <div className="space-y-5 rounded-[24px] bg-white/[0.06] p-5 text-sm text-white/65">
           <p>{categoryScoped && categoryName ? `Busca negocios de ${categoryName}.` : 'Busca negocios, eventos o anuncios en México.'}</p>
           {recentSearches.length > 0 && <div><p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/40"><Clock3 className="h-3.5 w-3.5"/>Búsquedas recientes</p><div className="flex flex-wrap gap-2">{recentSearches.map((term) => <button key={term} type="button" onClick={() => onSearchTerm(term)} className="rounded-full bg-white/[0.08] px-3 py-2 text-white/80 hover:bg-white/[0.13]">{term}</button>)}</div></div>}
