@@ -2260,7 +2260,8 @@ app.get('/api/shorts', requireNeon, async (req, res) => {
       video.total_dislikes AS dislikes,
       (SELECT COUNT(*)::INTEGER FROM short_video_comments AS comment WHERE comment.video_id = video.id) AS "commentCount",
       (SELECT reaction FROM short_video_reactions AS own_reaction WHERE own_reaction.video_id = video.id AND own_reaction.user_google_sub = ${account?.id || ''}) AS "myReaction"
-      FROM short_videos AS video ORDER BY CASE WHEN video.id LIKE 'puntonochi-short-%' THEN 0 WHEN video.id LIKE 'ayuntamiento-short-%' THEN 1 ELSE 2 END, video.id`;
+      FROM short_videos AS video LEFT JOIN user_accounts AS account ON account.google_sub = video.author_google_sub
+      ORDER BY CASE WHEN video.id LIKE 'puntonochi-short-%' THEN 0 WHEN video.id LIKE 'ayuntamiento-short-%' THEN 1 ELSE 2 END, video.id`;
     res.set('Cache-Control', 'no-store');
     res.json(videos);
   } catch (error) {
