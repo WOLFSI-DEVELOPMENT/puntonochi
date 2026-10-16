@@ -205,7 +205,10 @@ export function ReelCreatorPage({ onClose }: { onClose: () => void }) {
   };
 
   const stopRecording = useCallback(() => {
-    if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
+    const recorder = recorderRef.current;
+    if (recorder?.state !== 'recording') return;
+    try { recorder.requestData(); } catch { /* Some browsers flush the pending data when stopped. */ }
+    recorder.stop();
   }, []);
 
   const startRecording = () => {
@@ -223,10 +226,18 @@ export function ReelCreatorPage({ onClose }: { onClose: () => void }) {
       recorder.onstop = () => {
         cleanupRecordingTimers();
         setIsRecording(false);
-        if (chunksRef.current.length) {
-          const nextUrl = URL.createObjectURL(new Blob(chunksRef.current, { type: recorder.mimeType || 'video/webm' }));
+        const recordedChunks = chunksRef.current;
+        const recordedType = recordedChunks.find((chunk) => chunk.type)?.type || recorder.mimeType || 'video/webm';
+        const recordedBlob = new Blob(recordedChunks, { type: recordedType });
+        if (recordedBlob.size > 0) {
+          // Detach the live camera before switching the video element to the saved clip.
+          if (cameraRef.current) {
+            cameraRef.current.pause();
+            cameraRef.current.srcObject = null;
+          }
+          const nextUrl = URL.createObjectURL(recordedBlob);
           setRecordedUrl((previous) => { if (previous) URL.revokeObjectURL(previous); return nextUrl; });
-        }
+        } else setCameraError('No se pudo guardar la grabación. Inténtalo otra vez.');
       };
       recorder.start(200);
       setRecordedUrl((previous) => { if (previous) URL.revokeObjectURL(previous); return ''; });
