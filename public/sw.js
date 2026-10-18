@@ -1,10 +1,24 @@
-const CACHE_NAME = 'puntonochi-shell-v3';
+const CACHE_NAME = 'puntonochi-shell-v4';
 const APP_SHELL = ['/', '/manifest.webmanifest', '/pwa-192.png', '/favicon.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(APP_SHELL))
+      .then(async (cache) => {
+        // Cache the entry JavaScript and CSS during installation so the next
+        // PWA launch can paint from disk without waiting for the network.
+        try {
+          const shell = await cache.match('/');
+          const html = await shell?.text();
+          if (!html) return;
+          const assets = [...html.matchAll(/(?:src|href)=["'](\/assets\/[^"']+\.(?:js|css))(?:\?[^"']*)?["']/g)]
+            .map((match) => match[1]);
+          await Promise.allSettled(assets.map((asset) => cache.add(asset)));
+        } catch {
+          // A failed optional pre-cache must not prevent the app from installing.
+        }
+      })
       .then(() => self.skipWaiting())
   );
 });
@@ -43,13 +57,13 @@ self.addEventListener('fetch', (event) => {
 
   if (url.pathname.startsWith('/assets/') || /\.(?:png|jpe?g|webp|svg|ico|woff2?)$/i.test(url.pathname)) {
     event.respondWith(
-      caches.match(request).then((cached) => cached || fetch(request).then((response) => {
+      caches.open(CACHE_NAME).then((cache) => cache.match(request).then((cached) => cached || fetch(request).then((response) => {
         if (response.ok) {
           const copy = response.clone();
-          event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)));
+          void cache.put(request, copy);
         }
         return response;
-      }))
+      })))
     );
   }
 });

@@ -1,4 +1,5 @@
-/* Shared sheet chrome, matching the account sign-in sheet. */
+/* Desktop-only sheet chrome. Mobile sheets keep each component's own design. */
+@media (min-width: 1024px) {
 .dark [data-desktop-sheet],
 [data-desktop-sheet] {
   background-color: #202124 !important;
@@ -77,12 +78,4 @@
 [data-desktop-sheet]:not(:has([data-sheet-drag-handle])):not(:has(> header)) {
   padding-top: 44px !important;
 }
-
-@media (max-width: 1023px) {
-  [data-desktop-sheet] {
-    left: 5px !important;
-    right: 5px !important;
-    bottom: 5px !important;
-    width: auto !important;
-  }
 }

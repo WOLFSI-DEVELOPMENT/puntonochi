@@ -1,10 +1,9 @@
 type PageLoadingSkeletonProps = {
-  page: 'explore' | 'market' | 'news';
+  page: 'explore' | 'news';
 };
 
 const pageLabels = {
   explore: 'Explorar',
-  market: 'Mercado',
   news: 'Noticias',
 } as const;
 

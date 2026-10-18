@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { categories, visits, mockPlaces, mergeRequestedCategories, replaceDirectoryData } from './data';
-import { Bookmark, ChevronRight, CloudSun, Flame, Instagram, Search, Settings2, MapPin, Star, Store, X, Timer } from 'lucide-react';
+import { Bookmark, ChevronRight, Cloud, CloudLightning, CloudRain, CloudSnow, CloudSun, Flame, Instagram, Search, Settings2, MapPin, Star, Store, X, Timer, Hotel, Utensils, ShoppingCart, Pill, Landmark, Siren, Church, GraduationCap, Trees, Dessert, Wine, Salad } from 'lucide-react';
 import { BottomNav } from './components/BottomNav';
-import { ColoniasPage } from './components/ColoniasPage';
+const ColoniasPage = React.lazy(() => import('./components/ColoniasPage').then((module) => ({ default: module.ColoniasPage })));
 const ExploreVideoWireframe = React.lazy(() => import('./components/ExploreVideoWireframe').then((module) => ({ default: module.ExploreVideoWireframe })));
 const BusinessExplorePage = React.lazy(() => import('./components/BusinessExplorePage').then((module) => ({ default: module.BusinessExplorePage })));
 const ReelCreatorPage = React.lazy(() => import('./components/ReelCreatorPage').then((module) => ({ default: module.ReelCreatorPage })));
-import { CategoryPage } from './components/CategoryPage';
-import { AllCategoriesPage } from './components/AllCategoriesPage';
-import { DestacadosPage } from './components/DestacadosPage';
-import { ColoniaDetailPage } from './components/ColoniaDetailPage';
-import { BusinessDetailSheet } from './components/BusinessDetailSheet';
+const CategoryPage = React.lazy(() => import('./components/CategoryPage').then((module) => ({ default: module.CategoryPage })));
+const AllCategoriesPage = React.lazy(() => import('./components/AllCategoriesPage').then((module) => ({ default: module.AllCategoriesPage })));
+const DestacadosPage = React.lazy(() => import('./components/DestacadosPage').then((module) => ({ default: module.DestacadosPage })));
+const ColoniaDetailPage = React.lazy(() => import('./components/ColoniaDetailPage').then((module) => ({ default: module.ColoniaDetailPage })));
+const BusinessDetailSheet = React.lazy(() => import('./components/BusinessDetailSheet').then((module) => ({ default: module.BusinessDetailSheet })));
 import { FlipText } from './components/FlipText';
 import { VerifiedBusinessName } from './components/VerifiedBusinessName';
 const HomeVideosSection = React.lazy(() => import('./components/HomeVideosSection').then((module) => ({ default: module.HomeVideosSection })));
@@ -18,24 +18,24 @@ const HomeArticlesSection = React.lazy(() => import('./components/HomeArticlesSe
 const HomeEventsSection = React.lazy(() => import('./components/HomeEventsSection').then((module) => ({ default: module.HomeEventsSection })));
 import { articleCatalog } from './data/articles-index';
 import { AutoLayoutRoot } from './layout/AutoLayout';
-const VideosPage = React.lazy(() => import('./components/VideosPage').then((module) => ({ default: module.VideosPage })));
 const NewsPage = React.lazy(() => import('./components/NewsPage').then((module) => ({ default: module.NewsPage })));
 const EventsPage = React.lazy(() => import('./components/EventsPage').then((module) => ({ default: module.EventsPage })));
 const ArticlesPage = React.lazy(() => import('./components/ArticlesPage').then((module) => ({ default: module.ArticlesPage })));
-import { SearchPage, AskNochiPage } from './components/SearchPage';
-import { BusinessPromotionSheet } from './components/BusinessPromotionSheet';
-import { BusinessSubmissionSheet } from './components/BusinessSubmissionSheet';
-import { AdminPage } from './components/AdminPage';
-import { SmartOnboarding, readDeviceLocation, type DeviceLocation } from './components/SmartOnboarding';
+const SearchPage = React.lazy(() => import('./components/SearchPage').then((module) => ({ default: module.SearchPage })));
+const AskNochiPage = React.lazy(() => import('./components/SearchPage').then((module) => ({ default: module.AskNochiPage })));
+const BusinessPromotionSheet = React.lazy(() => import('./components/BusinessPromotionSheet').then((module) => ({ default: module.BusinessPromotionSheet })));
+const BusinessSubmissionSheet = React.lazy(() => import('./components/BusinessSubmissionSheet').then((module) => ({ default: module.BusinessSubmissionSheet })));
+const AdminPage = React.lazy(() => import('./components/AdminPage').then((module) => ({ default: module.AdminPage })));
+const SmartOnboarding = React.lazy(() => import('./components/SmartOnboarding').then((module) => ({ default: module.SmartOnboarding })));
 import { WelcomePage } from './components/WelcomePage';
 import CornerKit from '@cornerkit/core';
 import { Category, Place, Colonia } from './types';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { getBookmarkedPlaceIds, recordProfileActiveSeconds } from './profileStorage';
-import { PublicProfileSheet } from './components/PublicProfileSheet';
-import { SettingsSheet } from './components/SettingsSheet';
-import { BookmarksSheet } from './components/BookmarksSheet';
-import { AccountAuthSheet } from './components/AccountSheets';
+const PublicProfileSheet = React.lazy(() => import('./components/PublicProfileSheet').then((module) => ({ default: module.PublicProfileSheet })));
+const SettingsSheet = React.lazy(() => import('./components/SettingsSheet').then((module) => ({ default: module.SettingsSheet })));
+const BookmarksSheet = React.lazy(() => import('./components/BookmarksSheet').then((module) => ({ default: module.BookmarksSheet })));
+const AccountAuthSheet = React.lazy(() => import('./components/AccountSheets').then((module) => ({ default: module.AccountAuthSheet })));
 
 import { PublicMenuPage } from './components/PublicMenuPage';
 import { HotelProfileClaimPage } from './components/HotelProfileClaimPage';
@@ -50,8 +50,31 @@ import { installAppLocalization } from './i18n';
 
 const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
 const HOME_SEARCH_PROMPTS = ['Busca un negocio…', '¿Se te antoja algo rico?', 'Encuentra servicios cerca', 'Explora lugares locales'];
+const homeCategoryIcon = (name: string) => {
+  const category = name.toLocaleLowerCase();
+  if (/comida/.test(category)) return Salad;
+  if (/turismo|tur[ií]st|iglesia|templo|parroquia/.test(category)) return Church;
+  if (/escuel|colegio|educaci[oó]n|universidad/.test(category)) return GraduationCap;
+  if (/parque|park|jard[ií]n|plaza|recre/.test(category)) return Trees;
+  if (/reposter[ií]|pasteler[ií]|dulce|postre/.test(category)) return Dessert;
+  if (/vino|vinater[ií]|licor|bodega/.test(category)) return Wine;
+  if (/hotel|hosped|alojamiento|renta/.test(category)) return Hotel;
+  if (/restaur|comida|caf[eé]|bar|panader/.test(category)) return Utensils;
+  if (/super|mercado|tienda|abarrote/.test(category)) return ShoppingCart;
+  if (/farm|medic|salud/.test(category)) return Pill;
+  if (/banco|financ/.test(category)) return Landmark;
+  if (/emerg|seguridad|polic[ií]|bombero/.test(category)) return Siren;
+  return Store;
+};
 const WELCOME_SEEN_KEY = 'puntonochi-welcome-seen-v1';
 type SignedInAccount = { id: string; name: string; email: string; picture: string | null; phone?: string };
+type DeviceLocation = { latitude: number; longitude: number; accuracy: number; updatedAt: string };
+function readDeviceLocation(): DeviceLocation | null {
+  try {
+    const value = JSON.parse(localStorage.getItem('puntonochi-device-location-v1') || 'null') as DeviceLocation | null;
+    return value && Number.isFinite(value.latitude) && Number.isFinite(value.longitude) ? value : null;
+  } catch { return null; }
+}
 function distanceFromDevice(place: Place, location: DeviceLocation | null) {
   if (!location || typeof place.lat !== 'number' || typeof place.lng !== 'number') return null;
   const radians = (degrees: number) => degrees * Math.PI / 180;
@@ -91,6 +114,32 @@ function formatWeatherTemperature(value: number | null | undefined, unit: 'C' | 
   return `${Math.round(converted)}°${unit}`;
 }
 
+function weatherDescription(code: number | null | undefined) {
+  if (code === 0) return 'Despejado';
+  if (code === 1) return 'Mayormente despejado';
+  if (code === 2) return 'Parcialmente nublado';
+  if (code === 3) return 'Nublado';
+  if (code === 45 || code === 48) return 'Neblina';
+  if (code != null && code >= 95) return 'Tormenta';
+  if (code != null && (code >= 71 && code <= 86)) return 'Nieve';
+  if (code != null && ((code >= 51 && code <= 67) || (code >= 80 && code <= 82))) return 'Lluvia';
+  return 'Nublado';
+}
+
+function WeatherIcon({ code, className = '' }: { code?: number | null; className?: string }) {
+  if (code === 0) return <CloudSun aria-hidden="true" className={className} />;
+  if (code != null && code >= 95) return <CloudLightning aria-hidden="true" className={className} />;
+  if (code != null && (code >= 51 && code <= 67 || code >= 80 && code <= 82)) return <CloudRain aria-hidden="true" className={className} />;
+  if (code != null && code >= 71 && code <= 86) return <CloudSnow aria-hidden="true" className={className} />;
+  if (code === 1 || code === 2) return <CloudSun aria-hidden="true" className={className} />;
+  return <Cloud aria-hidden="true" className={className} />;
+}
+
+function compactWeatherDay(value: string, index: number) {
+  if (index === 0) return 'Hoy';
+  return new Intl.DateTimeFormat('es-MX', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${value}T12:00:00Z`)).replace('.', '');
+}
+
 declare global {
   interface Window {
     initLiquidGlass: () => void;
@@ -100,9 +149,9 @@ declare global {
 export default function App() {
   const reduceMotion = useReducedMotion();
   const [articlesNearView, setArticlesNearView] = useState(false);
-  const [videosNearView, setVideosNearView] = useState(false);
+  const [shortsNearView, setShortsNearView] = useState(false);
   const articlesSectionRef = useRef<HTMLDivElement>(null);
-  const videosSectionRef = useRef<HTMLDivElement>(null);
+  const shortsSectionRef = useRef<HTMLDivElement>(null);
   useEffect(() => installAppLocalization(), []);
   useEffect(() => {
     document.documentElement.classList.add('dark');
@@ -163,8 +212,10 @@ export default function App() {
         initialTab = 'eventos';
       } else if (parts[0] === 'ask-nochi') {
         initialTab = 'ask-nochi';
-      } else if (parts[0] === 'explorar' || parts[0] === 'guardados' || parts[0] === 'videos' || parts[0] === 'mercado' || parts[0] === 'noticias' || parts[0] === 'mapa' || parts[0] === 'guias' || parts[0] === 'articulos') {
-        initialTab = parts[0] === 'mapa' || parts[0] === 'mercado' ? 'videos' : parts[0] === 'articulos' ? 'guias' : parts[0];
+      } else if (['videos', 'mercado', 'mapa'].includes(parts[0])) {
+        initialTab = 'explorar';
+      } else if (parts[0] === 'explorar' || parts[0] === 'guardados' || parts[0] === 'noticias' || parts[0] === 'guias' || parts[0] === 'articulos') {
+        initialTab = parts[0] === 'articulos' ? 'guias' : parts[0];
       } else if (parts[0] === 'negocio' && parts[1]) {
         initialBusiness = findBusinessByRouteSlug(parts[1], mockPlaces) || null;
       } else {
@@ -209,10 +260,10 @@ export default function App() {
   const [openEventCreatorOnPage, setOpenEventCreatorOnPage] = useState(false);
   const [showReelCreator, setShowReelCreator] = useState(false);
   useEffect(() => {
-    if (!('IntersectionObserver' in window)) { setArticlesNearView(true); setVideosNearView(true); return undefined; }
+    if (!('IntersectionObserver' in window)) { setArticlesNearView(true); setShortsNearView(true); return undefined; }
     const observers = [
       [articlesSectionRef.current, setArticlesNearView],
-      [videosSectionRef.current, setVideosNearView],
+      [shortsSectionRef.current, setShortsNearView],
     ] as const;
     const activeObservers = observers.flatMap(([element, reveal]) => {
       if (!element) return [];
@@ -239,7 +290,7 @@ export default function App() {
   const [heroSearchTypedLength, setHeroSearchTypedLength] = useState(0);
   const [showSponsorSheet, setShowSponsorSheet] = useState(false);
   const [externalSiteToOpen, setExternalSiteToOpen] = useState<{ url: string; host: string } | null>(null);
-  const [weatherSummary, setWeatherSummary] = useState<{ current: number | null; high: number | null; low: number | null; precipitationChance: number | null } | null>(null);
+  const [weatherSummary, setWeatherSummary] = useState<{ current: number | null; high: number | null; low: number | null; precipitationChance: number | null; weatherCode: number; days: { date: string; high: number | null; low: number | null; weatherCode: number }[] } | null>(null);
   const [weatherUnit, setWeatherUnit] = useState<'C' | 'F'>(readWeatherUnit);
   const timerActive = timerEndAt !== null || timerPausedFor !== null;
   const timerDisplay = `${String(Math.floor(Math.ceil(timerRemainingDisplay / 1000) / 60)).padStart(2, '0')}:${String(Math.ceil(timerRemainingDisplay / 1000) % 60).padStart(2, '0')}`;
@@ -276,7 +327,7 @@ export default function App() {
   const dailyDropQuestion = getDailyDropQuestion();
   const dailyDropChoices = getDailyDropChoices(dailyDropQuestion);
   useEffect(() => {
-    const interval = window.setInterval(() => setHomeHighlightIndex((index) => (index + 1) % 4), 10_000);
+    const interval = window.setInterval(() => setHomeHighlightIndex((index) => (index + 1) % 3), 10_000);
     return () => window.clearInterval(interval);
   }, []);
   useEffect(() => {
@@ -286,12 +337,12 @@ export default function App() {
       const data = await response.json();
       if (active && data.days?.[0]) {
         const now = Date.now();
-        const currentHour = Array.isArray(data.hours) ? data.hours.reduce((closest: { temperature: number | null; dateTime: string } | null, hour: { temperature: number | null; dateTime: string }) => {
+        const currentHour = Array.isArray(data.hours) ? data.hours.reduce((closest: { temperature: number | null; dateTime: string; weatherCode: number } | null, hour: { temperature: number | null; dateTime: string; weatherCode: number }) => {
           if (hour.temperature == null) return closest;
           if (!closest || Math.abs(new Date(hour.dateTime).getTime() - now) < Math.abs(new Date(closest.dateTime).getTime() - now)) return hour;
           return closest;
         }, null) : null;
-        setWeatherSummary({ ...data.days[0], current: currentHour?.temperature ?? null });
+        setWeatherSummary({ ...data.days[0], current: currentHour?.temperature ?? null, weatherCode: currentHour?.weatherCode ?? data.days[0].weatherCode ?? 0, days: Array.isArray(data.days) ? data.days.slice(0, 7) : [] });
       }
     }).catch(() => undefined);
     return () => { active = false; };
@@ -330,7 +381,6 @@ export default function App() {
   const [showBookmarksSheet, setShowBookmarksSheet] = useState(false);
   const [showAccountAuth, setShowAccountAuth] = useState(() => new URLSearchParams(window.location.search).has('accountAuthError'));
   const [showProfileSettings, setShowProfileSettings] = useState(false);
-  const [marketplaceDetailOpen, setMarketplaceDetailOpen] = useState(false);
   const [signedInAccount, setSignedInAccount] = useState<SignedInAccount | null>(null);
   const [directoryVersion, setDirectoryVersion] = useState(0);
   const [suggestionVersion, setSuggestionVersion] = useState(0);
@@ -340,7 +390,7 @@ export default function App() {
   const tabSwipeStart = useRef<{ x: number; y: number } | null>(null);
   const previousPrimaryTab = useRef(activeTab);
   const [tabDirection, setTabDirection] = useState(1);
-  const primaryTabs = ['inicio', 'explorar', 'videos', 'noticias', 'eventos'] as const;
+  const primaryTabs = ['inicio', 'explorar', 'noticias', 'eventos'] as const;
 
   useEffect(() => {
     const from = primaryTabs.indexOf(previousPrimaryTab.current as typeof primaryTabs[number]);
@@ -403,14 +453,6 @@ export default function App() {
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
   }, [activeTab]);
-
-  useEffect(() => {
-    const handleMarketplaceDetailVisibility = (event: Event) => {
-      setMarketplaceDetailOpen(Boolean((event as CustomEvent<boolean>).detail));
-    };
-    window.addEventListener('marketplace-detail-visibility', handleMarketplaceDetailVisibility);
-    return () => window.removeEventListener('marketplace-detail-visibility', handleMarketplaceDetailVisibility);
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -636,7 +678,7 @@ export default function App() {
     } else if (((activeTab === 'noticias' || activeTab === 'eventos') && /^\/eventos\/[^/]+\/?$/.test(window.location.pathname)) || (activeTab === 'guias' && /^\/articulos\/[^/]+\/?$/.test(window.location.pathname))) {
       path = window.location.pathname;
     } else if (activeTab !== 'inicio') {
-      path = activeTab === 'videos' ? '/mercado' : activeTab === 'guias' ? '/articulos' : activeTab === 'puntoshorts' ? '/puntoshorts' : `/${activeTab}`;
+      path = activeTab === 'guias' ? '/articulos' : activeTab === 'puntoshorts' ? '/puntoshorts' : `/${activeTab}`;
     }
     
     if (window.location.pathname !== path) {
@@ -703,17 +745,6 @@ export default function App() {
     } else if (activeTab === 'puntoshorts') {
       title = 'PuntoShorts | Videos cortos de Nochistlán | PuntoNochi';
       description = 'Mira PuntoShorts: videos, lugares y momentos de la comunidad de Nochistlán.';
-    } else if (activeTab === 'videos') {
-      if (routePath.startsWith('/mapa')) {
-        title = 'Mapa de negocios y lugares en Nochistlán | PuntoNochi';
-        description = 'Explora en el mapa restaurantes, comercios, servicios y lugares de Nochistlán de Mejía, Zacatecas.';
-      } else if (routePath.startsWith('/mercado')) {
-        title = 'Anuncios y clasificados en Nochistlán | PuntoNochi';
-        description = 'Encuentra productos, servicios y anuncios locales publicados por la comunidad de Nochistlán.';
-      } else {
-        title = 'Videos de Nochistlán | PuntoNochi';
-        description = 'Mira videos cortos y largos sobre negocios, lugares, eventos y novedades de Nochistlán.';
-      }
     } else if (activeTab === 'guias') {
       title = routeArticle ? `${routeArticle.title} | Artículos de Nochistlán | PuntoNochi` : 'Artículos de Nochistlán | PuntoNochi';
       description = routeArticle?.summary || 'Historias, cultura y lugares para conocer mejor Nochistlán de Mejía.';
@@ -922,14 +953,14 @@ export default function App() {
   if (window.location.pathname === '/reclamar/hotelnochistlan') return <><HotelProfileClaimPage onRequireAccount={() => setShowAccountAuth(true)} onClose={() => { window.history.pushState({}, '', '/explorar'); setActiveTab('explorar'); }} />{showAccountAuth && <AccountAuthSheet onClose={() => setShowAccountAuth(false)}/>} {externalSiteConfirmation}</>;
 
   return (
-    <AutoLayoutRoot id="app-root" className={`auto-layout-root relative min-h-screen bg-[#f8f9fa] lg:pt-16 ${activeTab === 'explorar' || activeTab === 'inicio' ? 'pb-0' : 'pb-36'} font-sans text-neutral-900 selection:bg-blue-100`} style={{ fontFamily: "'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif" }}>
+    <AutoLayoutRoot id="app-root" className={`auto-layout-root relative min-h-screen bg-[#f8f9fa] ${activeTab === 'explorar' || activeTab === 'inicio' ? 'pb-0' : 'pb-36'} font-sans text-neutral-900 selection:bg-blue-100`} style={{ fontFamily: "'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif" }}>
       {/* Dynamic Main Content based on activeTab */}
       <AnimatePresence mode="wait" initial={false}>
       {activeTab === 'inicio' && (
-        <motion.main key="home-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }} className={`${timerActive ? 'pt-14' : ''}`}>
+        <motion.main key="home-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }} className={`${timerActive ? 'pt-14' : ''} touch-pan-y`}>
           {timerActive && <motion.div layout initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="fixed left-[5px] right-[5px] top-[max(5px,env(safe-area-inset-top))] z-40 mx-auto flex max-w-[520px] items-center gap-2 rounded-full border border-[#ff9f0a] bg-[#171719]/85 px-3 py-2 text-white shadow-lg backdrop-blur-xl"><Timer className="h-3.5 w-3.5 text-[#ff9f0a]"/><span className="text-[9px] font-semibold uppercase tracking-wider text-white/55">Temporizador</span><motion.span key={timerDisplay} initial={{ opacity: .6, y: 2 }} animate={{ opacity: 1, y: 0 }} className="ml-auto font-mono text-sm font-bold tabular-nums text-[#ffb347]">{timerDisplay}</motion.span></motion.div>}
           {/* Header Section */}
-          <div className="sticky top-0 z-30 -mx-5 isolate px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-2 lg:top-16 lg:pt-3">
+          <div className="sticky top-0 z-30 -mx-5 isolate px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-2 lg:top-0 lg:pt-3">
             <div aria-hidden="true" className="pointer-events-none absolute -left-5 -right-5 -top-8 z-0 h-[108px] bg-gradient-to-b from-[#161719]/80 via-[#161719]/45 to-transparent backdrop-blur-[10px] [mask-image:linear-gradient(to_bottom,black_0%,black_42%,transparent_100%)]" />
             <div className="absolute left-[25px] top-[calc(max(1rem,env(safe-area-inset-top))+1px)] z-20 flex h-10 items-center gap-0.5 rounded-full bg-white/[.08] p-1 backdrop-blur-xl lg:top-[13px]">
               <button type="button" onClick={() => setShowBookmarksSheet(true)} aria-label="Abrir guardados" title="Guardados" className="flex h-8 w-10 items-center justify-center rounded-full text-white/85 transition-colors hover:bg-white/[.08] active:scale-95"><Bookmark aria-hidden="true" className="h-[17px] w-[17px]" strokeWidth={2}/></button>
@@ -957,18 +988,18 @@ export default function App() {
               </button>
               <div aria-label="Explorar categorías" className="mt-3 flex snap-x snap-mandatory gap-2 overflow-x-auto scroll-smooth pb-1 scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch', maskImage: 'linear-gradient(to right, transparent 0, #000 20px, #000 calc(100% - 20px), transparent 100%)', WebkitMaskImage: 'linear-gradient(to right, transparent 0, #000 20px, #000 calc(100% - 20px), transparent 100%)' }}>
                 {categories.slice(0, 12).map((category) => {
-                  const emojiCode = Array.from(category.emoji).map((character) => character.codePointAt(0)?.toString(16)).filter((point) => point && point !== 'fe0f').join('-');
+                  const CategoryIcon = homeCategoryIcon(category.name);
                   return <button key={category.id} type="button" onClick={() => { setSearchCategory(category); setSearchQuery(category.name); setShowSearch(true); }} className="flex h-9 shrink-0 snap-start items-center gap-2 rounded-full bg-[#292a2d] px-3 text-[11px] font-semibold text-white/85 transition-colors hover:bg-[#303135] active:bg-[#35363a]">
-                    <img src={`https://cdn.jsdelivr.net/npm/@svgmoji/twemoji@2.0.0/svg/${emojiCode.toUpperCase()}.svg`} alt="" aria-hidden="true" loading="lazy" className="h-[17px] w-[17px] object-contain" />
+                    <CategoryIcon aria-hidden="true" className="h-[17px] w-[17px] shrink-0 text-white/85" strokeWidth={1.9} />
                     <span>{category.name}</span>
                   </button>;
                 })}
               </div>
             </div>
             <div className="mt-4">
-              <motion.div role="group" aria-label="Pregunta del día, pronóstico, patrocinadores e Instagram" className="ck-home-daily-drop-card relative min-h-[156px] overflow-hidden rounded-[24px] bg-[#292a2d] text-white">
-                <div className={`absolute inset-0 flex transition-transform duration-500 ${reduceMotion ? 'transition-none' : '[transition-timing-function:cubic-bezier(.22,1,.36,1)]'}`} style={{ width: '400%', transform: `translateX(-${homeHighlightIndex * 25}%)` }}>
-                  <div className="h-full w-1/4 shrink-0">
+              <motion.div role="group" aria-label="Pregunta del día, pronóstico y patrocinadores" className="ck-home-daily-drop-card relative min-h-[156px] overflow-hidden rounded-[24px] bg-[#292a2d] text-white">
+                <div className={`absolute inset-0 flex transition-transform duration-500 ${reduceMotion ? 'transition-none' : '[transition-timing-function:cubic-bezier(.22,1,.36,1)]'}`} style={{ width: '300%', transform: `translateX(-${homeHighlightIndex * 33.333333}%)` }}>
+                  <div className="h-full w-1/3 shrink-0">
                     {!dailyDropFlipped ? <button type="button" onClick={() => setDailyDropFlipped(true)} aria-label="Voltear para ver la respuesta del día" className="flex h-full w-full flex-col items-start justify-center px-6 py-5 text-left">
                       <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Pregunta del día</span>
                       <span className="mt-2 text-[18px] font-semibold leading-snug">{dailyDropQuestion}</span>
@@ -980,31 +1011,39 @@ export default function App() {
                       <span className="mt-3 text-[11px] font-medium text-white/40">Toca para volver</span>
                     </button>}
                   </div>
-                  <div className="flex h-full w-1/4 shrink-0 items-center justify-between gap-4 px-6 py-5">
-                    <div><span className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Pronóstico de hoy</span><p className="mt-2 text-lg font-semibold">Nochistlán, Zacatecas</p><p className="mt-1 text-sm text-white/65">{weatherSummary?.high != null && weatherSummary?.low != null ? `${formatWeatherTemperature(weatherSummary.high, weatherUnit)} / ${formatWeatherTemperature(weatherSummary.low, weatherUnit)} · máxima y mínima` : 'Consulta el clima local de hoy'}</p>{weatherSummary?.precipitationChance != null && <p className="mt-1 text-xs text-white/40">Lluvia: {weatherSummary.precipitationChance}%</p>}</div>
-                    <CloudSun aria-hidden="true" className="h-12 w-12 shrink-0 text-amber-200" strokeWidth={1.5}/>
+                  <div role="group" aria-label={`Pronóstico del tiempo para Nochistlán: ${weatherDescription(weatherSummary?.weatherCode)}`} className="relative flex h-full w-1/3 shrink-0 flex-col justify-between overflow-hidden px-4 py-3 sm:px-5" style={{ background: 'linear-gradient(135deg, #347bb4 0%, #285f98 52%, #214e80 100%)' }}>
+                    <div className="flex min-w-0 items-start justify-between gap-2">
+                      <div className="min-w-0"><p className="truncate text-xs font-semibold text-white/90">Nochistlán</p><p className="truncate text-[10px] text-white/65">Zacatecas</p></div>
+                      <WeatherIcon code={weatherSummary?.weatherCode} className="h-5 w-5 shrink-0 text-white" />
+                    </div>
+                    <div className="flex min-w-0 items-center justify-between gap-2">
+                      <p className="text-[34px] font-light leading-none tracking-tight tabular-nums">{formatWeatherTemperature(weatherSummary?.current, weatherUnit)}</p>
+                      <div className="min-w-0 text-right"><p className="truncate text-[11px] font-medium text-white/90">{weatherDescription(weatherSummary?.weatherCode)}</p><p className="mt-0.5 whitespace-nowrap text-[10px] text-white/65">Máx. {formatWeatherTemperature(weatherSummary?.high, weatherUnit)} · Mín. {formatWeatherTemperature(weatherSummary?.low, weatherUnit)}</p></div>
+                    </div>
+                    <div aria-label="Pronóstico para toda la semana" className="grid grid-cols-7 gap-0.5 pt-2">
+                      {(weatherSummary?.days || []).map((day, index) => <div key={day.date} className="flex min-w-0 flex-col items-center gap-1 text-[9px] leading-none text-white/80">
+                        <span className="capitalize">{compactWeatherDay(day.date, index)}</span>
+                        <WeatherIcon code={day.weatherCode} className="h-3.5 w-3.5 text-white" />
+                        <span className="whitespace-nowrap font-semibold tabular-nums">{formatWeatherTemperature(day.high, weatherUnit)}<span className="ml-0.5 font-normal text-white/55">{day.low == null ? '' : Math.round(weatherUnit === 'F' ? (day.low * 9) / 5 + 32 : day.low)}°</span></span>
+                      </div>)}
+                    </div>
                   </div>
-                  <div className="flex h-full w-1/4 shrink-0 flex-col items-start justify-center px-6 py-4">
+                  <div className="flex h-full w-1/3 shrink-0 flex-col items-start justify-center px-6 py-4">
                     <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Patrocinadores</span>
                     <span className="mt-2 text-lg font-semibold">Haz crecer tu negocio en Nochistlán</span>
                     <button type="button" onClick={() => setShowSponsorSheet(true)} className="mt-3 inline-flex h-10 items-center justify-center rounded-full bg-white px-5 text-xs font-bold text-[#202124] transition-transform active:scale-[.98]">Quiero ser patrocinador</button>
                   </div>
-                  <a href="https://www.instagram.com/puntonochistlan/" target="_blank" rel="noopener noreferrer" className="flex h-full w-1/4 shrink-0 items-center gap-3 px-5 py-4 text-white">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] bg-gradient-to-br from-[#ffb347] via-[#ee2a7b] to-[#6228d7] shadow-[0_6px_18px_rgba(238,42,123,.2)]"><Instagram aria-hidden="true" className="h-6 w-6"/></span>
-                    <span className="min-w-0 flex-1"><span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">PuntoNochi en</span><span className="mt-1 block text-[15px] font-bold leading-tight tracking-[-.02em]">Instagram</span><span className="mt-1.5 block truncate text-xs font-medium text-white/55">@puntonochistlan</span></span>
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.08]"><ChevronRight aria-hidden="true" className="h-4 w-4 text-white/70"/></span>
-                  </a>
                 </div>
               </motion.div>
               <div role="tablist" aria-label="Contenido destacado" className="mt-2 flex justify-center gap-1.5">
-                {['Pregunta del día', 'Pronóstico', 'Patrocinadores', 'Instagram'].map((label, index) => <button key={label} type="button" role="tab" aria-label={`Mostrar ${label.toLocaleLowerCase('es-MX')}`} aria-selected={homeHighlightIndex === index} onClick={() => setHomeHighlightIndex(index)} className={`h-1.5 rounded-full transition-all ${homeHighlightIndex === index ? 'w-5 bg-white/75' : 'w-1.5 bg-white/25'}`}/>) }
+                {['Pregunta del día', 'Pronóstico', 'Patrocinadores'].map((label, index) => <button key={label} type="button" role="tab" aria-label={`Mostrar ${label.toLocaleLowerCase('es-MX')}`} aria-selected={homeHighlightIndex === index} onClick={() => setHomeHighlightIndex(index)} className={`h-1.5 rounded-full transition-all ${homeHighlightIndex === index ? 'w-5 bg-white/75' : 'w-1.5 bg-white/25'}`}/>) }
               </div>
             </div>
           </section>
           <div className="flex flex-col">
           <React.Suspense fallback={<div className="mx-5 mb-10 h-[190px] animate-pulse rounded-[24px] bg-white/[.04]"/>}><HomeEventsSection onViewAll={() => setActiveTab('eventos')} onOpenEvent={(id) => { window.history.pushState({}, '', `/eventos/${encodeURIComponent(id)}`); setActiveTab('eventos'); }} /></React.Suspense>
           {/* By Category Section */}
-          <section className="mb-10">
+          <motion.section initial={reduceMotion ? false : { opacity: 0, y: 8 }} whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }} viewport={{ once: true, amount: .08 }} transition={reduceMotion ? { duration: 0 } : { duration: .2, ease: 'easeOut' }} className="mb-10">
             <div 
               className="px-5 mb-4 cursor-pointer active:opacity-70 transition-opacity"
               onClick={() => !loading && setShowAllCategories(true)}
@@ -1015,7 +1054,7 @@ export default function App() {
               <p className="text-[15px] text-neutral-500 font-medium mt-0.5">Encuentra lo que necesitas</p>
             </div>
             
-            <div className="flex overflow-x-auto gap-4 px-5 pb-4 scrollbar-hide snap-x">
+            <div className="flex touch-pan-x snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain scroll-smooth px-5 pb-4 scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
               {loading ? (
                 <>
                   {[1, 2, 3, 4].map((i) => (
@@ -1060,16 +1099,16 @@ export default function App() {
                 })
               )}
             </div>
-          </section>
+          </motion.section>
 
           {/* Personalized suggestions */}
-          <section className="mb-10">
+          <motion.section initial={reduceMotion ? false : { opacity: 0, y: 8 }} whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }} viewport={{ once: true, amount: .08 }} transition={reduceMotion ? { duration: 0 } : { duration: .2, ease: 'easeOut' }} className="mb-10">
             <div className="px-5 mb-4">
               <h2 className="text-2xl font-bold">{deviceLocation ? 'Cerca de ti' : 'Sugeridos'}</h2>
               <p className="text-[15px] text-neutral-500 font-medium mt-0.5">{deviceLocation ? 'Negocios ordenados por distancia a tu ubicación' : 'Negocios para ti, según lo que buscas y guardas'}</p>
             </div>
 
-            <div className="flex gap-4 overflow-x-auto px-5 pb-2 scrollbar-hide snap-x snap-mandatory">
+            <div className="flex touch-pan-x gap-4 overflow-x-auto overscroll-x-contain scroll-smooth px-5 pb-2 scrollbar-hide snap-x snap-mandatory" style={{ WebkitOverflowScrolling: 'touch' }}>
               {loading ? [1, 2, 3].map((item) => <div key={item} className="h-[220px] w-[250px] shrink-0 animate-pulse rounded-[28px] bg-neutral-200 snap-start" />) : suggestedPlaces.map((place) => (
                 <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
                   <img src={place.images[0]} alt={place.name} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
@@ -1086,15 +1125,15 @@ export default function App() {
                 </button>
               ))}
             </div>
-          </section>
+          </motion.section>
 
           {/* Recently viewed businesses */}
-          <section className="mb-10">
+          <motion.section initial={reduceMotion ? false : { opacity: 0, y: 8 }} whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }} viewport={{ once: true, amount: .08 }} transition={reduceMotion ? { duration: 0 } : { duration: .2, ease: 'easeOut' }} className="mb-10">
             <div className="mb-4 px-5">
               <h2 className="text-2xl font-bold tracking-tight">Vistos recientemente</h2>
               <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Vuelve rápido a los negocios que visitaste</p>
             </div>
-            {recentlyViewedPlaces.length ? <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 scrollbar-hide">
+            {recentlyViewedPlaces.length ? <div className="flex touch-pan-x snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain scroll-smooth px-5 pb-2 scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
               {recentlyViewedPlaces.map((place) => <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-neutral-200 text-left text-white shadow-sm transition-transform active:scale-[0.98]">
                 {place.images?.[0] ? <img src={place.images[0]} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 flex items-center justify-center bg-[#303135]"><Store className="h-12 w-12 text-white/25"/></div>}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
@@ -1102,15 +1141,15 @@ export default function App() {
                 <div className="absolute bottom-4 left-4 right-4"><h3 className="line-clamp-2 text-lg font-bold leading-tight"><VerifiedBusinessName name={place.name}/></h3><p className="mt-1 flex items-center gap-1 truncate text-xs text-white/80"><MapPin className="h-3 w-3 shrink-0"/>{place.location || place.address || 'Nochistlán'}</p>{place.rating > 0 && <p className="mt-1 flex items-center gap-1 text-xs text-white/85"><Star className="h-3 w-3 fill-current text-yellow-300"/>{place.rating.toFixed(1)}{place.reviewCount ? ` · ${place.reviewCount} reseñas` : ''}</p>}</div>
               </button>)}
             </div> : <p className="mx-5 rounded-[22px] bg-neutral-100 px-4 py-4 text-sm text-neutral-500">Los negocios que visites aparecerán aquí.</p>}
-          </section>
+          </motion.section>
 
           {/* Popular this week */}
-          {popularPlaces.length > 0 && <section className="mb-10">
+          {popularPlaces.length > 0 && <motion.section initial={reduceMotion ? false : { opacity: 0, y: 8 }} whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }} viewport={{ once: true, amount: .08 }} transition={reduceMotion ? { duration: 0 } : { duration: .2, ease: 'easeOut' }} className="mb-10">
             <div className="mb-4 px-5">
               <h2 className="text-2xl font-bold tracking-tight">Popular esta semana</h2>
               <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Lo que la comunidad está buscando y visitando</p>
             </div>
-            <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 scrollbar-hide">
+            <div className="flex touch-pan-x snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain scroll-smooth px-5 pb-2 scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
               {popularPlaces.map((place) => <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[30px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
                 <img src={place.images[0]} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
@@ -1118,17 +1157,17 @@ export default function App() {
                 <div className="absolute bottom-4 left-4 right-4"><h3 className="line-clamp-2 text-lg font-bold leading-tight"><VerifiedBusinessName name={place.name}/></h3><p className="mt-1 truncate text-xs text-white/80">{place.category} · {place.location || place.address || 'Nochistlán'}</p>{place.rating > 0 && <p className="mt-1 flex items-center gap-1 text-xs text-white/85"><Star className="h-3 w-3 fill-current text-yellow-300"/>{place.rating.toFixed(1)}{place.reviewCount ? ` · ${place.reviewCount} reseñas` : ''}</p>}</div>
               </button>)}
             </div>
-          </section>}
+          </motion.section>}
 
           <div ref={articlesSectionRef} className="min-h-[220px]">{articlesNearView && <React.Suspense fallback={<div className="h-[180px] animate-pulse rounded-[24px] bg-white/[.04]"/>}><HomeArticlesSection onViewAll={() => setActiveTab('guias')} onOpenArticle={(slug) => { window.history.pushState({}, '', `/articulos/${encodeURIComponent(slug)}`); setActiveTab('guias'); }} /></React.Suspense>}</div>
-          <div ref={videosSectionRef} className="min-h-[220px]">{videosNearView && <React.Suspense fallback={<div className="h-[180px] animate-pulse rounded-[24px] bg-white/[.04]"/>}><HomeVideosSection onViewAll={() => setActiveTab('puntoshorts')} onSelectShort={(shortId) => { window.history.pushState({}, '', `/puntoshorts?short=${encodeURIComponent(shortId)}`); setActiveTab('puntoshorts'); }} /></React.Suspense>}</div>
+          <div ref={shortsSectionRef} className="min-h-[220px]">{shortsNearView && <React.Suspense fallback={<div className="h-[180px] animate-pulse rounded-[24px] bg-white/[.04]"/>}><HomeVideosSection onViewAll={() => setActiveTab('puntoshorts')} onSelectShort={(shortId) => { window.history.pushState({}, '', `/puntoshorts?short=${encodeURIComponent(shortId)}`); setActiveTab('puntoshorts'); }} /></React.Suspense>}</div>
 
-          <section className="mb-10">
+          <motion.section initial={reduceMotion ? false : { opacity: 0, y: 8 }} whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }} viewport={{ once: true, amount: .08 }} transition={reduceMotion ? { duration: 0 } : { duration: .2, ease: 'easeOut' }} className="mb-10">
             <div className="mb-4 px-5">
               <h2 className="text-2xl font-bold tracking-tight">Nuevo en Nochistlán</h2>
               <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Negocios agregados recientemente</p>
             </div>
-            {recentlyAddedPlaces.length ? <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 scrollbar-hide">
+            {recentlyAddedPlaces.length ? <div className="flex touch-pan-x snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain scroll-smooth px-5 pb-2 scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
               {recentlyAddedPlaces.map((place) => <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
                 {place.images?.[0] ? <img src={place.images[0]} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 flex items-center justify-center bg-[#303135]"><Store className="h-12 w-12 text-white/25"/></div>}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
@@ -1136,15 +1175,15 @@ export default function App() {
                 <div className="absolute bottom-4 left-4 right-4"><h3 className="line-clamp-2 text-lg font-bold leading-tight"><VerifiedBusinessName name={place.name}/></h3><p className="mt-1 truncate text-xs text-white/80">{place.category} · {place.location || place.address || 'Nochistlán'}</p>{place.createdAt && <time className="mt-1 block text-[11px] text-white/65">Agregado el {new Date(place.createdAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}</time>}</div>
               </button>)}
             </div> : <p className="mx-5 rounded-[22px] bg-neutral-100 px-4 py-4 text-sm text-neutral-500">Los negocios nuevos que agreguemos aparecerán aquí.</p>}
-          </section>
+          </motion.section>
 
           {/* All saved businesses */}
-          <section className="mb-10">
+          <motion.section initial={reduceMotion ? false : { opacity: 0, y: 8 }} whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }} viewport={{ once: true, amount: .08 }} transition={reduceMotion ? { duration: 0 } : { duration: .2, ease: 'easeOut' }} className="mb-10">
             <div className="mb-4 px-5">
               <h2 className="flex items-center gap-2 text-2xl font-bold"><Bookmark className="h-5 w-5 fill-[#1a73e8] text-[#1a73e8]"/>Favoritos</h2>
               <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Tus negocios guardados</p>
             </div>
-            {favoritePlaces.length ? <div className="flex gap-3 overflow-x-auto px-5 pb-2 scrollbar-hide snap-x snap-mandatory">
+            {favoritePlaces.length ? <div className="flex touch-pan-x gap-3 overflow-x-auto overscroll-x-contain scroll-smooth px-5 pb-2 scrollbar-hide snap-x snap-mandatory" style={{ WebkitOverflowScrolling: 'touch' }}>
               {favoritePlaces.map((place) => <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-favorite-card relative h-[150px] w-[190px] shrink-0 snap-start overflow-hidden rounded-[24px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
                 {place.images?.[0] && <img src={place.images[0]} alt={place.name} loading="lazy" className="absolute inset-0 h-full w-full object-cover"/>}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent"/>
@@ -1152,10 +1191,10 @@ export default function App() {
                 <div className="absolute bottom-3 left-3 right-3"><h3 className="line-clamp-2 text-sm font-bold leading-tight"><VerifiedBusinessName name={place.name}/></h3><p className="mt-1 truncate text-[11px] text-white/75">{place.category} · {place.location || 'Nochistlán'}</p></div>
               </button>)}
             </div> : <div className="mx-5 rounded-[22px] bg-neutral-100 px-4 py-5 text-sm text-neutral-500">Aún no tienes favoritos. Guarda un negocio con el marcador para encontrarlo aquí.</div>}
-          </section>
+          </motion.section>
 
           {/* All Visits Section */}
-          <section className="px-5">
+          <motion.section initial={reduceMotion ? false : { opacity: 0, y: 8 }} whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }} viewport={{ once: true, amount: .08 }} transition={reduceMotion ? { duration: 0 } : { duration: .2, ease: 'easeOut' }} className="px-5">
             <div 
               className="mb-4 cursor-pointer active:opacity-70 transition-opacity"
               onClick={() => setShowDestacados(true)}
@@ -1250,15 +1289,15 @@ export default function App() {
                 </motion.div>
               ) : null}
             </div>
-          </section>
+          </motion.section>
 
-          <section className="mb-10 mt-10 px-5">
+          <motion.section initial={reduceMotion ? false : { opacity: 0, y: 8 }} whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }} viewport={{ once: true, amount: .08 }} transition={reduceMotion ? { duration: 0 } : { duration: .2, ease: 'easeOut' }} className="mb-10 mt-10 px-5">
             <div className="mb-4">
               <h2 className="text-2xl font-bold tracking-tight">Agrega tu negocio</h2>
               <p className="mt-1 text-[15px] font-medium text-neutral-500">Comparte tu negocio con la comunidad de Nochistlán.</p>
             </div>
             <button type="button" onClick={() => setShowBusinessSubmission(true)} style={{ backgroundColor: '#ffffff', color: '#111111' }} className="w-full rounded-full !bg-white px-6 py-3.5 text-sm font-bold !text-black transition-transform active:scale-[0.99]">Agrega tu negocio</button>
-          </section>
+          </motion.section>
           </div>
           <footer aria-label="Información y navegación de PuntoNochi" className="home-footer relative left-1/2 mt-12 min-h-[250px] w-screen -translate-x-1/2 overflow-hidden rounded-t-[48px] bg-white px-6 pb-[calc(env(safe-area-inset-bottom,0px)+92px)] pt-9 text-[#202124]">
             <div aria-hidden="true" className="pointer-events-none absolute left-1/2 top-12 h-20 w-[min(84%,520px)] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(96,115,255,.18),rgba(194,104,223,.12)_45%,rgba(255,170,92,.08)_68%,transparent_100%)] blur-2xl" />
@@ -1290,9 +1329,6 @@ export default function App() {
           </React.Suspense>
         )}
         {showReelCreator && <React.Suspense fallback={<div className="fixed inset-0 z-[110] bg-black"/>}><ReelCreatorPage onClose={() => setShowReelCreator(false)} /></React.Suspense>}
-        {activeTab === 'videos' && (
-          <motion.div key="videos-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<PageLoadingSkeleton page="market"/>}><VideosPage key="videos" onSelectBusiness={(place) => setSelectedBusiness(place)} /></React.Suspense></motion.div>
-        )}
         {activeTab === 'noticias' && (
           <motion.div key="news-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<PageLoadingSkeleton page="news"/>}><NewsPage key="noticias" onOpenEvents={() => setActiveTab('eventos')} /></React.Suspense></motion.div>
         )}
@@ -1316,17 +1352,18 @@ export default function App() {
       <AnimatePresence>{legalDocument && <LegalPage document={legalDocument} onClose={() => { setLegalDocument(null); window.history.replaceState({}, '', '/'); }}/>}</AnimatePresence>
 
       {/* Bottom Navigation & Search */}
-      {activeTab !== 'ask-nochi' && activeTab !== 'puntoshorts' && !showAdminPage && !legalDocument && !(activeTab === 'videos' && marketplaceDetailOpen) && (
+      {activeTab !== 'ask-nochi' && activeTab !== 'puntoshorts' && !showAdminPage && !legalDocument && (
         <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchCategory(null); setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => { setSearchQuery(''); setShowSearch(false); }} onOpenProfile={() => { if (signedInAccount) setPublicProfileId(signedInAccount.id); else setShowAccountAuth(true); }} onSelectBusiness={(place) => setSelectedBusiness(place)} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} profileEmail={signedInAccount?.email} timerEndAt={timerEndAt} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onStopTimer={stopTimer} onTimerComplete={completeTimer} searchQuery={searchQuery} searchOpen={showSearch} />
       )}
 
       {/* Pages & Overlays */}
       <AnimatePresence>
-        {activeTab === 'ask-nochi' && <AskNochiPage key="ask-nochi" onSelectBusiness={(place) => { setActiveTab('inicio'); setSelectedBusiness(place); }} />}
-        {showAdminPage && <AdminPage key="admin-page" onClose={() => setShowAdminPage(false)} />}
-        {showBusinessPromotion && <BusinessPromotionSheet key="business-promotion" onClose={() => setShowBusinessPromotion(false)} />}
-        {showBusinessSubmission && <BusinessSubmissionSheet key="business-submission" onClose={() => setShowBusinessSubmission(false)} />}
+        {activeTab === 'ask-nochi' && <React.Suspense fallback={null}><AskNochiPage key="ask-nochi" onSelectBusiness={(place) => { setActiveTab('inicio'); setSelectedBusiness(place); }} /></React.Suspense>}
+        {showAdminPage && <React.Suspense fallback={null}><AdminPage key="admin-page" onClose={() => setShowAdminPage(false)} /></React.Suspense>}
+        {showBusinessPromotion && <React.Suspense fallback={null}><BusinessPromotionSheet key="business-promotion" onClose={() => setShowBusinessPromotion(false)} /></React.Suspense>}
+        {showBusinessSubmission && <React.Suspense fallback={null}><BusinessSubmissionSheet key="business-submission" onClose={() => setShowBusinessSubmission(false)} /></React.Suspense>}
         {showSearch && (
+          <React.Suspense fallback={<div className="fixed inset-x-0 bottom-0 z-[45] mx-auto h-[min(86dvh,760px)] max-w-2xl rounded-t-[30px] bg-[#202124]"/>}>
           <SearchPage
             key="search-page"
             query={searchQuery}
@@ -1346,22 +1383,28 @@ export default function App() {
               setShowSearch(false);
             }}
           />
+          </React.Suspense>
         )}
         {showAllCategories && (
+          <React.Suspense fallback={null}>
           <AllCategoriesPage 
             key="all-categories"
             onClose={() => setShowAllCategories(false)}
             onSelectCategory={(cat) => setSelectedCategory(cat)}
           />
+          </React.Suspense>
         )}
         {showColonias && (
+          <React.Suspense fallback={null}>
           <ColoniasPage 
             key="colonias" 
             onClose={() => setShowColonias(false)} 
             onSelectColonia={(colonia) => setSelectedColonia(colonia)}
           />
+          </React.Suspense>
         )}
         {selectedColonia && (
+          <React.Suspense fallback={null}>
           <ColoniaDetailPage
             key="colonia-detail"
             colonia={selectedColonia}
@@ -1370,8 +1413,10 @@ export default function App() {
               setSelectedBusiness(place);
             }}
           />
+          </React.Suspense>
         )}
         {showDestacados && (
+          <React.Suspense fallback={null}>
           <DestacadosPage 
             key="destacados" 
             onClose={() => setShowDestacados(false)} 
@@ -1379,31 +1424,36 @@ export default function App() {
               setSelectedBusiness(place);
             }} 
           />
+          </React.Suspense>
         )}
         {selectedCategory && (
+          <React.Suspense fallback={null}>
           <CategoryPage 
             key="category-page"
             category={selectedCategory} 
             onClose={() => setSelectedCategory(null)} 
             onSelectBusiness={(place) => setSelectedBusiness(place)} 
           />
+          </React.Suspense>
         )}
         {selectedBusiness && (
+          <React.Suspense fallback={null}>
           <BusinessDetailSheet 
             key="business-sheet"
             place={selectedBusiness} 
             onClose={() => setSelectedBusiness(null)} 
             onSelectBusiness={(place) => setSelectedBusiness(place)}
           />
+          </React.Suspense>
         )}
 
-        <SmartOnboarding enabled={!loading && !showWelcome && welcomeTransitionDone && !showAdminPage} onLocation={setDeviceLocation} />
+        <React.Suspense fallback={null}><SmartOnboarding enabled={!loading && !showWelcome && welcomeTransitionDone && !showAdminPage} onLocation={setDeviceLocation} /></React.Suspense>
         {showWelcome && !showAdminPage && <WelcomePage onContinue={finishWelcome} />}
-        {publicProfileId && <PublicProfileSheet profileId={publicProfileId} onClose={() => setPublicProfileId(null)} onCreateShort={() => { setPublicProfileId(null); setShowReelCreator(true); }} />}
-        {showAccountAuth && <AccountAuthSheet onClose={() => setShowAccountAuth(false)}/>}
+        {publicProfileId && <React.Suspense fallback={null}><PublicProfileSheet profileId={publicProfileId} onClose={() => setPublicProfileId(null)} onCreateShort={() => { setPublicProfileId(null); setShowReelCreator(true); }} /></React.Suspense>}
+        {showAccountAuth && <React.Suspense fallback={null}><AccountAuthSheet onClose={() => setShowAccountAuth(false)}/></React.Suspense>}
       </AnimatePresence>
-      <AnimatePresence>{showBookmarksSheet && <BookmarksSheet key="bookmarks-sheet" onClose={() => setShowBookmarksSheet(false)} onSelectBusiness={(place) => setSelectedBusiness(place)} />}</AnimatePresence>
-      <AnimatePresence>{showProfileSettings && <SettingsSheet key="settings-sheet" account={signedInAccount} onClose={() => setShowProfileSettings(false)} onRequireAuth={() => { setShowProfileSettings(false); setShowAccountAuth(true); }} />}</AnimatePresence>
+      <AnimatePresence>{showBookmarksSheet && <React.Suspense fallback={null}><BookmarksSheet key="bookmarks-sheet" onClose={() => setShowBookmarksSheet(false)} onSelectBusiness={(place) => setSelectedBusiness(place)} /></React.Suspense>}</AnimatePresence>
+      <AnimatePresence>{showProfileSettings && <React.Suspense fallback={null}><SettingsSheet key="settings-sheet" account={signedInAccount} onClose={() => setShowProfileSettings(false)} onRequireAuth={() => { setShowProfileSettings(false); setShowAccountAuth(true); }} /></React.Suspense>}</AnimatePresence>
       {externalSiteConfirmation}
       <Analytics />
     </AutoLayoutRoot>

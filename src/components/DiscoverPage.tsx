@@ -98,7 +98,7 @@ function CommunityPostCard({ post, onOpenProfile, onOpenImage }: { post: Communi
       </div>
       <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-[9px] font-medium text-white/55">{post.postType === 'day' ? 'Momento' : 'Publicación'}</span>
     </div>
-    <button type="button" onClick={() => onOpenImage(post.imageUrl, post.caption || 'Publicación de la comunidad')} aria-label="Ampliar imagen de la publicación" className="block w-full cursor-zoom-in"><img src={post.imageUrl} alt={post.caption || 'Publicación de la comunidad'} loading="lazy" decoding="async" className="community-feed-image marketplace-squircle w-full object-cover" /></button>
+    <button type="button" onClick={() => onOpenImage(post.imageUrl, post.caption || 'Publicación de la comunidad')} aria-label="Ampliar imagen de la publicación" className="block w-full cursor-zoom-in"><img src={post.imageUrl} alt={post.caption || 'Publicación de la comunidad'} loading="lazy" decoding="async" className="community-feed-image content-squircle w-full object-cover" /></button>
     <div className="px-3.5 pb-3.5 pt-3">
       {post.caption && <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-white/90">{post.caption}</p>}
       <div className="mt-3 flex items-center gap-5 border-t border-white/[0.07] pt-3 text-white/55"><span className="inline-flex items-center gap-1.5"><Heart className="h-[17px] w-[17px]"/><span className="text-[10px]">Me gusta</span></span><span className="inline-flex items-center gap-1.5"><MessageCircle className="h-[17px] w-[17px]"/><span className="text-[10px]">Comentar</span></span></div>
@@ -114,8 +114,8 @@ function CommunityEventCard({ event, onOpenProfile, onOpenEvent }: { event: Comm
       <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-white">{author}</p><p className="mt-0.5 text-[10px] text-white/45">Evento de la comunidad</p></div>
       <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-[#292a2d] px-2.5 py-1.5 text-[10px] font-semibold text-white/75"><CalendarDays className="h-3.5 w-3.5 text-orange-300"/>{formatEventDate(event)}</span>
     </div>
-      <button type="button" onClick={() => onOpenEvent(event.id)} aria-label={`Ver evento: ${event.title}`} className="community-event-image-wrap marketplace-squircle relative block w-full cursor-pointer text-left">
-      <img src={event.imageUrl} alt="" loading="lazy" decoding="async" className="community-feed-image marketplace-squircle w-full object-cover" />
+      <button type="button" onClick={() => onOpenEvent(event.id)} aria-label={`Ver evento: ${event.title}`} className="community-event-image-wrap content-squircle relative block w-full cursor-pointer text-left">
+      <img src={event.imageUrl} alt="" loading="lazy" decoding="async" className="community-feed-image content-squircle w-full object-cover" />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
     </button>
     <div className="px-3.5 pb-4 pt-3">
@@ -130,7 +130,7 @@ function CommunityEventCard({ event, onOpenProfile, onOpenEvent }: { event: Comm
 
 function BusinessDiscoveryCard({ place, onOpen }: { place: Place; onOpen: () => void }) {
   const image = place.images?.[0] || place.logo;
-  return <button data-explore-corner type="button" onClick={onOpen} className="explore-lazy-card group marketplace-squircle relative h-[210px] w-full overflow-hidden bg-[#202124] text-left" aria-label={`Ver ${place.name}`}>
+  return <button data-explore-corner type="button" onClick={onOpen} className="explore-lazy-card group content-squircle relative h-[210px] w-full overflow-hidden bg-[#202124] text-left" aria-label={`Ver ${place.name}`}>
     {image ? <img src={image} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"/> : <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#30343b] to-[#1b1c1f]"><Store className="h-10 w-10 text-white/25"/></div>}
     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/15 to-black/5"/>
     <div className="absolute inset-x-0 bottom-0 p-3.5"><span className="rounded-full bg-black/45 px-2 py-1 text-[9px] font-semibold text-white/80 backdrop-blur">{place.category}</span><h3 className="mt-2 line-clamp-1 text-sm font-bold text-white"><VerifiedBusinessName name={place.name}/></h3><p className="mt-1 flex items-center gap-1 text-[10px] text-white/65"><MapPin className="h-3 w-3 shrink-0"/><span className="truncate">{place.location}</span></p><p className="mt-1 flex items-center gap-1 text-[10px] text-white/70"><Star className="h-3 w-3 fill-amber-300 text-amber-300"/>{place.rating?.toFixed(1) || 'Nuevo'}<span className="text-white/45">· {place.isOpen ? 'Abierto' : 'Cerrado'}</span></p></div>

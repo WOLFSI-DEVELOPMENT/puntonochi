@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useEffect, useRef, useState } from "react";
-import { AlarmClock, Bell, BookOpen, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Compass, Flag, Home, Mic, Newspaper, Pause, Play, Search, Square, Store, Timer, Trash2, UserRound, X } from "lucide-react";
+import { AlarmClock, Bell, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Flag, Mic, Pause, Play, Square, Timer, Trash2, X } from "lucide-react";
 import CornerKit from '@cornerkit/core';
 import { AnimatePresence, motion } from 'motion/react';
 import { getNavDesign, type NavDesign } from '../profileStorage';
@@ -175,13 +175,13 @@ const CSS_TEXT = `
 
 const PATHS = {
   home:
-    "M154.02-182.15v-386.89q0-16.17 7.09-30.59 7.1-14.42 20.02-23.87l257.85-193.57q17.83-13.67 40.86-13.67t41.18 13.67L778.87-623.5q12.92 9.45 20.14 23.87 7.21 14.42 7.21 30.59v386.89q0 28.33-20.02 48.23t-48.35 19.9H595.5q-14.42 0-24.24-9.82-9.83-9.82-9.83-24.25v-219.28q0-14.42-9.82-24.24-9.82-9.82-24.24-9.82h-94.74q-14.42 0-24.24 9.82-9.82 9.82-9.82 24.24v219.28q0 14.43-9.83 24.25-9.82 9.82-24.24 9.82H222.15q-28.33 0-48.23-19.9t-19.9-48.23Z",
+    "M20.04 6.81969L14.28 2.78969C12.71 1.68969 10.3 1.74969 8.78999 2.91969L3.77999 6.82969C2.77999 7.60969 1.98999 9.20969 1.98999 10.4697V17.3697C1.98999 19.9197 4.05999 21.9997 6.60999 21.9997H17.39C19.94 21.9997 22.01 19.9297 22.01 17.3797V10.5997C22.01 9.24969 21.14 7.58969 20.04 6.81969ZM12.75 17.9997C12.75 18.4097 12.41 18.7497 12 18.7497C11.59 18.7497 11.25 18.4097 11.25 17.9997V14.9997C11.25 14.5897 11.59 14.2497 12 14.2497C12.41 14.2497 12.75 14.5897 12.75 14.9997V17.9997Z",
   explore:
-    "m333.83-312.43 204.63-61.7q16.95-5.22 29.07-17.34 12.12-12.12 17.34-29.07l61.7-204.63q3.23-9.96-4.1-17.3-7.34-7.33-17.3-4.1l-204.63 61.7q-16.95 5.22-29.07 17.34-12.12 12.12-17.34 29.07l-61.7 204.63q-3.23 9.96 4.1 17.3 7.34 7.33 17.3 4.1Zm146.11-131.16q-15.27 0-25.81-10.6t-10.54-25.87q0-15.27 10.6-25.81t25.87-10.54q15.27 0 25.81 10.6t10.54 25.87q0 15.27-10.6 25.81t-25.87 10.54Zm.09 369.57q-83.46 0-157.54-31.88-74.07-31.88-129.39-87.2-55.32-55.32-87.2-129.36-31.88-74.04-31.88-157.51 0-84.46 31.88-158.54 31.88-74.07 87.16-128.9 55.28-54.84 129.34-86.82 74.06-31.99 157.55-31.99 84.48 0 158.59 31.97 74.1 31.97 128.91 86.77 54.82 54.8 86.79 128.88 31.98 74.08 31.98 158.6 0 83.5-31.99 157.57-31.98 74.07-86.82 129.36-54.83 55.29-128.87 87.17-74.04 31.88-158.51 31.88Z",
+    "M12 2C6.49 2 2 6.49 2 12C2 17.51 6.49 22 12 22C17.51 22 22 17.51 22 12C22 6.49 17.51 2 12 2ZM10.5 16.13C9.05 16.13 7.88 14.95 7.88 13.51C7.88 10.41 10.4 7.89 13.5 7.89C14.95 7.89 16.12 9.07 16.12 10.51C16.12 13.6 13.6 16.13 10.5 16.13Z",
   grid_view:
     "M182.15-510q-28.09 0-48.11-20.02t-20.02-48.35v-199.48q0-28.09 20.02-48.23 20.02-20.14 48.11-20.14h199.72q28.09 0 48.11 20.14T450-777.85v199.48q0 28.33-20.02 48.35Q409.96-510 381.87-510H182.15Zm0 395.98q-28.09 0-48.11-20.02t-20.02-48.11v-199.72q0-28.09 20.02-48.11T182.15-450h199.72q28.09 0 48.11 20.02T450-381.87v199.72q0 28.09-20.02 48.11t-48.11 20.02H182.15ZM578.37-510q-28.33 0-48.35-20.02Q510-550.04 510-578.37v-199.48q0-28.09 20.02-48.23 20.02-20.14 48.35-20.14h199.48q28.09 0 48.23 20.14 20.14 20.14 20.14 48.23v199.48q0 28.33-20.14 48.35Q805.94-510 777.85-510H578.37Zm0 395.98q-28.33 0-48.35-20.02Q510-154.06 510-182.15v-199.72q0-28.09 20.02-48.11T578.37-450h199.48q28.09 0 48.23 20.02 20.14 20.02 20.14 48.11v199.72q0 28.09-20.14 48.11t-48.23 20.02H578.37Z",
   video_library:
-    "M4 20H20V22H4C2.9 22 2 21.1 2 20V6H4V20ZM20 2C21.1 2 22 2.9 22 4V16C22 17.1 21.1 18 20 18H8C6.9 18 6 17.1 6 16V4C6 2.9 6.9 2 8 2H20ZM11 6V14L17 10L11 6Z",
+    "M21.15 6.17C20.74 5.95 19.88 5.72 18.71 6.54L17.24 7.58C17.13 4.47 15.78 3.25 12.5 3.25H6.5C3.08 3.25 1.75 4.58 1.75 8V16C1.75 18.3 3 20.75 6.5 20.75H12.5C15.78 20.75 17.13 19.53 17.24 16.42L18.71 17.46C19.33 17.9 19.87 18.04 20.3 18.04C20.67 18.04 20.96 17.93 21.15 17.83C21.56 17.62 22.25 17.05 22.25 15.62V8.38C22.25 6.95 21.56 6.38 21.15 6.17ZM11 11.38C9.97 11.38 9.12 10.54 9.12 9.5C9.12 8.46 9.97 7.62 11 7.62C12.03 7.62 12.88 8.46 12.88 9.5C12.88 10.54 12.03 11.38 11 11.38Z",
   search:
     "M376.57-324.93q-109.84 0-185.96-76.2Q114.5-477.33 114.5-585t76.2-183.87q76.19-76.2 184.37-76.2 108.17 0 183.86 76.2 75.7 76.2 75.7 184.02 0 43.33-13.64 82.97t-40.92 74.4l240.56 238.57q10.2 9.99 10.2 24.76 0 14.78-10.2 24.98-10.43 10.43-25.21 10.43-14.78 0-24.53-10.43L531.33-378.5q-29.76 25.28-69.6 39.42-39.84 14.15-85.16 14.15Zm-1-68.14q79.81 0 135.37-56.18T566.5-585q0-79.57-55.56-135.75-55.56-56.18-135.37-56.18-80.41 0-136.68 56.18-56.26 56.18-56.26 135.75t56.26 135.75q56.27 56.18 136.68 56.18Z",
   storefront:
@@ -197,10 +197,10 @@ const PATHS = {
 };
 
 /* ---------- Icon ---------- */
-const Icon = ({ name, size = 22 }) => (
+const Icon = ({ name, size = 24 }) => (
   <span className="lgn-ico">
     <svg
-      viewBox="0 -960 960 960"
+      viewBox={["home", "explore", "video_library"].includes(name) ? "0 0 24 24" : "0 -960 960 960"}
       width={size}
       height={size}
       aria-hidden="true"
@@ -209,8 +209,8 @@ const Icon = ({ name, size = 22 }) => (
     >
       <path
         d={PATHS[name]}
-        fill="url(#lgn-glass)"
-        transform={name === "auto_awesome" || name === "video_library" ? "translate(0 -960) scale(40)" : undefined}
+        fill={["home", "explore", "video_library"].includes(name) ? "#ffffff" : "url(#lgn-glass)"}
+        transform={name === "auto_awesome" ? "translate(0 -960) scale(40)" : undefined}
       />
     </svg>
   </span>
@@ -233,19 +233,9 @@ const Avatar = ({ src, alt, timerActive = false }) => {
           style={{ width: AVATAR, height: AVATAR, borderRadius: "50%", objectFit: "cover", display: "block" }}
         />
       ) : (
-        <svg viewBox="0 0 32 32" width={AVATAR} height={AVATAR} aria-hidden="true" style={{ display: "block" }}>
-          <defs>
-            <linearGradient id="lgn-av" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#ffffff" stopOpacity="0.9" />
-              <stop offset="1" stopColor="#ffffff" stopOpacity="0.6" />
-            </linearGradient>
-            <clipPath id="lgn-av-clip"><circle cx="16" cy="16" r="16" /></clipPath>
-          </defs>
-          <circle cx="16" cy="16" r="16" fill="rgba(255,255,255,0.28)" />
-          <g clipPath="url(#lgn-av-clip)" fill="url(#lgn-av)">
-            <circle cx="16" cy="12.5" r="5.5" />
-            <ellipse cx="16" cy="30" rx="11" ry="9" />
-          </g>
+        <svg viewBox="0 0 24 24" width={24} height={24} aria-hidden="true" style={{ display: "block" }}>
+          <path d="M12 2C9.38 2 7.25 4.13 7.25 6.75C7.25 9.32 9.26 11.4 11.88 11.49C11.96 11.48 12.04 11.48 12.1 11.49C12.12 11.49 12.13 11.49 12.15 11.49C12.16 11.49 12.16 11.49 12.17 11.49C14.73 11.4 16.74 9.32 16.75 6.75C16.75 4.13 14.62 2 12 2Z" fill="#ffffff" />
+          <path d="M17.08 14.1499C14.29 12.2899 9.73996 12.2899 6.92996 14.1499C5.65996 14.9999 4.95996 16.1499 4.95996 17.3799C4.95996 18.6099 5.65996 19.7499 6.91996 20.5899C8.31996 21.5299 10.16 21.9999 12 21.9999C13.84 21.9999 15.68 21.5299 17.08 20.5899C18.34 19.7399 19.04 18.5999 19.04 17.3599C19.03 16.1299 18.34 14.9899 17.08 14.1499Z" fill="#ffffff" />
         </svg>
       )}
     </span>
@@ -282,7 +272,6 @@ const MENU_W = 236;
 const DEFAULT_MENU = [
   { id: 'puntoshorts', label: 'PuntoShorts', icon: 'video_library' },
   { id: "eventos", label: "Eventos", icon: "event" },
-  { id: "videos", label: "Mercado", icon: "storefront" },
   { id: "noticias", label: "Noticias", icon: "newspaper" },
   { id: "guias", label: "Artículos", icon: "menu_book" },
   { id: "ask-nochi", label: "Pregúntale a Nochi", icon: "auto_awesome" },
@@ -574,14 +563,13 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
   const inputRef = useRef(null);
   const menuRef = useRef(null);
   const browseRef = useRef(null);
-  const desktopActionsRef = useRef(null);
 
   const [active, setActive] = useState(appTab);
   const [navDesign, setCurrentNavDesign] = useState<NavDesign>(getNavDesign);
   const experimentalNav = navDesign === 'experimental';
-  const visibleTabs = experimentalNav
-    ? [...TABS.slice(0, -1), { id: 'search', label: 'Search', icon: 'search' }, TABS[TABS.length - 1]]
-    : TABS;
+  // Search remains accessible from the home and Explore search bars, but is
+  // intentionally not a standalone bottom navigation destination.
+  const visibleTabs = TABS;
   const [moves, setMoves] = useState(0); // bumps on each tab switch to replay the stretch
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
@@ -683,7 +671,6 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
       const t = e.target;
       if (menuRef.current && menuRef.current.contains(t)) return;
       if (browseRef.current && browseRef.current.contains(t)) return;
-      if (desktopActionsRef.current && desktopActionsRef.current.contains(t)) return;
       setMenuOpen(false);
     };
     const onKey = (e) => e.key === "Escape" && setMenuOpen(false);
@@ -817,7 +804,6 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
 
   const select = (id) => {
     if (id === 'profile') { setMenuOpen(false); onOpenProfile(); return; }
-    if (id === 'search') { setMenuOpen(false); onSearchOpenChange(true); return; }
     setMenuOpen(false);
     if (id === active) return;
     setActive(id);
@@ -873,57 +859,15 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
       }}
     >
       <style>{CSS_TEXT}</style>
-      <header className={`pn-desktop-topbar${experimentalNav ? ' pn-progressive-nav' : ''}`} aria-label="Navegación de PuntoNochi" style={{ position: 'fixed', inset: '0 0 auto', zIndex: 60, height: 64, alignItems: 'center', gap: 20, padding: '0 18px', background: experimentalNav ? 'transparent' : '#242526', borderBottom: experimentalNav ? 0 : '1px solid rgba(255,255,255,.08)', boxShadow: experimentalNav ? 'none' : '0 2px 12px rgba(0,0,0,.18)', pointerEvents: 'auto' }}>
-        <div className="flex min-w-0 flex-[1.1] items-center gap-3">
-          <button type="button" aria-label="Ir al inicio" title="Inicio" onClick={() => select('home')} className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#17181a] transition-transform active:scale-95">
-            <img src="/pwa-192.png" alt="PuntoNochi" className="h-full w-full object-cover" />
-          </button>
-          <form role="search" onSubmit={(event) => event.preventDefault()} style={{ display: experimentalNav ? 'none' : undefined }} className="flex h-10 min-w-0 w-full max-w-[280px] items-center gap-2.5 rounded-full bg-[#3a3b3c] px-3.5 text-sm text-white/55 transition-colors focus-within:bg-[#454648]">
-            <Search aria-hidden="true" className="h-[17px] w-[17px] shrink-0"/>
-            <input
-              type="search"
-              value={query}
-              placeholder="Buscar en PuntoNochi"
-              aria-label="Buscar en PuntoNochi"
-              autoComplete="off"
-              onFocus={() => {
-                if (searching) return;
-                setMenuOpen(false);
-                setSearching(true);
-                onSearchOpenChange(true);
-              }}
-              onChange={(event) => { setQuery(event.target.value); onSearch(event.target.value); }}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  event.currentTarget.blur();
-                  closeSearch();
-                }
-              }}
-              className="search-input-fix min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-[14px] text-white outline-none ring-0 focus:border-0 focus:bg-transparent focus:outline-none focus:ring-0 placeholder:text-white/55 [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden [&::-webkit-search-results-button]:hidden [&::-webkit-search-results-decoration]:hidden"
-            />
-            {query && <button type="button" aria-label="Borrar búsqueda" onClick={() => { setQuery(''); onSearch(''); }} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white/65 hover:bg-white/10 hover:text-white"><X className="h-3.5 w-3.5"/></button>}
-          </form>
-        </div>
-        <div className="flex h-full flex-[1.8] items-stretch justify-center gap-2">
-          {([
-            { id: 'home', tab: 'inicio', label: 'Inicio', Icon: Home },
-            { id: 'explore', tab: 'explorar', label: 'Explorar', Icon: Compass },
-            { id: 'videos', tab: 'videos', label: 'Mercado', Icon: Store },
-            { id: 'noticias', tab: 'noticias', label: 'Noticias', Icon: Newspaper },
-            { id: 'guias', tab: 'guias', label: 'Artículos', Icon: BookOpen },
-          ] as const).map(({ id, tab, label, Icon }) => {
-            const selected = activeTab === tab;
-            return <button key={id} type="button" aria-label={label} aria-current={selected ? 'page' : undefined} title={label} onClick={() => select(id)} className={`relative flex min-w-[56px] max-w-[112px] flex-1 items-center justify-center text-white/60 transition-colors hover:text-white ${experimentalNav ? selected ? 'rounded-full bg-white/[.12] backdrop-blur-xl' : 'rounded-full bg-transparent' : ''} ${selected ? 'text-white' : ''}`}>
-              <Icon aria-hidden="true" className="h-[23px] w-[23px]" strokeWidth={selected ? 2.25 : 1.8}/>
-              {selected && !experimentalNav && <span className="absolute inset-x-1 bottom-0 h-[3px] rounded-t-full bg-[#6aa7ff]"/>}
+      <header className="pn-desktop-topbar pn-progressive-mobile" aria-label="Navegación de PuntoNochi" style={{ position: 'fixed', inset: 'auto 0 0', zIndex: 60, height: 'calc(74px + env(safe-area-inset-bottom, 0px))', alignItems: 'flex-start', justifyContent: 'center', padding: '6px 16px calc(8px + env(safe-area-inset-bottom, 0px))', background: 'transparent', border: 0, boxShadow: 'none', pointerEvents: 'none' }}>
+        <div className="pointer-events-auto flex h-[58px] w-[min(430px,calc(100vw-32px))] items-center justify-center gap-1 rounded-full bg-[#202124]/80 px-2 shadow-[0_8px_30px_rgba(0,0,0,.24)] backdrop-blur-2xl">
+          {TABS.map(({ id, label, icon, avatar }) => {
+            const selected = visualActive === id;
+            return <button key={id} type="button" aria-label={label} aria-current={selected ? 'page' : undefined} title={label} onClick={() => select(id)} className={`relative flex h-12 min-w-0 flex-1 items-center justify-center rounded-full text-white/60 transition-colors hover:text-white ${selected ? 'text-white' : ''}`}>
+              {selected && <motion.span layoutId="pn-desktop-bottom-active-tab" initial={false} transition={{ type: 'spring', stiffness: 420, damping: 36, mass: .72 }} aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-full bg-white/[.15]"/>}
+              <span className="relative z-10">{avatar ? <Avatar src={avatarSrc} alt={label} timerActive={timerActive}/> : <Icon name={icon}/>}</span>
             </button>;
           })}
-        </div>
-        <div className="flex flex-[1.1] items-center justify-end gap-2.5">
-          <button ref={desktopActionsRef} type="button" onClick={() => { setMenuOpen(false); onSearchOpenChange(true); }} aria-label="Buscar" title="Buscar" className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${experimentalNav ? 'bg-white/[.08] text-white/85 backdrop-blur-xl hover:bg-white/[.14]' : 'bg-[#3a3b3c] text-white/80 hover:bg-[#4b4c4d]'}`}><Search className="h-[19px] w-[19px]"/></button>
-          <button type="button" onClick={onOpenProfile} aria-label="Abrir perfil" title="Perfil" className={`flex h-10 w-10 items-center justify-center overflow-hidden rounded-full text-white/80 transition-colors ${experimentalNav ? 'bg-white/[.08] backdrop-blur-xl hover:bg-white/[.14]' : 'bg-[#3a3b3c] ring-2 ring-transparent hover:ring-white/20'}`}>
-            {avatarSrc ? <img src={avatarSrc} alt={profileName || 'Perfil'} referrerPolicy="no-referrer" className="h-full w-full object-cover"/> : <UserRound aria-hidden="true" className="h-[21px] w-[21px]"/>}
-          </button>
         </div>
       </header>
       <svg width="0" height="0" aria-hidden="true" style={{ position: "absolute" }}>

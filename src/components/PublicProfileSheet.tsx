@@ -4,13 +4,12 @@ import { Camera, LoaderCircle, Pencil, UserRound, Users, X } from 'lucide-react'
 import { AccountRequiredPrompt } from './AccountSheets';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 
-type Profile = { id: string; name: string; picture: string | null; bio: string; posts: number; reviews: number; events: number; listings: number; followers: number; following: number; isFollowing: boolean; isSelf: boolean };
+type Profile = { id: string; name: string; picture: string | null; bio: string; posts: number; reviews: number; events: number; followers: number; following: number; isFollowing: boolean; isSelf: boolean };
 type Activity = {
   posts: { id: string; imageUrl: string; caption: string; createdAt: string; postType: string; placeName?: string | null }[];
   reviews: { id: string; placeName: string; rating: number; text: string; createdAt: string }[];
   events: { id: string; title: string; date: string; location: string; imageUrl: string; description?: string; time?: string | null }[];
   shorts: { id: string; videoUrl: string; title: string; description: string; createdAt: string }[];
-  marketplaceListings: { id: string; category: string; title: string; price: string; location: string; description: string; images: { id: string; url: string; sortOrder: number }[] }[];
 };
 async function readApiJson<T>(response: Response): Promise<T> {
   const body = await response.text();
@@ -20,7 +19,7 @@ async function readApiJson<T>(response: Response): Promise<T> {
 
 export function PublicProfileSheet({ profileId, onClose, onCreateShort }: { profileId: string; onClose: () => void; onCreateShort?: () => void }) {
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [activity, setActivity] = useState<Activity>({ posts: [], reviews: [], events: [], shorts: [], marketplaceListings: [] });
+  const [activity, setActivity] = useState<Activity>({ posts: [], reviews: [], events: [], shorts: [] });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');

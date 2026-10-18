@@ -1,10 +1,12 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUpRight, MapPin, Search, SlidersHorizontal, Star, Store, X } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
 import type { Place } from '../types';
+import { categories as directoryCategories } from '../data';
 import { VerifiedBusinessName } from './VerifiedBusinessName';
 import { isInstalledMobilePwa } from '../pwaDisplay';
 
-const PAGE_SIZE = 18;
+const PAGE_SIZE = 24;
 
 function normalize(value: string) {
   return value.toLocaleLowerCase('es-MX').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -12,14 +14,19 @@ function normalize(value: string) {
 
 function BusinessTile({ place, onSelect }: { place: Place; onSelect: () => void }) {
   const image = place.images?.find(Boolean) || place.logo;
-  return <button
+  const reduceMotion = useReducedMotion();
+  return <motion.button
     type="button"
     onClick={onSelect}
     aria-label={`Ver ${place.name}, ${place.category}`}
-    style={{ contentVisibility: 'auto', containIntrinsicSize: '1px 320px' }}
-    className="group relative block w-full overflow-hidden rounded-[24px] bg-[#202124] p-[5px] text-left shadow-[0_3px_12px_rgba(0,0,0,.18)] outline-none ring-1 ring-white/[.06] focus-visible:ring-2 focus-visible:ring-blue-300 [corner-shape:squircle]"
+    initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+    whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+    viewport={{ once: true, amount: 0.08 }}
+    transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: 'easeOut' }}
+    style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 240px' }}
+    className="group relative block w-full touch-pan-y overflow-hidden rounded-[15px] bg-[#202124] p-[5px] text-left shadow-[0_3px_12px_rgba(0,0,0,.18)] outline-none ring-1 ring-white/[.06] transition-transform duration-150 active:scale-[.99] focus-visible:ring-2 focus-visible:ring-blue-300 [corner-shape:squircle]"
   >
-    <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[19px] bg-[#292a2d]">
+    <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[10px] bg-[#292a2d]">
       {image
         ? <img src={image} alt="" loading="lazy" decoding="async" fetchPriority="low" className="h-full w-full object-cover transition-transform duration-300 ease-out [@media(hover:hover)]:group-hover:scale-[1.03]" />
         : <div className="flex h-full items-center justify-center bg-[radial-gradient(ellipse_at_25%_20%,rgba(96,165,250,.24),transparent_48%),linear-gradient(145deg,#30333a,#191a1d)]"><Store aria-hidden="true" className="h-9 w-9 text-white/30"/></div>}
@@ -28,11 +35,11 @@ function BusinessTile({ place, onSelect }: { place: Place; onSelect: () => void 
       <span className="absolute bottom-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white/85" aria-hidden="true"><ArrowUpRight className="h-3.5 w-3.5"/></span>
     </div>
     <span className="mt-[5px] block rounded-[16px] bg-[#292a2d] px-2.5 pb-2 pt-2">
-      <span className="line-clamp-2 min-h-[2rem] text-[11px] font-bold leading-4 text-white"><VerifiedBusinessName name={place.name}/></span>
+      <span className="line-clamp-2 text-[11px] font-bold leading-4 text-white"><VerifiedBusinessName name={place.name}/></span>
       <span className="mt-1 flex min-w-0 items-center gap-1 text-[9px] text-white/55"><MapPin aria-hidden="true" className="h-3 w-3 shrink-0"/><span className="truncate">{place.location || 'Nochistlán'}</span></span>
       <span className="mt-1 flex items-center gap-1 text-[9px] text-white/65"><Star aria-hidden="true" className="h-3 w-3 fill-amber-300 text-amber-300"/>{place.rating ? place.rating.toFixed(1) : 'Nuevo'}<span className="text-white/35">·</span><span className={place.isOpen ? 'text-emerald-300/85' : 'text-white/45'}>{place.isOpen ? 'Abierto' : 'Ver horario'}</span></span>
     </span>
-  </button>;
+  </motion.button>;
 }
 
 export function BusinessExplorePage({ places, directoryVersion, onSelectBusiness, onOpenSearch }: {
@@ -49,9 +56,12 @@ export function BusinessExplorePage({ places, directoryVersion, onSelectBusiness
   const deferredQuery = useDeferredValue(query);
   const normalizedQuery = normalize(deferredQuery.trim());
 
-  const categories = useMemo(() => [...new Set(places.map((place) => place.category?.trim()).filter((value): value is string => Boolean(value)))].slice(0, 12), [places, directoryVersion]);
+  const availableCategories = useMemo(() => {
+    const usedCategories = new Set(places.map((place) => normalize(place.category || '')).filter(Boolean));
+    return directoryCategories.filter((item) => usedCategories.has(normalize(item.name))).map((item) => item.name);
+  }, [places, directoryVersion]);
   const filteredPlaces = useMemo(() => places.filter((place) => {
-    if (category && place.category !== category) return false;
+    if (category && normalize(place.category || '') !== normalize(category)) return false;
     if (!normalizedQuery) return true;
     const searchable = normalize([place.name, place.category, place.subtitle, place.location, place.address, ...(place.goodToKnow || [])].filter(Boolean).join(' '));
     return normalizedQuery.split(/\s+/).every((term) => searchable.includes(term));
@@ -63,7 +73,7 @@ export function BusinessExplorePage({ places, directoryVersion, onSelectBusiness
     if (!sentinel || visibleCount >= filteredPlaces.length || typeof IntersectionObserver === 'undefined') return;
     const observer = new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting) setVisibleCount((count) => Math.min(count + PAGE_SIZE, filteredPlaces.length));
-    }, { rootMargin: '420px 0px' });
+    }, { rootMargin: '700px 0px' });
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [filteredPlaces.length, visibleCount]);
@@ -71,7 +81,7 @@ export function BusinessExplorePage({ places, directoryVersion, onSelectBusiness
   const shownPlaces = filteredPlaces.slice(0, visibleCount);
   return <main
     style={installedMobilePwa ? { paddingTop: 'calc(max(env(safe-area-inset-top, 0px), 24px) + 12px)' } : undefined}
-    className="min-h-dvh bg-[#111214] px-3 pb-[calc(104px+env(safe-area-inset-bottom,0px))] pt-3 text-white sm:px-5 lg:min-h-[calc(100dvh-64px)] lg:pt-6"
+    className="min-h-dvh touch-pan-y bg-[#111214] px-3 pb-[calc(104px+env(safe-area-inset-bottom,0px))] pt-3 text-white sm:px-5 lg:min-h-[calc(100dvh-64px)] lg:pt-6"
   >
     <div className="sticky top-2 z-30 mx-auto mb-5 max-w-5xl" style={installedMobilePwa ? { top: 'calc(max(env(safe-area-inset-top, 0px), 24px) + 12px)' } : undefined}>
       <label className="flex h-[50px] items-center gap-3 rounded-full border-0 bg-white/[.08] px-4 text-white/70 shadow-none outline-none ring-0 backdrop-blur-xl focus-within:bg-white/[.12]">
@@ -87,9 +97,9 @@ export function BusinessExplorePage({ places, directoryVersion, onSelectBusiness
         <span className="mb-1 flex shrink-0 items-center gap-1.5 text-[10px] font-medium text-white/40"><SlidersHorizontal aria-hidden="true" className="h-3.5 w-3.5"/>{filteredPlaces.length} lugares</span>
       </div>
 
-      {categories.length > 0 && <div className="mb-5 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <button type="button" onClick={() => setCategory('')} aria-pressed={!category} className={`shrink-0 rounded-full px-3.5 py-2 text-[10px] font-semibold transition-colors ${!category ? 'bg-white text-[#17181a]' : 'bg-white/[.07] text-white/70 hover:bg-white/[.12]'}`}>Todo</button>
-        {categories.slice(0, 7).map((item) => <button key={item} type="button" onClick={() => setCategory((current) => current === item ? '' : item)} aria-pressed={category === item} className={`max-w-[160px] shrink-0 truncate rounded-full px-3.5 py-2 text-[10px] font-semibold transition-colors ${category === item ? 'bg-white text-[#17181a]' : 'bg-white/[.07] text-white/70 hover:bg-white/[.12]'}`}>{item}</button>)}
+      {availableCategories.length > 0 && <div className="mb-5 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <button type="button" onClick={() => setCategory('')} aria-pressed={!category} className={`shrink-0 rounded-full px-3.5 py-2 text-[10px] font-semibold transition-[color,background-color,transform] duration-150 active:scale-95 ${!category ? 'bg-white text-[#17181a]' : 'bg-white/[.07] text-white/70 hover:bg-white/[.12]'}`}>Todo</button>
+        {availableCategories.map((item) => <button key={item} type="button" onClick={() => setCategory((current) => current === item ? '' : item)} aria-pressed={category === item} className={`max-w-[160px] shrink-0 truncate rounded-full px-3.5 py-2 text-[10px] font-semibold transition-[color,background-color,transform] duration-150 active:scale-95 ${category === item ? 'bg-white text-[#17181a]' : 'bg-white/[.07] text-white/70 hover:bg-white/[.12]'}`}>{item}</button>)}
       </div>}
 
       {shownPlaces.length > 0 ? <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
