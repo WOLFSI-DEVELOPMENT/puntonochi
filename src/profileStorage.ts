@@ -1,5 +1,6 @@
 export const PROFILE_ACTIVITY_KEY = 'puntonochi-profile-activity-v1';
 export const BOOKMARKS_KEY = 'puntonochi-bookmarks-v1';
+export const ARTICLE_BOOKMARKS_KEY = 'puntonochi-article-bookmarks-v1';
 export const NAV_DESIGN_KEY = 'puntonochi-nav-design-v1';
 export type NavDesign = 'dynamic' | 'simple' | 'experimental';
 
@@ -62,4 +63,20 @@ export function setBookmarkedPlaceIds(ids: string[]) {
     localStorage.setItem(BOOKMARKS_KEY, JSON.stringify([...new Set(ids)]));
     window.dispatchEvent(new Event('puntonochi-bookmarks-updated'));
   } catch { /* Keep the app usable if local storage is unavailable. */ }
+}
+
+export function getBookmarkedArticleSlugs(): string[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(ARTICLE_BOOKMARKS_KEY) || '[]');
+    return Array.isArray(value) ? value.filter((slug): slug is string => typeof slug === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function setBookmarkedArticleSlugs(slugs: string[]) {
+  try {
+    localStorage.setItem(ARTICLE_BOOKMARKS_KEY, JSON.stringify([...new Set(slugs)]));
+    window.dispatchEvent(new Event('puntonochi-article-bookmarks-updated'));
+  } catch { /* Bookmarks are optional when local storage is unavailable. */ }
 }

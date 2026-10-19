@@ -1,5 +1,52 @@
 @import "tailwindcss";
 
+.tourism-progressive-blur {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  backdrop-filter: blur(18px) saturate(145%);
+  -webkit-mask-image: linear-gradient(to top, #000 0%, #000 48%, rgba(0,0,0,.72) 76%, transparent 97%);
+  mask-image: linear-gradient(to top, #000 0%, #000 48%, rgba(0,0,0,.72) 76%, transparent 97%);
+}
+
+.tourism-discovery-background img {
+  filter: blur(16px) brightness(.55) saturate(.8);
+  object-fit: contain;
+}
+
+.tourism-card-progressive-blur {
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(18px) saturate(125%);
+  backdrop-filter: blur(18px) saturate(125%);
+  -webkit-mask-image: linear-gradient(to top, #000 0%, #000 42%, rgba(0,0,0,.72) 72%, transparent 100%);
+  mask-image: linear-gradient(to top, #000 0%, #000 42%, rgba(0,0,0,.72) 72%, transparent 100%);
+}
+
+.reader-image-progressive-blur {
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(20px) saturate(120%);
+  backdrop-filter: blur(20px) saturate(120%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,.7) 58%, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,.7) 58%, #000 100%);
+}
+
+.reader-player-progressive-blur {
+  background: linear-gradient(to bottom, transparent 0%, rgb(0 0 0 / .08) 18%, rgb(0 0 0 / .34) 52%, rgb(0 0 0 / .62) 100%);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 45%, #000 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 45%, #000 100%);
+}
+
+.article-reader-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  scroll-behavior: auto;
+  touch-action: pan-y;
+}
+
 @layer base {
   html, body { scroll-behavior: smooth; }
   html, body, #root { width: 100%; min-height: 100%; }

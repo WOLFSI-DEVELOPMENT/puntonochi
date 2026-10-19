@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { articleImages } from '../data/article-images';
 
 export function ArticleCover({ id, className = '', sizes }: { id: number; className?: string; sizes?: string }) {
-  const image = articleImages[id];
+  const image = Object.values(articleImages).find((candidate) => candidate.id === id) || articleImages[id];
   const [current, setCurrent] = useState({ id, src: image?.src });
   useEffect(() => setCurrent({ id, src: image?.src }), [id, image?.src]);
   const src = current.id === id ? current.src : image?.src;

@@ -14,13 +14,13 @@ const BusinessDetailSheet = React.lazy(() => import('./components/BusinessDetail
 import { FlipText } from './components/FlipText';
 import { VerifiedBusinessName } from './components/VerifiedBusinessName';
 const HomeVideosSection = React.lazy(() => import('./components/HomeVideosSection').then((module) => ({ default: module.HomeVideosSection })));
-const HomeArticlesSection = React.lazy(() => import('./components/HomeArticlesSection').then((module) => ({ default: module.HomeArticlesSection })));
+const ArticleReaderPage = React.lazy(() => import('./components/ArticleReaderPage').then((module) => ({ default: module.ArticleReaderPage })));
+const TourismArticleCarousel = React.lazy(() => import('./components/TourismArticleCarousel').then((module) => ({ default: module.TourismArticleCarousel })));
 const HomeEventsSection = React.lazy(() => import('./components/HomeEventsSection').then((module) => ({ default: module.HomeEventsSection })));
 import { articleCatalog } from './data/articles-index';
 import { AutoLayoutRoot } from './layout/AutoLayout';
 const NewsPage = React.lazy(() => import('./components/NewsPage').then((module) => ({ default: module.NewsPage })));
 const EventsPage = React.lazy(() => import('./components/EventsPage').then((module) => ({ default: module.EventsPage })));
-const ArticlesPage = React.lazy(() => import('./components/ArticlesPage').then((module) => ({ default: module.ArticlesPage })));
 const SearchPage = React.lazy(() => import('./components/SearchPage').then((module) => ({ default: module.SearchPage })));
 const AskNochiPage = React.lazy(() => import('./components/SearchPage').then((module) => ({ default: module.AskNochiPage })));
 const BusinessPromotionSheet = React.lazy(() => import('./components/BusinessPromotionSheet').then((module) => ({ default: module.BusinessPromotionSheet })));
@@ -148,9 +148,7 @@ declare global {
 
 export default function App() {
   const reduceMotion = useReducedMotion();
-  const [articlesNearView, setArticlesNearView] = useState(false);
   const [shortsNearView, setShortsNearView] = useState(false);
-  const articlesSectionRef = useRef<HTMLDivElement>(null);
   const shortsSectionRef = useRef<HTMLDivElement>(null);
   useEffect(() => installAppLocalization(), []);
   useEffect(() => {
@@ -204,6 +202,8 @@ export default function App() {
         initShowSearch = true;
       } else if (parts[0] === 'puntoshorts') {
         initialTab = 'puntoshorts';
+      } else if (parts[0] === 'turismo') {
+        initialTab = 'turismo';
       } else if (parts[0] === 'categories') {
         initShowAllCategories = true;
       } else if (parts[0] === 'colonias') {
@@ -214,8 +214,10 @@ export default function App() {
         initialTab = 'ask-nochi';
       } else if (['videos', 'mercado', 'mapa'].includes(parts[0])) {
         initialTab = 'explorar';
-      } else if (parts[0] === 'explorar' || parts[0] === 'guardados' || parts[0] === 'noticias' || parts[0] === 'guias' || parts[0] === 'articulos') {
-        initialTab = parts[0] === 'articulos' ? 'guias' : parts[0];
+      } else if (parts[0] === 'explorar' || parts[0] === 'guardados' || parts[0] === 'noticias') {
+        initialTab = parts[0];
+      } else if (parts[0] === 'articulos' && parts[1]) {
+        initialTab = 'guias';
       } else if (parts[0] === 'negocio' && parts[1]) {
         initialBusiness = findBusinessByRouteSlug(parts[1], mockPlaces) || null;
       } else {
@@ -257,12 +259,16 @@ export default function App() {
   const [selectedBusiness, setSelectedBusiness] = useState<Place | null>(init.initialBusiness);
   const [publicMenuId] = useState<string | null>(init.initialMenuId);
   const [activeTab, setActiveTab] = useState(init.initialTab);
+  const [tourismStarted, setTourismStarted] = useState(false);
+  const [tourismArticleSlug, setTourismArticleSlug] = useState<string | null>(null);
+  const [articleReturnTab, setArticleReturnTab] = useState('inicio');
+  const [articleOriginRect, setArticleOriginRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  useEffect(() => { if (activeTab !== 'turismo' && activeTab !== 'guias') setTourismStarted(false); }, [activeTab]);
   const [openEventCreatorOnPage, setOpenEventCreatorOnPage] = useState(false);
   const [showReelCreator, setShowReelCreator] = useState(false);
   useEffect(() => {
-    if (!('IntersectionObserver' in window)) { setArticlesNearView(true); setShortsNearView(true); return undefined; }
+    if (!('IntersectionObserver' in window)) { setShortsNearView(true); return undefined; }
     const observers = [
-      [articlesSectionRef.current, setArticlesNearView],
       [shortsSectionRef.current, setShortsNearView],
     ] as const;
     const activeObservers = observers.flatMap(([element, reveal]) => {
@@ -419,7 +425,7 @@ export default function App() {
   useEffect(() => {
     const handleTabNavigation = (event: Event) => {
       const tab = (event as CustomEvent<string>).detail;
-      if (tab === 'noticias' || tab === 'inicio' || tab === 'guias') setActiveTab(tab);
+      if (tab === 'noticias' || tab === 'inicio') setActiveTab(tab);
     };
     window.addEventListener('navigate-tab', handleTabNavigation);
     return () => window.removeEventListener('navigate-tab', handleTabNavigation);
@@ -678,7 +684,7 @@ export default function App() {
     } else if (((activeTab === 'noticias' || activeTab === 'eventos') && /^\/eventos\/[^/]+\/?$/.test(window.location.pathname)) || (activeTab === 'guias' && /^\/articulos\/[^/]+\/?$/.test(window.location.pathname))) {
       path = window.location.pathname;
     } else if (activeTab !== 'inicio') {
-      path = activeTab === 'guias' ? '/articulos' : activeTab === 'puntoshorts' ? '/puntoshorts' : `/${activeTab}`;
+      path = activeTab === 'guias' ? '/' : activeTab === 'puntoshorts' ? '/puntoshorts' : `/${activeTab}`;
     }
     
     if (window.location.pathname !== path) {
@@ -746,8 +752,8 @@ export default function App() {
       title = 'PuntoShorts | Videos cortos de Nochistlán | PuntoNochi';
       description = 'Mira PuntoShorts: videos, lugares y momentos de la comunidad de Nochistlán.';
     } else if (activeTab === 'guias') {
-      title = routeArticle ? `${routeArticle.title} | Artículos de Nochistlán | PuntoNochi` : 'Artículos de Nochistlán | PuntoNochi';
-      description = routeArticle?.summary || 'Historias, cultura y lugares para conocer mejor Nochistlán de Mejía.';
+      title = routeArticle ? `${routeArticle.title} | PuntoNochi` : 'Artículo no encontrado | PuntoNochi';
+      description = routeArticle?.summary || 'No encontramos este artículo de Nochistlán.';
     } else if (activeTab === 'eventos') {
       title = /^\/eventos\/[^/]+\/?$/.test(routePath) ? 'Evento en Nochistlán | PuntoNochi' : 'Eventos en Nochistlán | Punto Events | PuntoNochi';
       description = /^\/eventos\/[^/]+\/?$/.test(routePath) ? 'Consulta fecha, horario, ubicación, fotos y detalles de este evento en Nochistlán.' : 'Descubre eventos, actividades y planes para hacer en Nochistlán de Mejía, Zacatecas.';
@@ -933,6 +939,20 @@ export default function App() {
     };
   }, []);
 
+  const openArticleReader = (slug: string, origin?: DOMRect) => {
+    setArticleReturnTab(activeTab);
+    setTourismArticleSlug(slug);
+    setArticleOriginRect(origin ? { left: origin.left, top: origin.top, width: origin.width, height: origin.height } : null);
+    setShowBookmarksSheet(false);
+    window.history.pushState({}, '', `/articulos/${encodeURIComponent(slug)}`);
+    setActiveTab('guias');
+  };
+
+  const closeArticleReader = () => {
+    if (articleReturnTab === 'turismo') setTourismStarted(true);
+    setActiveTab(articleReturnTab);
+  };
+
   const externalSiteConfirmation = <AnimatePresence>
     {externalSiteToOpen && <>
       <motion.button type="button" data-sheet-close aria-label="Cerrar confirmación" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setExternalSiteToOpen(null)} className="fixed inset-0 z-[140] cursor-default bg-black/65 backdrop-blur-sm" />
@@ -953,9 +973,9 @@ export default function App() {
   if (window.location.pathname === '/reclamar/hotelnochistlan') return <><HotelProfileClaimPage onRequireAccount={() => setShowAccountAuth(true)} onClose={() => { window.history.pushState({}, '', '/explorar'); setActiveTab('explorar'); }} />{showAccountAuth && <AccountAuthSheet onClose={() => setShowAccountAuth(false)}/>} {externalSiteConfirmation}</>;
 
   return (
-    <AutoLayoutRoot id="app-root" className={`auto-layout-root relative min-h-screen bg-[#f8f9fa] ${activeTab === 'explorar' || activeTab === 'inicio' ? 'pb-0' : 'pb-36'} font-sans text-neutral-900 selection:bg-blue-100`} style={{ fontFamily: "'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif" }}>
+    <AutoLayoutRoot id="app-root" className={`auto-layout-root relative min-h-screen bg-[#08090b] ${activeTab === 'explorar' || activeTab === 'inicio' || activeTab === 'turismo' ? 'pb-0' : 'pb-36'} font-sans text-neutral-900 selection:bg-blue-100`} style={{ fontFamily: "'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif" }}>
       {/* Dynamic Main Content based on activeTab */}
-      <AnimatePresence mode="wait" initial={false}>
+      <AnimatePresence mode="sync" initial={false}>
       {activeTab === 'inicio' && (
         <motion.main key="home-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }} className={`${timerActive ? 'pt-14' : ''} touch-pan-y`}>
           {timerActive && <motion.div layout initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="fixed left-[5px] right-[5px] top-[max(5px,env(safe-area-inset-top))] z-40 mx-auto flex max-w-[520px] items-center gap-2 rounded-full border border-[#ff9f0a] bg-[#171719]/85 px-3 py-2 text-white shadow-lg backdrop-blur-xl"><Timer className="h-3.5 w-3.5 text-[#ff9f0a]"/><span className="text-[9px] font-semibold uppercase tracking-wider text-white/55">Temporizador</span><motion.span key={timerDisplay} initial={{ opacity: .6, y: 2 }} animate={{ opacity: 1, y: 0 }} className="ml-auto font-mono text-sm font-bold tabular-nums text-[#ffb347]">{timerDisplay}</motion.span></motion.div>}
@@ -1159,7 +1179,6 @@ export default function App() {
             </div>
           </motion.section>}
 
-          <div ref={articlesSectionRef} className="min-h-[220px]">{articlesNearView && <React.Suspense fallback={<div className="h-[180px] animate-pulse rounded-[24px] bg-white/[.04]"/>}><HomeArticlesSection onViewAll={() => setActiveTab('guias')} onOpenArticle={(slug) => { window.history.pushState({}, '', `/articulos/${encodeURIComponent(slug)}`); setActiveTab('guias'); }} /></React.Suspense>}</div>
           <div ref={shortsSectionRef} className="min-h-[220px]">{shortsNearView && <React.Suspense fallback={<div className="h-[180px] animate-pulse rounded-[24px] bg-white/[.04]"/>}><HomeVideosSection onViewAll={() => setActiveTab('puntoshorts')} onSelectShort={(shortId) => { window.history.pushState({}, '', `/puntoshorts?short=${encodeURIComponent(shortId)}`); setActiveTab('puntoshorts'); }} /></React.Suspense>}</div>
 
           <motion.section initial={reduceMotion ? false : { opacity: 0, y: 8 }} whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }} viewport={{ once: true, amount: .08 }} transition={reduceMotion ? { duration: 0 } : { duration: .2, ease: 'easeOut' }} className="mb-10">
@@ -1309,7 +1328,6 @@ export default function App() {
             <nav aria-label="Enlaces del pie de página" className="relative z-10 mx-auto mt-8 flex max-w-md flex-wrap items-center justify-center gap-x-6 gap-y-3 border-t border-[#202124]/10 pt-5 text-[13px] font-semibold text-[#202124]/70">
               <button type="button" onClick={() => setActiveTab('inicio')} className="transition-colors hover:text-[#202124]">Inicio</button>
               <button type="button" onClick={() => setActiveTab('explorar')} className="transition-colors hover:text-[#202124]">Explorar</button>
-              <button type="button" onClick={() => setActiveTab('guias')} className="transition-colors hover:text-[#202124]">Artículos</button>
               <button type="button" onClick={() => setActiveTab('noticias')} className="transition-colors hover:text-[#202124]">Noticias</button>
               <a href="/privacidad" onClick={(event) => { event.preventDefault(); setLegalDocument('privacidad'); }} className="transition-colors hover:text-[#202124]">Privacidad</a>
               <a href="/terminos" onClick={(event) => { event.preventDefault(); setLegalDocument('terminos'); }} className="transition-colors hover:text-[#202124]">Términos</a>
@@ -1319,9 +1337,22 @@ export default function App() {
         </motion.main>
       )}
 
-        {activeTab === 'explorar' && <React.Suspense key="explore-page" fallback={<div className="min-h-[70dvh] bg-[#111214]"/>}><BusinessExplorePage places={mockPlaces} directoryVersion={directoryVersion} onSelectBusiness={(business) => setSelectedBusiness(business)} onOpenSearch={(query) => { setSearchQuery(query || ''); setShowSearch(true); }}/></React.Suspense>}
+        {activeTab === 'explorar' && <motion.div key="explore-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={null}><BusinessExplorePage places={mockPlaces} directoryVersion={directoryVersion} onSelectBusiness={(business) => setSelectedBusiness(business)} onOpenSearch={(query) => { setSearchQuery(query || ''); setShowSearch(true); }}/></React.Suspense></motion.div>}
+        {activeTab === 'turismo' && <motion.main key="turismo-page" aria-label="Turismo" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 1.005 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={reduceMotion ? { duration: .12 } : { duration: .28, ease: 'easeOut' }} className="relative min-h-dvh w-full overflow-hidden bg-black">
+          {tourismStarted ? <React.Suspense fallback={<div className="min-h-dvh bg-black"/>}><TourismArticleCarousel initialArticleSlug={tourismArticleSlug} onBack={() => setTourismStarted(false)} onOpenArticle={openArticleReader}/></React.Suspense> : <>
+          <img src="https://res.cloudinary.com/dwthgcx5j/image/upload/v1792360806/Golden_Hour_Colonial_Plaza_aqcowh.png" alt="" aria-hidden="true" className="absolute inset-0 h-full min-h-dvh w-full object-contain object-center"/>
+          <div aria-hidden="true" className="tourism-progressive-blur"/>
+          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-[360px] bg-gradient-to-t from-black/80 via-black/30 to-transparent"/>
+          <div className="absolute inset-x-0 bottom-[calc(92px+env(safe-area-inset-bottom,0px))] z-10 mx-auto flex w-full max-w-md flex-col items-center px-6 text-center text-white">
+            <h1 className="text-[clamp(34px,9vw,46px)] font-bold leading-[.98] tracking-[-.045em]">Bienvenido a Nochistlán</h1>
+            <p className="mt-3 max-w-xs text-sm leading-relaxed text-white/80">Descubre la historia, naturaleza y cultura de nuestro pueblo mágico.</p>
+            <button type="button" onClick={() => setTourismStarted(true)} className="mt-6 flex h-12 w-full max-w-[280px] items-center justify-center rounded-full border-0 bg-white/[.18] px-6 text-sm font-semibold text-white shadow-[0_8px_28px_rgba(0,0,0,.2)] outline-none backdrop-blur-xl transition-colors hover:bg-white/[.24] active:scale-[.98]">Comenzar</button>
+            <p className="mt-4 text-[10px] font-medium tracking-wide text-white/65">Turismo local · Nochistlán, Zacatecas</p>
+          </div>
+          </>}
+        </motion.main>}
         {activeTab === 'puntoshorts' && (
-          <React.Suspense key="puntoshorts-page" fallback={<div className="fixed inset-0 z-[80] bg-[#08090b]"/>}>
+          <React.Suspense key="puntoshorts-page" fallback={null}>
             <ExploreVideoWireframe onClose={() => setActiveTab('inicio')} onRequireAccount={() => setShowAccountAuth(true)} onCreateShort={async () => { const response = await fetch('/api/account/session', { cache: 'no-store', credentials: 'same-origin' }); const session = await response.json().catch(() => ({})); if (session.authenticated) setShowReelCreator(true); else setShowAccountAuth(true); }} onCreateEvent={async () => { const response = await fetch('/api/account/session', { cache: 'no-store', credentials: 'same-origin' }); const session = await response.json().catch(() => ({})); if (session.authenticated) { setOpenEventCreatorOnPage(true); setActiveTab('eventos'); } else setShowAccountAuth(true); }} onOpenEvent={(id) => { window.history.pushState({}, '', `/eventos/${encodeURIComponent(id)}`); setActiveTab('eventos'); }} onOpenBusiness={(business) => {
               setActiveTab('inicio');
               setSelectedBusiness(business);
@@ -1335,7 +1366,7 @@ export default function App() {
         {activeTab === 'eventos' && (
           <motion.div key="events-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<PageLoadingSkeleton page="news"/>}><EventsPage key="events" autoCreate={openEventCreatorOnPage} onAutoCreateHandled={() => setOpenEventCreatorOnPage(false)} /></React.Suspense></motion.div>
         )}
-        {activeTab === 'guias' && <motion.div key="articles-page" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .18 }}><React.Suspense fallback={<div className="min-h-screen bg-[#111214]"/>}><ArticlesPage /></React.Suspense></motion.div>}
+        {activeTab === 'guias' && <motion.div key="article-reader" initial={articleOriginRect ? { left: articleOriginRect.left, top: articleOriginRect.top, width: articleOriginRect.width, height: articleOriginRect.height, borderRadius: 34, opacity: .85 } : { left: 0, top: '100dvh', width: '100vw', height: '100dvh', borderRadius: 0, opacity: 0 }} animate={{ left: 0, top: 0, width: '100vw', height: '100dvh', borderRadius: 0, opacity: 1 }} exit={articleOriginRect ? { left: articleOriginRect.left, top: articleOriginRect.top, width: articleOriginRect.width, height: articleOriginRect.height, borderRadius: 34, opacity: .8 } : { left: 0, top: '100dvh', opacity: 0 }} transition={reduceMotion ? { duration: .01 } : { type: 'spring', stiffness: 300, damping: 32, mass: .8 }} style={{ transformOrigin: 'top left' }} className="article-reader-scroll fixed z-[100] overflow-x-hidden overflow-y-auto bg-black text-white"><React.Suspense fallback={null}><ArticleReaderPage onClose={closeArticleReader} /></React.Suspense></motion.div>}
       </AnimatePresence>
 
       <AnimatePresence>{activeTab === 'explorar' && openEventCreatorOnPage && <React.Suspense fallback={null}><EventsPage embedded autoCreate onClose={() => setOpenEventCreatorOnPage(false)} /></React.Suspense>}</AnimatePresence>
@@ -1352,7 +1383,7 @@ export default function App() {
       <AnimatePresence>{legalDocument && <LegalPage document={legalDocument} onClose={() => { setLegalDocument(null); window.history.replaceState({}, '', '/'); }}/>}</AnimatePresence>
 
       {/* Bottom Navigation & Search */}
-      {activeTab !== 'ask-nochi' && activeTab !== 'puntoshorts' && !showAdminPage && !legalDocument && (
+      {activeTab !== 'ask-nochi' && activeTab !== 'guias' && !showAdminPage && !legalDocument && (
         <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchCategory(null); setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => { setSearchQuery(''); setShowSearch(false); }} onOpenProfile={() => { if (signedInAccount) setPublicProfileId(signedInAccount.id); else setShowAccountAuth(true); }} onSelectBusiness={(place) => setSelectedBusiness(place)} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} profileEmail={signedInAccount?.email} timerEndAt={timerEndAt} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onStopTimer={stopTimer} onTimerComplete={completeTimer} searchQuery={searchQuery} searchOpen={showSearch} />
       )}
 
@@ -1452,7 +1483,7 @@ export default function App() {
         {publicProfileId && <React.Suspense fallback={null}><PublicProfileSheet profileId={publicProfileId} onClose={() => setPublicProfileId(null)} onCreateShort={() => { setPublicProfileId(null); setShowReelCreator(true); }} /></React.Suspense>}
         {showAccountAuth && <React.Suspense fallback={null}><AccountAuthSheet onClose={() => setShowAccountAuth(false)}/></React.Suspense>}
       </AnimatePresence>
-      <AnimatePresence>{showBookmarksSheet && <React.Suspense fallback={null}><BookmarksSheet key="bookmarks-sheet" onClose={() => setShowBookmarksSheet(false)} onSelectBusiness={(place) => setSelectedBusiness(place)} /></React.Suspense>}</AnimatePresence>
+      <AnimatePresence>{showBookmarksSheet && <React.Suspense fallback={null}><BookmarksSheet key="bookmarks-sheet" onClose={() => setShowBookmarksSheet(false)} onSelectBusiness={(place) => setSelectedBusiness(place)} onOpenArticle={(slug) => openArticleReader(slug)} /></React.Suspense>}</AnimatePresence>
       <AnimatePresence>{showProfileSettings && <React.Suspense fallback={null}><SettingsSheet key="settings-sheet" account={signedInAccount} onClose={() => setShowProfileSettings(false)} onRequireAuth={() => { setShowProfileSettings(false); setShowAccountAuth(true); }} /></React.Suspense>}</AnimatePresence>
       {externalSiteConfirmation}
       <Analytics />

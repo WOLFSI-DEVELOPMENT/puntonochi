@@ -393,7 +393,7 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
     touchStartY.current = null;
   };
 
-  return <motion.main initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'tween', duration: .46, ease: [0.22, 1, 0.36, 1] }} className="fixed inset-0 z-[80] overflow-hidden bg-[#08090b] text-white [will-change:transform]">
+  return <motion.main initial={{ opacity: 0, scale: .985, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: .99, y: 8 }} transition={{ type: 'spring', stiffness: 300, damping: 30, mass: .8 }} className="relative mx-auto mt-2 mb-1 h-[calc(100dvh-72px-env(safe-area-inset-top,0px))] min-h-[420px] w-[calc(100%-10px)] max-w-[1100px] overflow-hidden rounded-[30px] bg-[#08090b] text-white [will-change:transform]">
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 hidden overflow-hidden md:block">
       <div className="absolute left-1/2 top-1/2 h-[min(82vh,920px)] w-[min(80vw,1100px)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(ellipse,rgba(111,76,167,.3)_0%,rgba(46,91,136,.2)_40%,rgba(8,9,11,0)_72%)] blur-[100px]"/>
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_5%,rgba(8,9,11,.28)_76%)]"/>

@@ -182,6 +182,8 @@ const PATHS = {
     "M182.15-510q-28.09 0-48.11-20.02t-20.02-48.35v-199.48q0-28.09 20.02-48.23 20.02-20.14 48.11-20.14h199.72q28.09 0 48.11 20.14T450-777.85v199.48q0 28.33-20.02 48.35Q409.96-510 381.87-510H182.15Zm0 395.98q-28.09 0-48.11-20.02t-20.02-48.11v-199.72q0-28.09 20.02-48.11T182.15-450h199.72q28.09 0 48.11 20.02T450-381.87v199.72q0 28.09-20.02 48.11t-48.11 20.02H182.15ZM578.37-510q-28.33 0-48.35-20.02Q510-550.04 510-578.37v-199.48q0-28.09 20.02-48.23 20.02-20.14 48.35-20.14h199.48q28.09 0 48.23 20.14 20.14 20.14 20.14 48.23v199.48q0 28.33-20.14 48.35Q805.94-510 777.85-510H578.37Zm0 395.98q-28.33 0-48.35-20.02Q510-154.06 510-182.15v-199.72q0-28.09 20.02-48.11T578.37-450h199.48q28.09 0 48.23 20.02 20.14 20.02 20.14 48.11v199.72q0 28.09-20.14 48.11t-48.23 20.02H578.37Z",
   video_library:
     "M21.15 6.17C20.74 5.95 19.88 5.72 18.71 6.54L17.24 7.58C17.13 4.47 15.78 3.25 12.5 3.25H6.5C3.08 3.25 1.75 4.58 1.75 8V16C1.75 18.3 3 20.75 6.5 20.75H12.5C15.78 20.75 17.13 19.53 17.24 16.42L18.71 17.46C19.33 17.9 19.87 18.04 20.3 18.04C20.67 18.04 20.96 17.93 21.15 17.83C21.56 17.62 22.25 17.05 22.25 15.62V8.38C22.25 6.95 21.56 6.38 21.15 6.17ZM11 11.38C9.97 11.38 9.12 10.54 9.12 9.5C9.12 8.46 9.97 7.62 11 7.62C12.03 7.62 12.88 8.46 12.88 9.5C12.88 10.54 12.03 11.38 11 11.38Z",
+  tourism:
+    "M16.88 21.1098L15.9 20.8398C15.33 20.6798 14.94 20.1798 14.94 19.5698C14.94 18.9598 15.32 18.4598 15.92 18.2898L16.88 18.0398C17.39 17.8898 17.76 17.5198 17.9 17.0198L18.16 16.0698L18.22 15.8998C18.41 15.3998 18.89 15.0698 19.44 15.0698C20 15.0698 20.45 15.4098 20.64 15.9098L20.95 17.0298C21.06 17.4698 21.38 17.7998 21.79 17.9798C21.84 17.3498 21.74 16.7198 21.48 16.1198L18.35 8.79983C17.78 7.45983 16.93 6.69983 15.96 6.64983C15 6.59983 14.07 7.26983 13.36 8.54983L11.46 11.9598C11.06 12.6798 10.49 13.1098 9.86998 13.1598C9.23998 13.2198 8.60998 12.8898 8.09998 12.2398L7.87998 11.9598C7.16998 11.0698 6.28998 10.6398 5.38998 10.7298C4.48998 10.8198 3.71998 11.4398 3.20998 12.4498L1.47998 15.8998C0.859977 17.1498 0.919977 18.5998 1.64998 19.7798C2.37998 20.9598 3.64998 21.6698 5.03998 21.6698H17.67C17.48 21.3998 17.21 21.1998 16.88 21.1098ZM22.94 19.5898C22.94 19.6598 22.9 19.8198 22.71 19.8798L21.73 20.1498C20.88 20.3798 20.24 21.0198 20.01 21.8698L19.75 22.8298C19.69 23.0498 19.52 23.0698 19.44 23.0698C19.36 23.0698 19.19 23.0498 19.13 22.8298L18.87 21.8598C18.64 21.0198 17.99 20.3798 17.15 20.1498L16.18 19.8898C15.97 19.8298 15.95 19.6498 15.95 19.5798C15.95 19.4998 15.97 19.3198 16.18 19.2598L17.16 18.9998C18 18.7598 18.64 18.1198 18.87 17.2798L19.15 16.2598C19.22 16.0898 19.38 16.0598 19.44 16.0598C19.5 16.0598 19.67 16.0798 19.73 16.2398L20.01 17.2698C20.24 18.1098 20.89 18.7498 21.73 18.9898L22.73 19.2698C22.93 19.3498 22.94 19.5298 22.94 19.5898ZM6.42999 7.68993C8.29999 7.68993 9.80999 6.17993 9.80999 4.30993C9.80999 2.43993 8.29999 0.929932 6.42999 0.929932C4.55999 0.929932 3.04999 2.43993 3.04999 4.30993C3.04999 6.17993 4.55999 7.68993 6.42999 7.68993Z",
   search:
     "M376.57-324.93q-109.84 0-185.96-76.2Q114.5-477.33 114.5-585t76.2-183.87q76.19-76.2 184.37-76.2 108.17 0 183.86 76.2 75.7 76.2 75.7 184.02 0 43.33-13.64 82.97t-40.92 74.4l240.56 238.57q10.2 9.99 10.2 24.76 0 14.78-10.2 24.98-10.43 10.43-25.21 10.43-14.78 0-24.53-10.43L531.33-378.5q-29.76 25.28-69.6 39.42-39.84 14.15-85.16 14.15Zm-1-68.14q79.81 0 135.37-56.18T566.5-585q0-79.57-55.56-135.75-55.56-56.18-135.37-56.18-80.41 0-136.68 56.18-56.26 56.18-56.26 135.75t56.26 135.75q56.27 56.18 136.68 56.18Z",
   storefront:
@@ -200,7 +202,7 @@ const PATHS = {
 const Icon = ({ name, size = 24 }) => (
   <span className="lgn-ico">
     <svg
-      viewBox={["home", "explore", "video_library"].includes(name) ? "0 0 24 24" : "0 -960 960 960"}
+      viewBox={["home", "explore", "video_library", "tourism"].includes(name) ? "0 0 24 24" : "0 -960 960 960"}
       width={size}
       height={size}
       aria-hidden="true"
@@ -209,7 +211,7 @@ const Icon = ({ name, size = 24 }) => (
     >
       <path
         d={PATHS[name]}
-        fill={["home", "explore", "video_library"].includes(name) ? "#ffffff" : "url(#lgn-glass)"}
+        fill={["home", "explore", "video_library", "tourism"].includes(name) ? "#ffffff" : "url(#lgn-glass)"}
         transform={name === "auto_awesome" ? "translate(0 -960) scale(40)" : undefined}
       />
     </svg>
@@ -265,6 +267,7 @@ const TABS = [
   { id: "home", label: "Home", icon: "home" },
   { id: "explore", label: "Explore", icon: "explore" },
   { id: "puntoshorts", label: "PuntoShorts", icon: "video_library" },
+  { id: "turismo", label: "Turismo", icon: "tourism" },
   { id: "profile", label: "Profile", avatar: true },
 ];
 
@@ -273,7 +276,6 @@ const DEFAULT_MENU = [
   { id: 'puntoshorts', label: 'PuntoShorts', icon: 'video_library' },
   { id: "eventos", label: "Eventos", icon: "event" },
   { id: "noticias", label: "Noticias", icon: "newspaper" },
-  { id: "guias", label: "Artículos", icon: "menu_book" },
   { id: "ask-nochi", label: "Pregúntale a Nochi", icon: "auto_awesome" },
   { id: "voice-search", label: "Búsqueda por voz", icon: "mic" },
 ];
@@ -861,9 +863,9 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
       <style>{CSS_TEXT}</style>
       <header className="pn-desktop-topbar pn-progressive-mobile" aria-label="Navegación de PuntoNochi" style={{ position: 'fixed', inset: 'auto 0 0', zIndex: 60, height: 'calc(74px + env(safe-area-inset-bottom, 0px))', alignItems: 'flex-start', justifyContent: 'center', padding: '6px 16px calc(8px + env(safe-area-inset-bottom, 0px))', background: 'transparent', border: 0, boxShadow: 'none', pointerEvents: 'none' }}>
         <div className="pointer-events-auto flex h-[58px] w-[min(430px,calc(100vw-32px))] items-center justify-center gap-1 rounded-full bg-[#202124]/80 px-2 shadow-[0_8px_30px_rgba(0,0,0,.24)] backdrop-blur-2xl">
-          {TABS.map(({ id, label, icon, avatar }) => {
+          {TABS.map(({ id, label, icon, avatar, disabled }) => {
             const selected = visualActive === id;
-            return <button key={id} type="button" aria-label={label} aria-current={selected ? 'page' : undefined} title={label} onClick={() => select(id)} className={`relative flex h-12 min-w-0 flex-1 items-center justify-center rounded-full text-white/60 transition-colors hover:text-white ${selected ? 'text-white' : ''}`}>
+            return <button key={id} type="button" disabled={disabled} aria-label={label} aria-disabled={disabled || undefined} aria-current={selected ? 'page' : undefined} title={disabled ? `${label} · Próximamente` : label} onClick={() => select(id)} className={`relative flex h-12 min-w-0 flex-1 items-center justify-center rounded-full text-white/60 transition-colors ${disabled ? 'cursor-not-allowed opacity-40' : 'hover:text-white'} ${selected ? 'text-white' : ''}`}>
               {selected && <motion.span layoutId="pn-desktop-bottom-active-tab" initial={false} transition={{ type: 'spring', stiffness: 420, damping: 36, mass: .72 }} aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-full bg-white/[.15]"/>}
               <span className="relative z-10">{avatar ? <Avatar src={avatarSrc} alt={label} timerActive={timerActive}/> : <Icon name={icon}/>}</span>
             </button>;
@@ -952,9 +954,10 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
             />
           </div>
 
-          {visibleTabs.map(({ id, label, icon, avatar, menu }) => (
+          {visibleTabs.map(({ id, label, icon, avatar, menu, disabled }) => (
             <button
               key={id}
+              disabled={disabled}
               className="lgn-tab"
               role="tab"
               ref={menu ? browseRef : undefined}
@@ -962,13 +965,16 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
               aria-haspopup={menu ? "menu" : undefined}
               aria-expanded={menu ? menuOpen : undefined}
               aria-label={label}
+              aria-disabled={disabled || undefined}
+              title={disabled ? `${label} · Próximamente` : undefined}
               tabIndex={searching ? -1 : 0}
               onClick={() => (menu ? setMenuOpen((o) => !o) : select(id))}
               style={{
                 all: "unset",
                 boxSizing: "border-box",
                 position: "relative",
-                cursor: "pointer",
+                cursor: disabled ? "not-allowed" : "pointer",
+                opacity: disabled ? .4 : 1,
                 WebkitTapHighlightColor: "transparent",
                 flex: 1,
                 height: "100%",

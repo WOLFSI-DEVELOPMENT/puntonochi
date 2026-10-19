@@ -1,4 +1,4 @@
-const CACHE_NAME = 'puntonochi-shell-v4';
+const CACHE_NAME = 'puntonochi-shell-v5';
 const APP_SHELL = ['/', '/manifest.webmanifest', '/pwa-192.png', '/favicon.png'];
 
 self.addEventListener('install', (event) => {
@@ -26,8 +26,17 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key.startsWith('puntonochi-shell-') && key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then(async (keys) => {
+        const oldShellCaches = keys.filter((key) => key.startsWith('puntonochi-shell-') && key !== CACHE_NAME);
+        await Promise.all(oldShellCaches.map((key) => caches.delete(key)));
+        return oldShellCaches.length > 0;
+      })
       .then(() => self.clients.claim())
+      .then(async (isUpdate) => {
+        if (!isUpdate) return;
+        const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        await Promise.all(windows.filter((client) => new URL(client.url).origin === self.location.origin).map((client) => client.navigate(client.url)));
+      })
   );
 });
 
