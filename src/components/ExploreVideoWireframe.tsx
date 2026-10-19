@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { Building2, CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Film, ImagePlus, MessageCircle, Plus, Send, Share2, SmilePlus, ThumbsUp, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowUpRight, Building2, CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Film, ImagePlus, MessageCircle, Plus, Send, Share2, SmilePlus, ThumbsUp, Volume2, VolumeX, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type TouchEvent, type WheelEvent } from 'react';
 import CornerKit from '@cornerkit/core';
 import { mockPlaces } from '../data';
@@ -14,6 +14,7 @@ const FEED_VIDEOS = [
   { id: 'puntonochi-short-3', url: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1790871656/Expo_Eventos_2026_qekh1y.mp4' },
   ...AYUNTAMIENTO_SHORTS,
   { id: 'hotel-nochistlan-short-1', url: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1792029646/Video-44459_hxywo3.mp4' },
+  { id: 'rentas-damian-short-1', url: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1792424425/AQOAXLQ1J7vNBIyb7B7t5L5KwZYa1heUSGV__6WhoVeTHfTKtPUsDtymJVOAveYUbm0E9mUemETysVQqWPhuIXZDgfA1bA7p_o1stmp.mp4' },
 ];
 const COMMENT_EMOJIS = ['😍', '😂', '🥰', '✨', '❤️', '🔥', '😮', '🙌', '👏', '😊', '😢', '😎', '🎉', '🤔', '💯', '👀', '🤩', '🙏', '💙', '🌮'];
 type Reaction = 'like' | 'dislike' | null;
@@ -26,9 +27,11 @@ const AYUNTAMIENTO_AVATAR = '/ayuntamiento-avatar.jpg';
 const AYUNTAMIENTO_DESCRIPTION = 'Cuenta oficial del Ayuntamiento de Nochistlán de Mejía, Zacatecas.';
 const HOTEL_AVATAR = '/hotel-nochistlan-avatar.jpg';
 const HOTEL_DESCRIPTION = 'Hotel Nochistlán · Hospedaje en Nochistlán de Mejía, Zacatecas.';
+const RENTAS_DAMIAN_AVATAR = 'https://scontent-mty2-1.cdninstagram.com/v/t51.82787-19/818988113_17956854180234981_444299232040797350_n.jpg?_nc_cat=110&ig_cache_key=GFHE0DDlRrLqqcs-AKZExSvMdyoGbmNDAQAB0j-ccb7-5&ccb=7-5&_nc_sid=669407&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLnd3dy4xMDgwLkMzIn0%3D&_nc_ohc=qz_R_JxwA5MQ7kNvwHzRGAx&_nc_oc=Adop6OGal0uEFsa5qB0bQ9ApTZS71cv0SVAgx_VQEDTCLm-G_B8kqfhAyMh0Zn3NMI8&_nc_zt=24&_nc_ht=scontent-mty2-1.cdninstagram.com&_nc_gid=xYP0x3Tezn9BqnsC5bCoIQ&_nc_ss=7baaf&oh=00_AQM46MS9cX3Plt5bq56rsaOk-T85poiLjlI4eO4Txt72aA&oe=6ADC0B6D';
 const isAyuntamientoVideoId = (id: string) => id === 'puntonochi-short-3' || id.startsWith('ayuntamiento-short-');
 const isHotelVideoId = (id: string) => id.startsWith('hotel-nochistlan-short-');
-const getVideoProfileId = (id: string) => isHotelVideoId(id) ? 'hotel' : isAyuntamientoVideoId(id) ? 'ayuntamiento' : 'puntonochi';
+const isRentasDamianVideoId = (id: string) => id.startsWith('rentas-damian-short-');
+const getVideoProfileId = (id: string) => isHotelVideoId(id) ? 'hotel' : isAyuntamientoVideoId(id) ? 'ayuntamiento' : isRentasDamianVideoId(id) ? 'rentas-damian' : 'puntonochi';
 const VIDEO_CAPTIONS = [
   'Descubre un nuevo rincón de Nochistlán ✨ #Nochistlán #Zacatecas',
   'Paisajes que nos recuerdan lo increíble que es nuestro planeta 🌎',
@@ -37,6 +40,7 @@ const VIDEO_CAPTIONS = [
   'Ayuntamiento de Nochistlán · Información y actividades para nuestra comunidad.',
   'Ayuntamiento de Nochistlán · Información y actividades para nuestra comunidad.',
   'Conoce Hotel Nochistlán y descubre una opción para hospedarte en el centro.',
+  'Rentas y novedades de @rentas_damian_oficial.',
 ];
 type CreateAction = 'reel' | 'event' | 'image';
 const CREATE_ACTIONS: Array<{ id: CreateAction; label: string; icon: typeof Film }> = [
@@ -120,8 +124,11 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
   const currentVideo = videoUrls[videoIndex] || FEED_VIDEOS[videoIndex] || videoUrls[0] || FEED_VIDEOS[0];
   const isAyuntamientoVideo = isAyuntamientoVideoId(currentVideo.id);
   const isHotelVideo = isHotelVideoId(currentVideo.id);
+  const isRentasDamianVideo = isRentasDamianVideoId(currentVideo.id);
   const hotelBusiness = mockPlaces.find((place) => place.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es').includes('hotel nochistlan')) || null;
-  const activeProfile = isHotelVideo
+  const activeProfile = isRentasDamianVideo
+    ? { kind: 'rentas-damian', name: 'Rentas Damián Oficial', handle: '@rentas_damian_oficial', description: 'Perfil público de Instagram.', avatar: RENTAS_DAMIAN_AVATAR, location: 'Instagram', business: null, instagramUrl: 'https://www.instagram.com/rentas_damian_oficial/reels/' }
+    : isHotelVideo
     ? { kind: 'hotel', name: 'Hotel Nochistlán', handle: '@hotelnochistlan', description: HOTEL_DESCRIPTION, avatar: HOTEL_AVATAR, location: 'Nochistlán de Mejía, Zacatecas', business: hotelBusiness }
     : isAyuntamientoVideo
       ? { kind: 'ayuntamiento', name: 'Ayuntamiento Nochistlán', handle: '@ayuntamiento.nochistlan', description: AYUNTAMIENTO_DESCRIPTION, avatar: AYUNTAMIENTO_AVATAR, location: 'Nochistlán de Mejía, Zacatecas', business: null }
@@ -155,6 +162,8 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
       const rows = await response.json() as Array<{ id: string; videoUrl: string; likes: number; dislikes: number; commentCount: number; myReaction: Reaction }>;
       if (!Array.isArray(rows) || !rows.length) return;
       const nextVideos = rows.map((row) => ({ id: row.id, url: row.videoUrl }));
+      const rentasDamianShort = FEED_VIDEOS.find((video) => isRentasDamianVideoId(video.id));
+      if (rentasDamianShort && !nextVideos.some((video) => video.id === rentasDamianShort.id)) nextVideos.push(rentasDamianShort);
       const requestedShortId = new URLSearchParams(window.location.search).get('short');
       if (requestedShortId && !nextVideos.some((video) => video.id === requestedShortId)) {
         const bundledShort = FEED_VIDEOS.find((video) => video.id === requestedShortId);
@@ -469,6 +478,7 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
       <div className="mx-auto max-w-3xl px-5 pb-[max(30px,env(safe-area-inset-bottom))] pt-4">
         <section className="flex items-start gap-4">{activeProfile.avatar ? <img src={activeProfile.avatar} alt={`Foto de perfil de ${activeProfile.name}`} className="h-[76px] w-[76px] shrink-0 rounded-full object-cover ring-2 ring-[#fe2c55]"/> : <span aria-label="Emblema del Ayuntamiento" className="flex h-[76px] w-[76px] shrink-0 items-center justify-center rounded-full bg-white/[.08] text-4xl ring-2 ring-[#fe2c55]">🏛️</span>}<div className="min-w-0 flex-1 pt-1"><h1 id="puntonochi-profile-name" className="text-xl font-bold">{activeProfile.name}</h1><p className="mt-0.5 text-xs text-white/55">{activeProfile.handle}</p><p className="mt-2 text-xs leading-relaxed text-white/70">{activeProfile.description}</p></div></section>
         {activeProfile.business && <button type="button" onClick={() => onOpenBusiness(activeProfile.business!)} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-sm font-semibold text-[#202124] transition-transform active:scale-[.98]"><Building2 className="h-4 w-4"/>Ver hotel</button>}
+        {activeProfile.instagramUrl && <a href={activeProfile.instagramUrl} target="_blank" rel="noopener noreferrer" className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-sm font-semibold text-[#202124] transition-transform active:scale-[.98]">Ver en Instagram<ArrowUpRight className="h-4 w-4"/></a>}
         <div className="mt-5 flex items-center gap-5 py-2 text-xs"><span><b>{videoUrls.filter((video) => getVideoProfileId(video.id) === activeProfile.kind).length}</b> videos</span><span className="text-white/45">{activeProfile.location}</span></div>
         <h2 className="mb-3 mt-5 text-sm font-semibold">Videos de {activeProfile.name}</h2>
         <div className="grid grid-cols-3 gap-1.5 sm:gap-3">{videoUrls.map((video, feedIndex) => ({ video, feedIndex })).filter(({ video }) => getVideoProfileId(video.id) === activeProfile.kind).map(({ video, feedIndex }, index) => <button key={video.id} type="button" onClick={() => { setVideoIndex(feedIndex); closeProfile(); }} aria-label={`Ver video ${index + 1} de ${activeProfile.name}`} className="group relative aspect-[9/16] overflow-hidden rounded-[12px] bg-[#222428] text-left [corner-shape:squircle]">

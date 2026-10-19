@@ -159,18 +159,11 @@ const CSS_TEXT = `
   .lgn-blob.is-moving { animation: none; }
 }
 @media (min-width: 1024px) {
-  .lgn-row { display: contents !important; }
-  .lgn-tabbar, .lgn-search-wrap { display: none !important; }
-  .pn-desktop-topbar { display: flex !important; }
-  .lgn-menu { left: auto !important; right: 18px !important; top: 72px !important; bottom: auto !important; width: min(360px, calc(100vw - 36px)) !important; max-width: 360px !important; margin-inline: 0 !important; z-index: 65 !important; transform-origin: 100% 0 !important; }
-}
-@media (max-width: 1023px) {
-  .pn-desktop-topbar { display: none !important; }
+  .lgn-row { display: block !important; }
 }
 .pn-progressive-nav { isolation: isolate; background: transparent !important; border: 0 !important; box-shadow: none !important; }
 .pn-progressive-nav::before { content: ""; position: absolute; inset: 0 -24px -34px; z-index: -1; pointer-events: none; background: linear-gradient(to bottom, rgba(27,28,30,.8), rgba(27,28,30,.42) 64%, transparent); -webkit-backdrop-filter: blur(18px) saturate(145%); backdrop-filter: blur(18px) saturate(145%); -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 50%, transparent 100%); mask-image: linear-gradient(to bottom, #000 0%, #000 50%, transparent 100%); }
 .pn-progressive-mobile::before { content: ""; position: absolute; inset: -47px 0 0; z-index: 0; pointer-events: none; background: linear-gradient(to top, rgba(27,28,30,.88), rgba(27,28,30,.4) 58%, transparent); -webkit-backdrop-filter: blur(18px) saturate(145%); backdrop-filter: blur(18px) saturate(145%); -webkit-mask-image: linear-gradient(to top, #000 0%, #000 50%, transparent 100%); mask-image: linear-gradient(to top, #000 0%, #000 50%, transparent 100%); }
-@media (min-width: 1024px) { .pn-progressive-mobile::before { display: none; } }
 `;
 
 const PATHS = {
@@ -861,17 +854,6 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
       }}
     >
       <style>{CSS_TEXT}</style>
-      <header className="pn-desktop-topbar pn-progressive-mobile" aria-label="Navegación de PuntoNochi" style={{ position: 'fixed', inset: 'auto 0 0', zIndex: 60, height: 'calc(74px + env(safe-area-inset-bottom, 0px))', alignItems: 'flex-start', justifyContent: 'center', padding: '6px 16px calc(8px + env(safe-area-inset-bottom, 0px))', background: 'transparent', border: 0, boxShadow: 'none', pointerEvents: 'none' }}>
-        <div className="pointer-events-auto flex h-[58px] w-[min(430px,calc(100vw-32px))] items-center justify-center gap-1 rounded-full bg-[#202124]/80 px-2 shadow-[0_8px_30px_rgba(0,0,0,.24)] backdrop-blur-2xl">
-          {TABS.map(({ id, label, icon, avatar, disabled }) => {
-            const selected = visualActive === id;
-            return <button key={id} type="button" disabled={disabled} aria-label={label} aria-disabled={disabled || undefined} aria-current={selected ? 'page' : undefined} title={disabled ? `${label} · Próximamente` : label} onClick={() => select(id)} className={`relative flex h-12 min-w-0 flex-1 items-center justify-center rounded-full text-white/60 transition-colors ${disabled ? 'cursor-not-allowed opacity-40' : 'hover:text-white'} ${selected ? 'text-white' : ''}`}>
-              {selected && <motion.span layoutId="pn-desktop-bottom-active-tab" initial={false} transition={{ type: 'spring', stiffness: 420, damping: 36, mass: .72 }} aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-full bg-white/[.15]"/>}
-              <span className="relative z-10">{avatar ? <Avatar src={avatarSrc} alt={label} timerActive={timerActive}/> : <Icon name={icon}/>}</span>
-            </button>;
-          })}
-        </div>
-      </header>
       <svg width="0" height="0" aria-hidden="true" style={{ position: "absolute" }}>
         <defs>
           <linearGradient id="lgn-glass" x1="0" y1="0" x2="0" y2="1">
