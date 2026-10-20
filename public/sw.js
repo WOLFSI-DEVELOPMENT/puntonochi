@@ -1,4 +1,4 @@
-const CACHE_NAME = 'puntonochi-shell-v5';
+const CACHE_NAME = 'puntonochi-shell-v6';
 const APP_SHELL = ['/', '/manifest.webmanifest', '/pwa-192.png', '/favicon.png'];
 
 self.addEventListener('install', (event) => {

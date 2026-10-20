@@ -73,7 +73,7 @@
     { "source": "/api/shorts/:id/reactions", "destination": "/api/shorts-dispatch?__shortPath=:id/reactions" },
     { "source": "/api/shorts", "destination": "/api/shorts-dispatch" },
     {
-      "source": "/:path((?!api/).*)",
+      "source": "/:path((?!api/|assets/|.*\\.[^/]+$).*)",
       "destination": "/index.html"
     }
   ],
