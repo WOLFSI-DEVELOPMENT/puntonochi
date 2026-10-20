@@ -4,18 +4,6 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api",
-      "destination": "https://br-steep-resonance-b4pb0oce-api.compute.c-6.us-east-2.aws.neon.tech/api"
-    },
-    {
-      "source": "/api/:path*",
-      "destination": "https://br-steep-resonance-b4pb0oce-api.compute.c-6.us-east-2.aws.neon.tech/api/:path*"
-    },
-    {
-      "source": "/sitemap-businesses.xml",
-      "destination": "https://br-steep-resonance-b4pb0oce-api.compute.c-6.us-east-2.aws.neon.tech/sitemap-businesses.xml"
-    },
-    {
       "source": "/:path((?!api/).*)",
       "destination": "/index.html"
     }
