@@ -4,6 +4,7 @@ export default function placesHandler(req, res) {
   const requestUrl = new URL(req.url || '/', `https://${req.headers.host || 'localhost'}`);
   const reviewPlaceId = requestUrl.searchParams.get('__reviewPlaceId');
   const overviewPlaceId = requestUrl.searchParams.get('__overviewPlaceId');
+  const googleDetailsPlaceId = requestUrl.searchParams.get('__googleDetailsPlaceId');
   const eventPath = requestUrl.searchParams.get('__eventPath');
   const eventList = requestUrl.searchParams.get('__eventList');
   const menuPath = requestUrl.searchParams.get('__menuPath');
@@ -20,6 +21,9 @@ export default function placesHandler(req, res) {
   } else if (overviewPlaceId) {
     requestUrl.searchParams.delete('__overviewPlaceId');
     req.url = `/api/places/${encodeURIComponent(overviewPlaceId)}/overview${requestUrl.search}`;
+  } else if (googleDetailsPlaceId) {
+    requestUrl.searchParams.delete('__googleDetailsPlaceId');
+    req.url = `/api/places/${encodeURIComponent(googleDetailsPlaceId)}/google-details${requestUrl.search}`;
   } else if (reviewPlaceId) {
     requestUrl.searchParams.delete('__reviewPlaceId');
     req.url = `/api/places/${encodeURIComponent(reviewPlaceId)}/reviews${requestUrl.search}`;

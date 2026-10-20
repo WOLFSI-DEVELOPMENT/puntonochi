@@ -1,5 +1,5 @@
-const neonApiBase = (import.meta.env.VITE_NEON_API_BASE_URL || '').replace(/\/+$/, '');
-
 export function apiFetch(path: string, init?: RequestInit) {
-  return fetch(`${neonApiBase}${path}`, init);
+  // Keep API calls same-origin so session cookies work through Vercel's
+  // external rewrite to Neon Functions in production.
+  return fetch(path, init);
 }

@@ -4,7 +4,9 @@ import 'dotenv/config';
 import dotenv from 'dotenv';
 import { createHash, randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
-import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import experimentalBusinesses from './server/data/experimental-nochisgo-businesses.json' with { type: 'json' };
 import { neon } from '@neondatabase/serverless';
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse } from '@simplewebauthn/server';
 import { OAuth2Client } from 'google-auth-library';
@@ -203,7 +205,7 @@ const ensureExperimentalCatalog = () => {
       imported_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
     await sql`CREATE INDEX IF NOT EXISTS experimental_business_catalog_category_idx ON experimental_business_catalog (category_slug, name)`;
-    const sourceBusinesses = JSON.parse(await readFile(new URL('./server/data/experimental-nochisgo-businesses.json', import.meta.url), 'utf8'));
+    const sourceBusinesses = experimentalBusinesses;
     const [{ total }] = await sql`SELECT COUNT(*)::INTEGER AS total FROM experimental_business_catalog`;
     if (Number(total) < sourceBusinesses.length) {
       const rows = sourceBusinesses.map((business) => {
@@ -509,7 +511,8 @@ const getCookieValue = (req, name) => {
 const phoneAuthLimits = new Map();
 const allowPhoneAuthAttempt = (req) => {
   const now = Date.now();
-  const key = String(req.ip || req.socket.remoteAddress || 'unknown');
+  const forwardedAddress = req.headers['x-forwarded-for']?.split(',')[0]?.trim();
+  const key = String(forwardedAddress || req.socket?.remoteAddress || 'unknown');
   const current = phoneAuthLimits.get(key);
   if (!current || current.expiresAt <= now) {
     phoneAuthLimits.set(key, { count: 1, expiresAt: now + 15 * 60 * 1000 });
@@ -1364,6 +1367,58 @@ app.post('/api/notifications/subscribe', requireNeon, async (req, res) => {
   } catch (error) {
     console.error('Push subscription save failed:', error);
     res.status(500).json({ error: 'No se pudo activar la suscripción.' });
+  }
+});
+
+app.get('/api/cron/news-notifications', async (req, res) => {
+  if (!process.env.CRON_SECRET || req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) return res.status(401).json({ error: 'Unauthorized.' });
+  if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) return res.status(503).json({ error: 'Missing VAPID keys.' });
+
+  try {
+    webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'https://puntonochi.vercel.app', process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
+    await ensurePushSchema();
+    let article = null;
+    if (process.env.GNEWS_API_KEY) {
+      try {
+        const newsUrl = new URL('https://gnews.io/api/v4/top-headlines');
+        newsUrl.searchParams.set('country', 'mx');
+        newsUrl.searchParams.set('lang', 'es');
+        newsUrl.searchParams.set('max', '10');
+        newsUrl.searchParams.set('apikey', process.env.GNEWS_API_KEY);
+        const newsResponse = await fetch(newsUrl);
+        if (newsResponse.ok) article = (await newsResponse.json()).articles?.[0] || null;
+      } catch (error) {
+        console.error('GNews unavailable; sending the daily app reminder without a headline.', error);
+      }
+    }
+
+    const mexicoHour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Mexico_City', hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
+    const isMorning = mexicoHour >= 7 && mexicoHour <= 9;
+    let body = article?.title || 'Descubre negocios, lugares y novedades de Nochistlán.';
+    if (isMorning) {
+      try {
+        const weatherResponse = await fetch('https://api.open-meteo.com/v1/forecast?latitude=21.3667&longitude=-102.85&current=temperature_2m&timezone=America%2FMexico_City');
+        if (weatherResponse.ok) {
+          const weather = await weatherResponse.json();
+          if (Number.isFinite(weather.current?.temperature_2m)) body = `Nochistlán: ${Math.round(weather.current.temperature_2m)}°C. ${body}`;
+        }
+      } catch { /* Continue if the weather provider is temporarily unavailable. */ }
+      body = `Abre PuntoNochi hoy para mantener tu racha. ${body}`;
+    }
+
+    const subscriptions = await sql`SELECT endpoint, subscription FROM push_subscriptions`;
+    const results = await Promise.allSettled(subscriptions.map(({ endpoint, subscription }) => webpush.sendNotification(subscription, JSON.stringify({
+      title: isMorning ? 'Buenos días, Nochistlán 🔥' : 'Noticias de México',
+      body: body.slice(0, 170), url: '/noticias', icon: '/pwa-192.png',
+      tag: `puntonochi-news-${new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City' }).format(new Date())}-${mexicoHour}`,
+    })).catch(async (error) => {
+      if (error.statusCode === 404 || error.statusCode === 410) await sql`DELETE FROM push_subscriptions WHERE endpoint = ${endpoint}`;
+      throw error;
+    })));
+    return res.json({ sent: results.filter((item) => item.status === 'fulfilled').length, total: subscriptions.length });
+  } catch (error) {
+    console.error('News push cron failed:', error);
+    return res.status(500).json({ error: 'Could not send news notifications.' });
   }
 });
 
@@ -3079,7 +3134,10 @@ app.patch('/api/admin/places/:id/image', requireAdmin, requireNeon, async (req, 
   }
 });
 
-if (process.env.VERCEL !== '1') {
+// Only open a local listener when this file is the Node entrypoint. Neon
+// Functions imports this Express app behind a Fetch adapter and supplies the
+// HTTP listener itself.
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   app.listen(port, () => {
     console.log(`API Server listening on http://localhost:${port}`);
   });

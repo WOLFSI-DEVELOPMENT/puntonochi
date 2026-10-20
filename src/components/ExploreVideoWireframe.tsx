@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowUpRight, Building2, CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Film, ImagePlus, MessageCircle, Plus, Send, Share2, SmilePlus, ThumbsUp, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowUpRight, Building2, CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Film, ImagePlus, MapPin, MessageCircle, Pause, Play, Plus, Send, Share2, SmilePlus, ThumbsUp, Volume2, VolumeX, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type TouchEvent, type WheelEvent } from 'react';
 import CornerKit from '@cornerkit/core';
 import { mockPlaces } from '../data';
@@ -8,13 +8,16 @@ import { apiFetch } from '../api';
 import type { EventSummary } from './NewsPage';
 import { AYUNTAMIENTO_SHORTS } from '../shortsData';
 
-const FEED_VIDEOS = [
+const FEED_VIDEOS: Array<{ id: string; url: string; youtubeId?: string }> = [
   { id: 'puntonochi-short-1', url: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1790910290/Untitled_video_4_edhg8f.mp4' },
   { id: 'puntonochi-short-2', url: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1790279115/Earth_zoomed_from_space_20260924134241_jkhbtw.mp4' },
   { id: 'puntonochi-short-3', url: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1790871656/Expo_Eventos_2026_qekh1y.mp4' },
   ...AYUNTAMIENTO_SHORTS,
   { id: 'hotel-nochistlan-short-1', url: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1792029646/Video-44459_hxywo3.mp4' },
   { id: 'rentas-damian-short-1', url: 'https://res.cloudinary.com/dwthgcx5j/video/upload/v1792424425/AQOAXLQ1J7vNBIyb7B7t5L5KwZYa1heUSGV__6WhoVeTHfTKtPUsDtymJVOAveYUbm0E9mUemETysVQqWPhuIXZDgfA1bA7p_o1stmp.mp4' },
+  { id: 'videos-nochistlan-jflpfsd2imw', url: '', youtubeId: 'JflpfsD2Imw' },
+  { id: 'videos-nochistlan-zyu-irhtez8', url: '', youtubeId: 'ZYU_irhTEz8' },
+  { id: 'videos-nochistlan-cwcaccjjxwa', url: '', youtubeId: 'CwcACcJjXwA' },
 ];
 const COMMENT_EMOJIS = ['😍', '😂', '🥰', '✨', '❤️', '🔥', '😮', '🙌', '👏', '😊', '😢', '😎', '🎉', '🤔', '💯', '👀', '🤩', '🙏', '💙', '🌮'];
 type Reaction = 'like' | 'dislike' | null;
@@ -28,10 +31,12 @@ const AYUNTAMIENTO_DESCRIPTION = 'Cuenta oficial del Ayuntamiento de Nochistlán
 const HOTEL_AVATAR = '/hotel-nochistlan-avatar.jpg';
 const HOTEL_DESCRIPTION = 'Hotel Nochistlán · Hospedaje en Nochistlán de Mejía, Zacatecas.';
 const RENTAS_DAMIAN_AVATAR = 'https://scontent-mty2-1.cdninstagram.com/v/t51.82787-19/818988113_17956854180234981_444299232040797350_n.jpg?_nc_cat=110&ig_cache_key=GFHE0DDlRrLqqcs-AKZExSvMdyoGbmNDAQAB0j-ccb7-5&ccb=7-5&_nc_sid=669407&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLnd3dy4xMDgwLkMzIn0%3D&_nc_ohc=qz_R_JxwA5MQ7kNvwHzRGAx&_nc_oc=Adop6OGal0uEFsa5qB0bQ9ApTZS71cv0SVAgx_VQEDTCLm-G_B8kqfhAyMh0Zn3NMI8&_nc_zt=24&_nc_ht=scontent-mty2-1.cdninstagram.com&_nc_gid=xYP0x3Tezn9BqnsC5bCoIQ&_nc_ss=7baaf&oh=00_AQM46MS9cX3Plt5bq56rsaOk-T85poiLjlI4eO4Txt72aA&oe=6ADC0B6D';
+const VIDEOS_NOCHISTLAN_DESCRIPTION = 'Videos de Nochistlán: historias, lugares y momentos de nuestro pueblo.';
 const isAyuntamientoVideoId = (id: string) => id === 'puntonochi-short-3' || id.startsWith('ayuntamiento-short-');
 const isHotelVideoId = (id: string) => id.startsWith('hotel-nochistlan-short-');
 const isRentasDamianVideoId = (id: string) => id.startsWith('rentas-damian-short-');
-const getVideoProfileId = (id: string) => isHotelVideoId(id) ? 'hotel' : isAyuntamientoVideoId(id) ? 'ayuntamiento' : isRentasDamianVideoId(id) ? 'rentas-damian' : 'puntonochi';
+const isVideosNochistlanVideoId = (id: string) => id.startsWith('videos-nochistlan-');
+const getVideoProfileId = (id: string) => isVideosNochistlanVideoId(id) ? 'videos-nochistlan' : isHotelVideoId(id) ? 'hotel' : isAyuntamientoVideoId(id) ? 'ayuntamiento' : isRentasDamianVideoId(id) ? 'rentas-damian' : 'puntonochi';
 const VIDEO_CAPTIONS = [
   'Descubre un nuevo rincón de Nochistlán ✨ #Nochistlán #Zacatecas',
   'Paisajes que nos recuerdan lo increíble que es nuestro planeta 🌎',
@@ -41,7 +46,15 @@ const VIDEO_CAPTIONS = [
   'Ayuntamiento de Nochistlán · Información y actividades para nuestra comunidad.',
   'Conoce Hotel Nochistlán y descubre una opción para hospedarte en el centro.',
   'Rentas y novedades de @rentas_damian_oficial.',
+  'Videos Nochistlán · Historias y lugares de nuestro pueblo.',
+  'Videos Nochistlán · Historias y lugares de nuestro pueblo.',
+  'Videos Nochistlán · Historias y lugares de nuestro pueblo.',
 ];
+const getVideoCaption = (video: { id: string }, index: number) => {
+  if (isVideosNochistlanVideoId(video.id)) return 'Videos Nochistlán · Historias y lugares de nuestro pueblo.';
+  const bundledIndex = FEED_VIDEOS.findIndex((item) => item.id === video.id);
+  return VIDEO_CAPTIONS[bundledIndex >= 0 ? bundledIndex : index] || 'Videos de Nochistlán.';
+};
 type CreateAction = 'reel' | 'event' | 'image';
 const CREATE_ACTIONS: Array<{ id: CreateAction; label: string; icon: typeof Film }> = [
   { id: 'reel', label: 'Crear short', icon: Film },
@@ -59,6 +72,32 @@ const feedCardMotion = {
   exit: (direction: number) => ({ y: `${direction * -100}%`, opacity: .82 }),
 };
 
+type YouTubePlayer = {
+  playVideo: () => void;
+  pauseVideo: () => void;
+  seekTo: (seconds: number, allowSeekAhead: boolean) => void;
+  getCurrentTime: () => number;
+  getDuration: () => number;
+  mute: () => void;
+  unMute: () => void;
+  setVolume: (volume: number) => void;
+  setPlaybackRate: (rate: number) => void;
+  destroy: () => void;
+};
+type YouTubeApi = { Player: new (element: HTMLElement, options: Record<string, unknown>) => YouTubePlayer };
+declare global { interface Window { YT?: YouTubeApi; onYouTubeIframeAPIReady?: () => void } }
+let youtubeApiPromise: Promise<YouTubeApi> | null = null;
+function loadYouTubeApi() {
+  if (window.YT?.Player) return Promise.resolve(window.YT);
+  if (!youtubeApiPromise) youtubeApiPromise = new Promise<YouTubeApi>((resolve, reject) => {
+    const previousReady = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => { previousReady?.(); if (window.YT?.Player) resolve(window.YT); else reject(new Error('YouTube player API unavailable')); };
+    let script = document.querySelector<HTMLScriptElement>('script[data-youtube-iframe-api]');
+    if (!script) { script = document.createElement('script'); script.src = 'https://www.youtube.com/iframe_api'; script.async = true; script.dataset.youtubeIframeApi = 'true'; script.onerror = () => reject(new Error('YouTube player API failed to load')); document.head.appendChild(script); }
+  }).catch((error) => { youtubeApiPromise = null; throw error; });
+  return youtubeApiPromise;
+}
+
 function Action({ icon: Icon, label, count, onClick, pressed, disabled }: { icon: typeof ThumbsUp; label: string; count?: string; onClick?: () => void; pressed?: boolean; disabled?: boolean }) {
   return <button type="button" aria-label={label} aria-pressed={pressed} onClick={onClick} disabled={disabled} className={`flex min-w-12 flex-col items-center gap-1 text-white drop-shadow-md disabled:opacity-55 ${pressed ? 'text-[#ff6b78]' : ''}`}>
     <span className="flex h-10 w-10 items-center justify-center rounded-full transition-transform active:scale-90 md:h-12 md:w-12 md:bg-black/30 md:backdrop-blur-md"><Icon className="h-5 w-5" strokeWidth={1.8} fill={pressed ? 'currentColor' : 'none'}/></span>
@@ -75,6 +114,8 @@ function ProfileAction({ onClick, avatar = PUNTONOCHI_AVATAR, handle = '@puntono
 export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccount, onCreateShort, onCreateEvent, onOpenEvent }: { onClose: () => void; onOpenBusiness: (place: Place) => void; onRequireAccount?: () => void; onCreateShort?: () => void; onCreateEvent?: () => void; onOpenEvent?: (id: string) => void }) {
   const frameRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const youtubeHostRef = useRef<HTMLDivElement>(null);
+  const youtubePlayerRef = useRef<YouTubePlayer | null>(null);
   const createMenuRef = useRef<HTMLDivElement>(null);
   const businessCardRef = useRef<HTMLDivElement>(null);
   const promoCardRef = useRef<HTMLDivElement>(null);
@@ -90,7 +131,7 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
     const sharedIndex = sharedShortId ? FEED_VIDEOS.findIndex((video) => video.id === sharedShortId) : -1;
     return sharedIndex >= 0 ? sharedIndex : 0;
   });
-  const [videoUrls, setVideoUrls] = useState(FEED_VIDEOS.map((video) => ({ id: video.id, url: video.url })));
+  const [videoUrls, setVideoUrls] = useState(FEED_VIDEOS.map((video) => ({ ...video })));
   const [feedEvents, setFeedEvents] = useState<EventSummary[]>([]);
   const [eventPhotoIndex, setEventPhotoIndex] = useState(0);
   const [videoStats, setVideoStats] = useState<Record<string, ShortStats>>({});
@@ -122,11 +163,14 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
   const eventImages = currentEvent?.gallery?.length ? currentEvent.gallery : currentEvent?.imageUrl ? [{ id: 'cover', imageUrl: currentEvent.imageUrl }] : [];
   const activeEventImage = eventImages[eventPhotoIndex] || eventImages[0];
   const currentVideo = videoUrls[videoIndex] || FEED_VIDEOS[videoIndex] || videoUrls[0] || FEED_VIDEOS[0];
+  const isYouTubeVideo = Boolean(currentVideo.youtubeId);
   const isAyuntamientoVideo = isAyuntamientoVideoId(currentVideo.id);
   const isHotelVideo = isHotelVideoId(currentVideo.id);
   const isRentasDamianVideo = isRentasDamianVideoId(currentVideo.id);
   const hotelBusiness = mockPlaces.find((place) => place.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es').includes('hotel nochistlan')) || null;
-  const activeProfile = isRentasDamianVideo
+  const activeProfile = isVideosNochistlanVideoId(currentVideo.id)
+    ? { kind: 'videos-nochistlan', name: 'Videos Nochistlán', handle: '@videosnochistlan', description: VIDEOS_NOCHISTLAN_DESCRIPTION, avatar: '', location: 'Nochistlán de Mejía, Zacatecas', business: null }
+    : isRentasDamianVideo
     ? { kind: 'rentas-damian', name: 'Rentas Damián Oficial', handle: '@rentas_damian_oficial', description: 'Perfil público de Instagram.', avatar: RENTAS_DAMIAN_AVATAR, location: 'Instagram', business: null, instagramUrl: 'https://www.instagram.com/rentas_damian_oficial/reels/' }
     : isHotelVideo
     ? { kind: 'hotel', name: 'Hotel Nochistlán', handle: '@hotelnochistlan', description: HOTEL_DESCRIPTION, avatar: HOTEL_AVATAR, location: 'Nochistlán de Mejía, Zacatecas', business: hotelBusiness }
@@ -143,8 +187,7 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
       if (event.key === 'Escape') {
         if (creatorNoticeOpen) setCreatorNoticeOpen(false);
         else setCreateMenuOpen(false);
-        const playback = videoRef.current?.play();
-        if (playback) void playback.catch(() => undefined);
+        playActiveVideo();
       }
     };
     window.addEventListener('keydown', closeOnEscape);
@@ -155,15 +198,84 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
     if (playback) void playback.catch(() => undefined);
   };
 
+  const playActiveVideo = () => {
+    if (isYouTubeVideo) { youtubePlayerRef.current?.playVideo(); setVideoPaused(false); return; }
+    const playback = videoRef.current?.play();
+    if (playback) void playback.catch(() => undefined);
+    setVideoPaused(false);
+  };
+  const pauseActiveVideo = () => {
+    if (isYouTubeVideo) { youtubePlayerRef.current?.pauseVideo(); setVideoPaused(true); return; }
+    videoRef.current?.pause();
+    setVideoPaused(true);
+  };
+  const seekActiveVideo = (seconds: number) => {
+    if (isYouTubeVideo) youtubePlayerRef.current?.seekTo(seconds, true);
+    else if (videoRef.current) videoRef.current.currentTime = seconds;
+  };
+  const setActiveMuted = (nextMuted: boolean) => {
+    setMuted(nextMuted);
+    if (isYouTubeVideo) {
+      const player = youtubePlayerRef.current;
+      if (nextMuted) player?.mute(); else { player?.unMute(); player?.setVolume(100); }
+    } else if (videoRef.current) videoRef.current.muted = nextMuted;
+  };
+
+  useEffect(() => {
+    setCurrentTime(0);
+    setDuration(0);
+    setVideoPaused(false);
+    if (!currentVideo.youtubeId) {
+      youtubePlayerRef.current?.destroy();
+      youtubePlayerRef.current = null;
+      return;
+    }
+    let active = true;
+    let player: YouTubePlayer | null = null;
+    let pollTimer: number | null = null;
+    void loadYouTubeApi().then((youtube) => {
+      if (!active || !youtubeHostRef.current) return;
+      player = new youtube.Player(youtubeHostRef.current, {
+        width: '100%', height: '100%', videoId: currentVideo.youtubeId,
+        playerVars: { autoplay: 1, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, loop: 1, modestbranding: 1, playsinline: 1, playlist: currentVideo.youtubeId, rel: 0, origin: window.location.origin },
+        events: {
+          onReady: (event: { target: YouTubePlayer }) => {
+            if (!active) return;
+            youtubePlayerRef.current = event.target;
+            event.target.mute();
+            setMuted(true);
+            event.target.playVideo();
+            setVideoPaused(false);
+            setDuration(event.target.getDuration() || 0);
+            pollTimer = window.setInterval(() => {
+              try { setCurrentTime(event.target.getCurrentTime() || 0); setDuration(event.target.getDuration() || 0); } catch { /* Player may be switching videos. */ }
+            }, 400);
+          },
+          onStateChange: (event: { data: number; target: YouTubePlayer }) => {
+            if (event.data === 1) setVideoPaused(false);
+            else if (event.data === 2) setVideoPaused(true);
+            else if (event.data === 0) { event.target.seekTo(0, true); event.target.playVideo(); }
+          },
+        },
+      });
+      youtubePlayerRef.current = player;
+    }).catch(() => { if (active) setVideoPaused(true); });
+    return () => {
+      active = false;
+      if (pollTimer !== null) window.clearInterval(pollTimer);
+      if (youtubePlayerRef.current === player) youtubePlayerRef.current = null;
+      player?.destroy();
+    };
+  }, [currentVideo.youtubeId]);
+
   const refreshShorts = useCallback(async () => {
     try {
       const response = await fetch('/api/shorts', { credentials: 'same-origin', cache: 'no-store' });
       if (!response.ok) return;
       const rows = await response.json() as Array<{ id: string; videoUrl: string; likes: number; dislikes: number; commentCount: number; myReaction: Reaction }>;
       if (!Array.isArray(rows) || !rows.length) return;
-      const nextVideos = rows.map((row) => ({ id: row.id, url: row.videoUrl }));
-      const rentasDamianShort = FEED_VIDEOS.find((video) => isRentasDamianVideoId(video.id));
-      if (rentasDamianShort && !nextVideos.some((video) => video.id === rentasDamianShort.id)) nextVideos.push(rentasDamianShort);
+      const nextVideos = rows.map((row) => ({ ...(FEED_VIDEOS.find((video) => video.id === row.id) || {}), id: row.id, url: row.videoUrl }));
+      FEED_VIDEOS.forEach((video) => { if (!nextVideos.some((item) => item.id === video.id)) nextVideos.push(video); });
       const requestedShortId = new URLSearchParams(window.location.search).get('short');
       if (requestedShortId && !nextVideos.some((video) => video.id === requestedShortId)) {
         const bundledShort = FEED_VIDEOS.find((video) => video.id === requestedShortId);
@@ -245,7 +357,7 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
   };
 
   const openComments = () => {
-    videoRef.current?.pause();
+    pauseActiveVideo();
     setCommentError('');
     setEmojiPickerOpen(false);
     setCommentsOpen(true);
@@ -253,29 +365,26 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
   const closeComments = () => {
     setCommentsOpen(false);
     setEmojiPickerOpen(false);
-    const playback = videoRef.current?.play();
-    if (playback) void playback.catch(() => undefined);
+    playActiveVideo();
   };
   const openProfile = () => {
-    videoRef.current?.pause();
+    pauseActiveVideo();
     setProfileOpen(true);
   };
   const closeProfile = () => {
     setProfileOpen(false);
-    const playback = videoRef.current?.play();
-    if (playback) void playback.catch(() => undefined);
+    playActiveVideo();
   };
 
   const openShare = () => {
-    videoRef.current?.pause();
+    pauseActiveVideo();
     setShareStatus('');
     setShareOpen(true);
   };
   const closeShare = () => {
     setShareOpen(false);
     setShareStatus('');
-    const playback = videoRef.current?.play();
-    if (playback) void playback.catch(() => undefined);
+    playActiveVideo();
   };
   const copyShareLink = async () => {
     try {
@@ -302,7 +411,7 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
       return;
     }
     try {
-      await navigator.share({ title: `${activeProfile.name} en PuntoShorts`, text: VIDEO_CAPTIONS[videoIndex] || 'Mira este video de Nochistlán.', url: shareUrl });
+      await navigator.share({ title: `${activeProfile.name} en PuntoShorts`, text: getVideoCaption(currentVideo, videoIndex), url: shareUrl });
       closeShare();
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) setShareStatus('No se pudo abrir el menú para compartir.');
@@ -371,19 +480,21 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
     if (edgeBounceTimer.current !== null) window.clearTimeout(edgeBounceTimer.current);
     if (longPressTimer.current !== null) window.clearTimeout(longPressTimer.current);
     if (videoRef.current) videoRef.current.playbackRate = 1;
+    youtubePlayerRef.current?.setPlaybackRate(1);
   }, []);
 
   const startLongPressSpeed = () => {
     if (longPressTimer.current !== null) window.clearTimeout(longPressTimer.current);
     longPressTimer.current = window.setTimeout(() => {
-      if (videoRef.current) videoRef.current.playbackRate = 2;
+      if (isYouTubeVideo) youtubePlayerRef.current?.setPlaybackRate(2);
+      else if (videoRef.current) videoRef.current.playbackRate = 2;
       longPressActive.current = true;
       longPressTimer.current = null;
     }, 360);
   };
   const stopLongPressSpeed = () => {
     if (longPressTimer.current !== null) { window.clearTimeout(longPressTimer.current); longPressTimer.current = null; }
-    if (longPressActive.current && videoRef.current) videoRef.current.playbackRate = 1;
+    if (longPressActive.current) { if (isYouTubeVideo) youtubePlayerRef.current?.setPlaybackRate(1); else if (videoRef.current) videoRef.current.playbackRate = 1; }
     longPressActive.current = false;
   };
 
@@ -414,7 +525,7 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
     <AnimatePresence>{createMenuOpen && <>
       <motion.button type="button" aria-label="Cerrar menú de creación" onClick={() => setCreateMenuOpen(false)} className="fixed inset-0 z-30 cursor-default" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}/>
       <motion.div ref={createMenuRef} role="menu" aria-label="Opciones de creación" initial={{ opacity: 0, y: -8, scale: .96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: .97 }} transition={{ duration: .16 }} className="absolute right-4 top-[max(62px,calc(env(safe-area-inset-top)+58px))] z-40 w-max max-w-[calc(100vw-32px)] overflow-hidden rounded-[18px] bg-[#202124]/95 p-1 text-white shadow-[0_16px_48px_rgba(0,0,0,.45)] backdrop-blur-xl [corner-shape:squircle] md:right-6 md:top-[76px]">
-        {CREATE_ACTIONS.map(({ id, label, icon: Icon }) => <button key={id} type="button" role="menuitem" onClick={() => { setCreateMenuOpen(false); if (id === 'reel' && onCreateShort) { videoRef.current?.pause(); onCreateShort(); return; } if (id === 'event' && onCreateEvent) { videoRef.current?.pause(); onCreateEvent(); return; } setCreateAction(id); setCreatorNoticeOpen(true); videoRef.current?.pause(); }} className="flex h-10 w-full items-center gap-2 rounded-[13px] px-2 text-left text-sm font-medium transition-colors hover:bg-white/[.08] active:bg-white/[.12] [corner-shape:squircle]"><Icon className="h-4 w-4 shrink-0 text-white/75"/>{label}</button>)}
+        {CREATE_ACTIONS.map(({ id, label, icon: Icon }) => <button key={id} type="button" role="menuitem" onClick={() => { setCreateMenuOpen(false); if (id === 'reel' && onCreateShort) { pauseActiveVideo(); onCreateShort(); return; } if (id === 'event' && onCreateEvent) { pauseActiveVideo(); onCreateEvent(); return; } setCreateAction(id); setCreatorNoticeOpen(true); pauseActiveVideo(); }} className="flex h-10 w-full items-center gap-2 rounded-[13px] px-2 text-left text-sm font-medium transition-colors hover:bg-white/[.08] active:bg-white/[.12] [corner-shape:squircle]"><Icon className="h-4 w-4 shrink-0 text-white/75"/>{label}</button>)}
       </motion.div>
     </>}</AnimatePresence>
 
@@ -434,13 +545,16 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
             <button type="button" onClick={() => onOpenEvent?.(currentEvent.id)} className="mt-5 flex h-12 w-full items-center justify-center rounded-full bg-white text-sm font-bold text-[#15191b]">Ver evento</button>
           </div>
         </div> : <>
-        <video ref={videoRef} src={currentVideo.url} autoPlay muted={muted} playsInline preload="auto" aria-label={videoPaused ? 'Video pausado. Toca para reproducir' : 'Video reproduciéndose. Toca para pausar'} onClick={(event) => { if ((event.target as HTMLElement).closest('[data-video-controls]')) return; const video = event.currentTarget; if (video.paused) { const playback = video.play(); if (playback) void playback.catch(() => undefined); setVideoPaused(false); } else { video.pause(); setVideoPaused(true); } }} onPlay={() => setVideoPaused(false)} onPause={() => setVideoPaused(true)} onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)} onLoadedMetadata={(event) => { setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0); keepVideoPlaying(event.currentTarget); }} onDurationChange={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)} onEnded={(event) => { event.currentTarget.currentTime = 0; keepVideoPlaying(event.currentTarget); }} className="absolute inset-0 h-full w-full cursor-pointer object-cover"/>
-        <div className="absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-black/45 to-transparent md:hidden"/>
-        <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-black/75 via-black/20 to-transparent"/>
+        {isYouTubeVideo ? <>
+          <div ref={youtubeHostRef} aria-label={videoPaused ? 'Short pausado' : 'Short reproduciéndose'} className="youtube-short-player absolute inset-0 h-full w-full"/>
+          <button type="button" onClick={() => videoPaused ? playActiveVideo() : pauseActiveVideo()} aria-label={videoPaused ? 'Reproducir short' : 'Pausar short'} className="absolute inset-0 z-[1] cursor-pointer bg-transparent"/>
+        </> : <video ref={videoRef} src={currentVideo.url} autoPlay muted={muted} playsInline preload="auto" aria-label={videoPaused ? 'Video pausado. Toca para reproducir' : 'Video reproduciéndose. Toca para pausar'} onClick={(event) => { if ((event.target as HTMLElement).closest('[data-video-controls]')) return; const video = event.currentTarget; if (video.paused) { const playback = video.play(); if (playback) void playback.catch(() => undefined); setVideoPaused(false); } else { video.pause(); setVideoPaused(true); } }} onPlay={() => setVideoPaused(false)} onPause={() => setVideoPaused(true)} onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)} onLoadedMetadata={(event) => { setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0); keepVideoPlaying(event.currentTarget); }} onDurationChange={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)} onEnded={(event) => { event.currentTarget.currentTime = 0; keepVideoPlaying(event.currentTarget); }} className="absolute inset-0 h-full w-full cursor-pointer object-cover"/>}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-black/45 to-transparent md:hidden"/>
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-black/75 via-black/20 to-transparent"/>
 
         <div className="absolute bottom-[max(62px,calc(env(safe-area-inset-bottom)+46px))] left-5 right-[76px] z-10 md:bottom-5 md:left-6 md:right-6">
           <button type="button" onClick={openProfile} aria-label={`Abrir perfil de ${activeProfile.name}`} className="mb-2 flex items-center gap-2 text-left">{activeProfile.avatar ? <img src={activeProfile.avatar} alt="" className="h-7 w-7 rounded-full object-cover"/> : <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/15 text-sm">🏛️</span>}<span className="min-w-0"><span className="block text-[11px] font-bold leading-tight">{activeProfile.name} <span className="font-medium text-white/65">{activeProfile.handle}</span></span><span className="mt-0.5 block truncate text-[9px] text-white/65">{activeProfile.description}</span></span></button>
-          <p className="line-clamp-2 text-[13px] leading-5 text-white/90">{VIDEO_CAPTIONS[videoIndex]}</p>
+          <p className="line-clamp-2 text-[13px] leading-5 text-white/90">{getVideoCaption(currentVideo, videoIndex)}</p>
         </div>
 
         <div aria-hidden="true" className="pointer-events-none absolute bottom-0 right-0 z-[5] h-[48%] w-[68px] bg-gradient-to-t from-black/[.08] via-black/[.025] to-transparent backdrop-blur-[.5px] [mask-image:linear-gradient(to_top,rgba(0,0,0,.72)_0%,rgba(0,0,0,.3)_40%,transparent_100%)] md:hidden"/>
@@ -456,11 +570,12 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
           <Action icon={Share2} label="Compartir" onClick={openShare}/>
         </div>
         <div data-video-controls onMouseEnter={() => setControlsActive(true)} onMouseLeave={(event) => { if (!event.currentTarget.contains(document.activeElement)) setControlsActive(false); }} onFocusCapture={() => setControlsActive(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setControlsActive(false); }} className={`absolute inset-x-0 bottom-0 z-20 flex items-end gap-2 bg-gradient-to-t from-black/55 via-black/20 to-transparent px-3 pb-[max(10px,env(safe-area-inset-bottom))] pt-10 transition-opacity duration-200 [@media(hover:none)]:opacity-100 ${controlsActive ? 'opacity-100' : 'opacity-0'}`}>
+          <button type="button" onClick={() => videoPaused ? playActiveVideo() : pauseActiveVideo()} aria-label={videoPaused ? 'Reproducir video' : 'Pausar video'} className="mb-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white transition-colors hover:bg-white/15 active:scale-90">{videoPaused ? <Play className="h-[18px] w-[18px] fill-current"/> : <Pause className="h-[18px] w-[18px]"/>}</button>
           <div className="min-w-0 flex-1">
-            <input type="range" min={0} max={duration || 1} step={0.1} value={Math.min(currentTime, duration || 0)} onChange={(event) => { const nextTime = Number(event.currentTarget.value); setCurrentTime(nextTime); if (videoRef.current) videoRef.current.currentTime = nextTime; }} aria-label="Posición del video" className="block h-1 w-full cursor-pointer appearance-none rounded-full accent-white" style={{ background: `linear-gradient(to right, white ${videoProgress}%, rgba(255,255,255,.36) ${videoProgress}%)` }}/>
+            <input type="range" min={0} max={duration || 1} step={0.1} value={Math.min(currentTime, duration || 0)} onChange={(event) => { const nextTime = Number(event.currentTarget.value); setCurrentTime(nextTime); seekActiveVideo(nextTime); }} aria-label="Posición del video" className="block h-1 w-full cursor-pointer appearance-none rounded-full accent-white" style={{ background: `linear-gradient(to right, white ${videoProgress}%, rgba(255,255,255,.36) ${videoProgress}%)` }}/>
             <div className="mt-1 flex items-center justify-between text-[10px] font-medium tabular-nums text-white"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
           </div>
-          <button type="button" onClick={() => setMuted((value) => !value)} aria-label={muted ? 'Activar sonido' : 'Silenciar video'} aria-pressed={!muted} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white transition-colors hover:bg-white/15 active:scale-90">{muted ? <VolumeX className="h-[18px] w-[18px]"/> : <Volume2 className="h-[18px] w-[18px]"/>}</button>
+          <button type="button" onClick={() => setActiveMuted(!muted)} aria-label={muted ? 'Activar sonido' : 'Silenciar video'} aria-pressed={!muted} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white transition-colors hover:bg-white/15 active:scale-90">{muted ? <VolumeX className="h-[18px] w-[18px]"/> : <Volume2 className="h-[18px] w-[18px]"/>}</button>
         </div>
         </>}
       </section>
@@ -482,8 +597,8 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
         <div className="mt-5 flex items-center gap-5 py-2 text-xs"><span><b>{videoUrls.filter((video) => getVideoProfileId(video.id) === activeProfile.kind).length}</b> videos</span><span className="text-white/45">{activeProfile.location}</span></div>
         <h2 className="mb-3 mt-5 text-sm font-semibold">Videos de {activeProfile.name}</h2>
         <div className="grid grid-cols-3 gap-1.5 sm:gap-3">{videoUrls.map((video, feedIndex) => ({ video, feedIndex })).filter(({ video }) => getVideoProfileId(video.id) === activeProfile.kind).map(({ video, feedIndex }, index) => <button key={video.id} type="button" onClick={() => { setVideoIndex(feedIndex); closeProfile(); }} aria-label={`Ver video ${index + 1} de ${activeProfile.name}`} className="group relative aspect-[9/16] overflow-hidden rounded-[12px] bg-[#222428] text-left [corner-shape:squircle]">
-          <video src={video.url} muted playsInline autoPlay loop preload="metadata" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"/>
-          <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 pb-2 pt-8"><span className="line-clamp-2 block text-[9px] font-medium leading-snug text-white sm:text-[11px]">{VIDEO_CAPTIONS[feedIndex] || `${activeProfile.name} · Nochistlán`}</span><span className="mt-1 flex items-center gap-1 text-[9px] font-semibold text-white/85"><ThumbsUp className="h-3 w-3"/>{formatCount(videoStats[video.id]?.likes || 0)}</span></span>
+          {video.youtubeId ? <img src={`https://i.ytimg.com/vi/${encodeURIComponent(video.youtubeId)}/hqdefault.jpg`} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"/> : <video src={video.url} muted playsInline autoPlay loop preload="metadata" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"/>}
+          <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 pb-2 pt-8"><span className="line-clamp-2 block text-[9px] font-medium leading-snug text-white sm:text-[11px]">{getVideoCaption(video, feedIndex)}</span><span className="mt-1 flex items-center gap-1 text-[9px] font-semibold text-white/85"><ThumbsUp className="h-3 w-3"/>{formatCount(videoStats[video.id]?.likes || 0)}</span></span>
         </button>)}</div>
       </div>
     </motion.main>}</AnimatePresence>
@@ -494,7 +609,7 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
         <div className="flex items-center justify-between"><div><h2 id="short-share-title" className="text-base font-bold">Compartir video</h2><p className="mt-1 text-xs text-white/50">Envía este video de {activeProfile.name}</p></div><button type="button" onClick={closeShare} aria-label="Cerrar compartir" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[.08] text-white/75"><X className="h-4 w-4"/></button></div>
         <div className="mt-5 flex min-w-0 items-center gap-2 rounded-2xl bg-[#292a2d] px-3 py-3"><span className="min-w-0 flex-1 truncate text-xs text-white/65">{shareUrl}</span><button type="button" onClick={() => void copyShareLink()} aria-label="Copiar enlace" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[.08] text-white transition-colors hover:bg-white/[.14]"><Copy className="h-4 w-4"/></button></div>
         {shareStatus && <p role="status" className={`mt-2 px-1 text-xs ${shareStatus.startsWith('No se pudo') ? 'text-red-300' : 'text-emerald-300'}`}>{shareStatus}</p>}
-        <div className="mt-4 grid grid-cols-2 gap-2"><button type="button" onClick={() => void shareNatively()} className="flex h-12 items-center justify-center gap-2 rounded-full bg-white text-sm font-semibold text-[#202124] transition-transform active:scale-[.98]"><Share2 className="h-4 w-4"/>Compartir…</button><a href={`https://wa.me/?text=${encodeURIComponent(`${VIDEO_CAPTIONS[videoIndex] || 'Mira este video de Nochistlán.'} ${shareUrl}`)}`} target="_blank" rel="noopener noreferrer" onClick={closeShare} className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#25D366] text-sm font-semibold text-[#102117] transition-transform active:scale-[.98]"><img src="/whatsapp-logo.png" alt="" aria-hidden="true" className="h-5 w-5 object-contain"/>WhatsApp</a></div>
+        <div className="mt-4 grid grid-cols-2 gap-2"><button type="button" onClick={() => void shareNatively()} className="flex h-12 items-center justify-center gap-2 rounded-full bg-white text-sm font-semibold text-[#202124] transition-transform active:scale-[.98]"><Share2 className="h-4 w-4"/>Compartir…</button><a href={`https://wa.me/?text=${encodeURIComponent(`${getVideoCaption(currentVideo, videoIndex)} ${shareUrl}`)}`} target="_blank" rel="noopener noreferrer" onClick={closeShare} className="flex h-12 items-center justify-center gap-2 rounded-full bg-[#25D366] text-sm font-semibold text-[#102117] transition-transform active:scale-[.98]"><img src="/whatsapp-logo.png" alt="" aria-hidden="true" className="h-5 w-5 object-contain"/>WhatsApp</a></div>
       </motion.section>
     </>}</AnimatePresence>
     <AnimatePresence>{commentsOpen && <>
@@ -512,13 +627,13 @@ export function ExploreVideoWireframe({ onClose, onOpenBusiness, onRequireAccoun
         </div>
       </motion.section>
     </>}</AnimatePresence>
-    <AnimatePresence>{creatorNoticeOpen && <motion.div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/65 px-5 backdrop-blur-md" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) { setCreatorNoticeOpen(false); const playback = videoRef.current?.play(); if (playback) void playback.catch(() => undefined); } }}>
+    <AnimatePresence>{creatorNoticeOpen && <motion.div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/65 px-5 backdrop-blur-md" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) { setCreatorNoticeOpen(false); playActiveVideo(); } }}>
       <motion.section role="dialog" aria-modal="true" aria-labelledby="reels-coming-title" aria-describedby="reels-coming-description" initial={{ opacity: 0, y: 14, scale: .97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: .98 }} transition={{ duration: .2 }} className="relative w-full max-w-[360px] rounded-[28px] bg-[#202124] p-6 text-white shadow-[0_24px_80px_rgba(0,0,0,.45)] [corner-shape:squircle]">
-        <button type="button" onClick={() => { setCreatorNoticeOpen(false); const playback = videoRef.current?.play(); if (playback) void playback.catch(() => undefined); }} aria-label="Cerrar aviso" className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/[.08] text-white/70 transition-colors hover:bg-white/[.14]"><X className="h-4 w-4"/></button>
+        <button type="button" onClick={() => { setCreatorNoticeOpen(false); playActiveVideo(); }} aria-label="Cerrar aviso" className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/[.08] text-white/70 transition-colors hover:bg-white/[.14]"><X className="h-4 w-4"/></button>
         <span className="flex h-12 w-12 items-center justify-center rounded-[17px] bg-white/[.08] text-white [corner-shape:squircle]">{(() => { const Icon = CREATE_ACTIONS.find((action) => action.id === createAction)?.icon || Film; return <Icon className="h-5 w-5"/>; })()}</span>
         <h2 id="reels-coming-title" className="mt-5 pr-7 text-lg font-bold tracking-tight">{CREATE_ACTION_CONTENT[createAction].title}</h2>
         <p id="reels-coming-description" className="mt-2 text-sm leading-relaxed text-white/60">{CREATE_ACTION_CONTENT[createAction].description}</p>
-        <button type="button" onClick={() => { setCreatorNoticeOpen(false); const playback = videoRef.current?.play(); if (playback) void playback.catch(() => undefined); }} className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-sm font-semibold text-[#202124] transition-transform active:scale-[.98]"><Check className="h-4 w-4"/>Entendido</button>
+        <button type="button" onClick={() => { setCreatorNoticeOpen(false); playActiveVideo(); }} className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-sm font-semibold text-[#202124] transition-transform active:scale-[.98]"><Check className="h-4 w-4"/>Entendido</button>
       </motion.section>
     </motion.div>}</AnimatePresence>
   </motion.main>;
