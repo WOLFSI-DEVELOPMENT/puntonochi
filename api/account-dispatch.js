@@ -21,6 +21,13 @@ export default function accountDispatch(req, res) {
     req.url = `/api/profile-claims/${claimPath}${requestUrl.search}`;
     return app(req, res);
   }
+  const activityPath = requestUrl.searchParams.get('__activityPath');
+  if (activityPath) {
+    if (!['click', 'clicks'].includes(activityPath)) return res.status(404).json({ error: 'Activity route not found.' });
+    requestUrl.searchParams.delete('__activityPath');
+    req.url = `/api/activity/${activityPath}${requestUrl.search}`;
+    return app(req, res);
+  }
   if (!accountPath) return res.status(404).json({ error: 'Account route not found.' });
   requestUrl.searchParams.delete('__accountPath');
   req.url = `/api/account/${accountPath}${requestUrl.search}`;
