@@ -1449,13 +1449,13 @@ const businessImportHosts = {
   instagram: ['instagram.com'], facebook: ['facebook.com', 'fb.com'],
   nochisgo: ['nochisgo.com'], tiktok: ['tiktok.com'], yelp: ['yelp.com'], website: [],
 };
-const isPublicImportAddress = (address) => {
+const isPrivateImportAddress = (address) => {
   const value = String(address).toLowerCase();
   if (isIP(value) === 4) {
     const octets = value.split('.').map(Number);
-    return !(octets[0] === 0 || octets[0] === 10 || octets[0] === 127 || octets[0] >= 224 ||
+    return octets[0] === 0 || octets[0] === 10 || octets[0] === 127 || octets[0] >= 224 ||
       (octets[0] === 169 && octets[1] === 254) || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
-      (octets[0] === 192 && octets[1] === 168) || (octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127));
+      (octets[0] === 192 && octets[1] === 168) || (octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127);
   }
   if (isIP(value) === 6) return value === '::' || value === '::1' || value.startsWith('fc') || value.startsWith('fd') || value.startsWith('fe8') || value.startsWith('fe9') || value.startsWith('fea') || value.startsWith('feb') || value.startsWith('::ffff:');
   return false;
@@ -1465,12 +1465,12 @@ const validateBusinessImportUrl = async (value, source) => {
   try { url = new URL(String(value || '')); } catch { throw new Error('Pega un enlace HTTPS válido del negocio.'); }
   if (url.protocol !== 'https:' || url.username || url.password || url.port) throw new Error('Usa un enlace HTTPS público sin usuario ni contraseña.');
   const host = url.hostname.toLowerCase().replace(/\.$/, '');
-  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || isPublicImportAddress(host)) throw new Error('Ese enlace no es una página pública válida.');
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || isPrivateImportAddress(host)) throw new Error('Ese enlace no es una página pública válida.');
   const allowed = businessImportHosts[source];
   if (!allowed) throw new Error('Selecciona una fuente compatible.');
   if (allowed.length && !allowed.some((domain) => host === domain || host.endsWith(`.${domain}`))) throw new Error('El dominio no coincide con la fuente seleccionada.');
   const records = isIP(host) ? [{ address: host }] : await lookup(host, { all: true, verbatim: true });
-  if (!records.length || records.some(({ address }) => isPublicImportAddress(address))) throw new Error('No se puede importar desde una dirección privada.');
+  if (!records.length || records.some(({ address }) => isPrivateImportAddress(address))) throw new Error('No se puede importar desde una dirección privada.');
   return url;
 };
 const decodeImportHtml = (value) => String(value || '').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code))).replace(/&#x([\da-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)));
