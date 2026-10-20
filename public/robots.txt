@@ -1,17 +1,12 @@
+# PuntoNochi public discovery pages are available to search and AI crawlers.
+# Robots directives cannot guarantee indexing or placement in AI answers.
+
 User-agent: *
 Allow: /
 Disallow: /api/
 Disallow: /admin
-User-agent: Googlebot
-Allow: /
-Disallow: /api/
-Disallow: /admin
 
-User-agent: Bingbot
-Allow: /
-Disallow: /api/
-Disallow: /admin
-
+# AI answer and search crawlers
 User-agent: GPTBot
 Allow: /
 Disallow: /api/
@@ -22,7 +17,17 @@ Allow: /
 Disallow: /api/
 Disallow: /admin
 
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /api/
+Disallow: /admin
+
 User-agent: ClaudeBot
+Allow: /
+Disallow: /api/
+Disallow: /admin
+
+User-agent: Claude-SearchBot
 Allow: /
 Disallow: /api/
 Disallow: /admin
@@ -32,10 +37,22 @@ Allow: /
 Disallow: /api/
 Disallow: /admin
 
-User-agent: Google-Extended
+User-agent: Perplexity-User
 Allow: /
 Disallow: /api/
 Disallow: /admin
 
+# Search engine crawlers
+User-agent: Googlebot
+Allow: /
+Disallow: /api/
+Disallow: /admin
+
+User-agent: Bingbot
+Allow: /
+Disallow: /api/
+Disallow: /admin
+
+# Training crawlers can follow the site-wide policy above.
+
 Sitemap: https://puntonochi.vercel.app/sitemap.xml
-Sitemap: https://puntonochi.vercel.app/sitemap-businesses.xml

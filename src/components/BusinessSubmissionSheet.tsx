@@ -34,13 +34,15 @@ function fileToBase64(file: File): Promise<string> {
 export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
   const sheetDrag = useSheetDrag(onClose);
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('Restaurante');
+  const [category, setCategory] = useState('Comida');
   const [description, setDescription] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
   const [hours, setHours] = useState('');
   const [cost, setCost] = useState(2);
   const [email, setEmail] = useState('');
+  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [sourceUrl, setSourceUrl] = useState('');
   const [photos, setPhotos] = useState<BusinessPhoto[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
@@ -49,8 +51,10 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
   const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadedPhotoCount, setUploadedPhotoCount] = useState(0);
-  const [mode, setMode] = useState<'choose' | 'add' | 'maps' | 'claim'>('choose');
+  const [mode, setMode] = useState<'choose' | 'add' | 'maps' | 'import' | 'claim'>('choose');
   const [mapsUrl, setMapsUrl] = useState('');
+  const [importUrl, setImportUrl] = useState('');
+  const [importSource, setImportSource] = useState<'instagram' | 'facebook' | 'website' | 'nochisgo' | 'tiktok' | 'yelp'>('website');
   const [addStep, setAddStep] = useState(0);
   const [claimStep, setClaimStep] = useState(0);
   const [selectedClaimPlace, setSelectedClaimPlace] = useState<Place | null>(null);
@@ -100,7 +104,7 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
     try {
       const created = await apiFetch('/api/business-applications', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, category, description, address, phone, hours, cost, email, tags }),
+        body: JSON.stringify({ name, category, description, address, phone, hours, cost, email, tags, websiteUrl, sourceUrl }),
       });
       const createdBody = await created.json();
       if (!created.ok) throw new Error(createdBody.error || 'No se pudo guardar la solicitud.');
@@ -157,14 +161,34 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
     finally { setIsSubmitting(false); }
   };
 
+  const submitPublicImport = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); setIsSubmitting(true); setSubmitError('');
+    try {
+      const response = await apiFetch('/api/business-applications/scrape', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source: importSource, url: importUrl }) });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'No se pudo leer esta página.');
+      setName(body.name || ''); setDescription(body.description || ''); setAddress(body.address || ''); setPhone(body.phone || ''); setHours(body.hours || '');
+      setSourceUrl(body.sourceUrl || importUrl);
+      const importedWebsite = body.websiteUrl || (importSource === 'website' ? importUrl : '');
+      setWebsiteUrl(/^https:\/\//i.test(importedWebsite) ? importedWebsite : '');
+      if (body.category) {
+        const normalized = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es-MX');
+        const match = categories.find((item) => normalized(item) === normalized(body.category) || normalized(item).includes(normalized(body.category)) || normalized(body.category).includes(normalized(item)));
+        if (match) setCategory(match);
+      }
+      setMode('add'); setAddStep(0);
+    } catch (error) { setSubmitError(error instanceof Error ? error.message : 'No se pudo importar esta página. Inténtalo de nuevo.'); }
+    finally { setIsSubmitting(false); }
+  };
+
   return (
     <>
       <motion.button data-sheet-close aria-label="Cerrar formulario" className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
       <motion.section {...sheetDrag} data-business-sheet data-desktop-sheet="side-left" role="dialog" aria-modal="true" aria-label="Registra tu negocio" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360, mass: 0.82 }} className="fixed inset-x-3 bottom-3 z-[71] mx-auto flex max-h-[88dvh] w-auto max-w-md flex-col overflow-hidden rounded-[30px] bg-[#202124] text-white shadow-2xl">
         <div className="relative flex shrink-0 items-center justify-between border-b border-white/[0.07] px-5 pb-4 pt-7">
           <SheetDragHandle controls={sheetDrag.dragControls} className="absolute inset-x-0 top-0" />
-          {mode !== 'choose' && !submitted && !claimSubmitted && <button type="button" onClick={() => { setMode(mode === 'maps' ? 'add' : 'choose'); setSubmitError(''); }} aria-label="Volver a opciones" className="mr-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.07] text-white/80"><ArrowLeft className="h-5 w-5" /></button>}
-          <div className="min-w-0 flex-1 pt-2"><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">PuntoNochi · Negocios</p><h2 className="mt-1 text-xl font-bold">{submitted || claimSubmitted ? 'Solicitud recibida' : mode === 'choose' ? 'Tu negocio en PuntoNochi' : mode === 'claim' ? 'Reclamar o editar' : mode === 'maps' ? 'Importar desde Maps' : 'Agregar negocio'}</h2></div>
+          {mode !== 'choose' && !submitted && !claimSubmitted && <button type="button" onClick={() => { setMode(mode === 'maps' || mode === 'import' ? 'add' : 'choose'); setSubmitError(''); }} aria-label="Volver a opciones" className="mr-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.07] text-white/80"><ArrowLeft className="h-5 w-5" /></button>}
+          <div className="min-w-0 flex-1 pt-2"><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">PuntoNochi · Negocios</p><h2 className="mt-1 text-xl font-bold">{submitted || claimSubmitted ? 'Solicitud recibida' : mode === 'choose' ? 'Tu negocio en PuntoNochi' : mode === 'claim' ? 'Reclamar o editar' : mode === 'maps' ? 'Importar desde Maps' : mode === 'import' ? `Importar desde ${importSource === 'nochisgo' ? 'NochisGo' : importSource}` : 'Agregar negocio'}</h2></div>
           <button type="button" onClick={onClose} data-sheet-close aria-label="Cerrar" className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.08] text-white/80"><X className="h-5 w-5" /></button>
         </div>
 
@@ -195,10 +219,18 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
             </motion.button>
             <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/40">Más formas de importar</p>
             <div className="grid grid-cols-3 gap-3">{[
-              { name: 'Instagram', image: 'https://cdn-icons-png.flaticon.com/512/1384/1384063.png' }, { name: 'Facebook', image: 'https://static.vecteezy.com/system/resources/previews/018/930/698/non_2x/facebook-logo-facebook-icon-transparent-free-png.png' }, { name: 'Website', icon: <Globe2 className="h-5 w-5" /> },
-              { name: "Nochi's Go", icon: <span className="text-sm font-black">NG</span> }, { name: 'TikTok', image: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a6/Tiktok_icon.svg/3840px-Tiktok_icon.svg.png' }, { name: 'Yelp', image: 'https://static.vecteezy.com/system/resources/previews/027/127/458/non_2x/yelp-logo-yelp-icon-transparent-free-png.png' },
-            ].map((source) => <div key={source.name} aria-disabled="true" className="flex aspect-square flex-col items-center justify-center gap-2 rounded-[22px] bg-[#292a2d] text-white/55 [corner-shape:squircle]"><span className="flex h-9 w-9 items-center justify-center text-white/75">{'image' in source && source.image ? <img src={source.image} alt="" aria-hidden="true" className={`object-contain ${source.name === 'Facebook' || source.name === 'Yelp' ? 'h-10 w-10' : 'h-8 w-8'}`} /> : 'icon' in source ? source.icon : null}</span><span className="text-xs font-semibold">{source.name}</span><span className="text-[10px] text-white/35">Próximamente</span></div>)}</div>
+              { name: 'Instagram', id: 'instagram' as const, image: 'https://cdn-icons-png.flaticon.com/512/1384/1384063.png' }, { name: 'Facebook', id: 'facebook' as const, image: 'https://static.vecteezy.com/system/resources/previews/018/930/698/non_2x/facebook-logo-facebook-icon-transparent-free-png.png' }, { name: 'Website', id: 'website' as const, icon: <Globe2 className="h-5 w-5" /> },
+              { name: 'NochisGo', id: 'nochisgo' as const, image: '/nochisgo-logo.jpg' }, { name: 'TikTok', id: 'tiktok' as const, image: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a6/Tiktok_icon.svg/3840px-Tiktok_icon.svg.png' }, { name: 'Yelp', id: 'yelp' as const, image: 'https://static.vecteezy.com/system/resources/previews/027/127/458/non_2x/yelp-logo-yelp-icon-transparent-free-png.png' },
+            ].map((source) => <button key={source.id} type="button" onClick={() => { setImportSource(source.id); setImportUrl(''); setSubmitError(''); setMode('import'); }} className="flex aspect-square flex-col items-center justify-center gap-2 rounded-[22px] bg-[#292a2d] text-white/75 transition-colors hover:bg-[#35363a] [corner-shape:squircle]"><span className="flex h-9 w-9 items-center justify-center text-white/75">{'image' in source && source.image ? <img src={source.image} alt="" aria-hidden="true" className={`object-contain ${source.id === 'nochisgo' ? 'h-9 w-9 rounded-xl' : source.name === 'Facebook' || source.name === 'Yelp' ? 'h-10 w-10' : 'h-8 w-8'}`} /> : 'icon' in source ? source.icon : null}</span><span className="text-xs font-semibold">{source.name}</span><span className="text-[10px] text-emerald-200/70">Importar</span></button>)}</div>
           </div>
+        ) : mode === 'import' ? (
+          <form onSubmit={submitPublicImport} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-8 pt-6">
+            <div className="mb-5 flex flex-col items-center text-center"><span className="mb-4 flex h-16 w-16 items-center justify-center overflow-hidden rounded-[22px] bg-white/[0.08] p-2">{importSource === 'nochisgo' ? <img src="/nochisgo-logo.jpg" alt="Logo de NochisGo" className="h-full w-full rounded-xl object-cover"/> : <Globe2 className="h-7 w-7 text-white/70"/>}</span><h3 className="text-lg font-bold">Importa los datos públicos</h3><p className="mt-2 max-w-sm text-sm leading-relaxed text-white/55">Pega el enlace público de {importSource === 'nochisgo' ? 'NochisGo' : importSource}. Revisaremos la información disponible y podrás corregirla antes de enviar tu negocio.</p></div>
+            <label className="flex h-14 items-center gap-3 rounded-full bg-[#303135] px-4 ring-1 ring-white/[0.06]"><Globe2 className="h-5 w-5 shrink-0 text-white/55"/><input required type="url" value={importUrl} onChange={(event) => setImportUrl(event.target.value)} placeholder="Pega aquí el enlace público" className="search-input-fix min-w-0 flex-1 appearance-none !bg-transparent p-0 text-sm text-white outline-none placeholder:text-white/40 focus:!bg-transparent focus:outline-none focus:ring-0"/><button type="submit" disabled={isSubmitting} aria-label="Importar datos públicos" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#202124] disabled:opacity-50">{isSubmitting ? <LoaderCircle className="h-5 w-5 animate-spin"/> : <Search className="h-5 w-5"/>}</button></label>
+            {submitError && <p role="alert" className="mt-4 rounded-2xl bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{submitError}</p>}
+            {isSubmitting && <p className="mt-4 text-center text-xs text-white/45">Buscando información pública…</p>}
+            <p className="mt-5 text-center text-xs leading-relaxed text-white/40">Algunas redes limitan la lectura automática. Si no se puede importar, puedes agregar la información manualmente.</p>
+          </form>
         ) : mode === 'maps' ? (
           <form onSubmit={submitMapsImport} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-8 pt-6">
             <div className="mb-5 flex flex-col items-center text-center"><span className="mb-4 flex h-16 w-16 items-center justify-center rounded-[22px] bg-white"><GoogleMapsMark /></span><h3 className="text-lg font-bold">Encuentra tu ficha en Google Maps</h3><p className="mt-2 max-w-sm text-sm leading-relaxed text-white/55">Abre tu negocio en Google Maps, toca <b className="text-white/75">Compartir</b> y pega aquí el enlace. Importaremos los datos y las fotos disponibles.</p></div>
@@ -226,6 +258,7 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
           ) : (
           <form onSubmit={submit} className="min-h-0 overflow-y-auto px-5 pb-8 pt-4">
             <div className="mb-4"><div className="mb-2 flex items-center justify-between text-xs font-semibold text-white/50"><span>Paso {addStep + 1} de 3</span><span>{['Información básica', 'Detalles y fotos', 'Contacto y envío'][addStep]}</span></div><div className="flex gap-1.5">{[0, 1, 2].map((step) => <motion.span key={step} className="h-1 flex-1 rounded-full" animate={{ backgroundColor: step === addStep ? '#ffffff' : step < addStep ? 'rgba(255,255,255,0.42)' : 'rgba(255,255,255,0.15)' }} transition={{ duration: 0.24 }} />)}</div></div>
+            {sourceUrl && addStep === 0 && <div className="mb-4 rounded-2xl bg-emerald-300/[0.08] px-4 py-3 text-xs leading-relaxed text-emerald-100/80">Importamos algunos datos públicos. Revísalos y completa los campos faltantes. <a href={sourceUrl} target="_blank" rel="noreferrer" className="ml-1 underline underline-offset-2">Ver fuente</a></div>}
             <p className="mb-5 text-sm text-white/55">{['Cuéntanos lo básico para identificar tu negocio.', 'Agrega detalles que ayudarán a la comunidad a elegirte.', 'Déjanos un correo para avisarte cuando revisemos tu ficha.'][addStep]}</p>
 
             {addStep === 1 && <section className="mb-5 rounded-[26px] bg-[#292a2d] p-4 [corner-shape:squircle]">
@@ -259,6 +292,7 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
             </section>
 
             <Field icon={<Store />} label="Descripción"><textarea required value={description} onChange={(e) => setDescription(e.target.value)} placeholder="¿Qué hace especial a tu negocio?" rows={5} className={`${inputClass} !h-36 resize-y !py-3.5`} /></Field>
+            <Field icon={<Globe2 />} label="Sitio web (opcional)"><input type="url" value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} placeholder="https://" className={inputClass} /></Field>
             </>}
 
             {addStep === 2 && <><section className="mb-4 mt-4 rounded-[26px] bg-[#292a2d] p-4 [corner-shape:squircle]">

@@ -6,6 +6,8 @@ import { createHash, randomBytes, randomUUID, scrypt as scryptCallback, timingSa
 import { promisify } from 'node:util';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import experimentalBusinesses from './server/data/experimental-nochisgo-businesses.json' with { type: 'json' };
 import { neon } from '@neondatabase/serverless';
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse } from '@simplewebauthn/server';
@@ -1187,6 +1189,7 @@ const ensureSubmissionSchema = () => {
     await sql`ALTER TABLE business_applications ADD COLUMN IF NOT EXISTS google_place_id TEXT`;
     await sql`ALTER TABLE business_applications ADD COLUMN IF NOT EXISTS maps_url TEXT`;
     await sql`ALTER TABLE business_applications ADD COLUMN IF NOT EXISTS website_url TEXT`;
+    await sql`ALTER TABLE business_applications ADD COLUMN IF NOT EXISTS source_url TEXT NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE business_applications ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE business_applications ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION`;
     await sql`ALTER TABLE business_applications ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION`;
@@ -1424,20 +1427,104 @@ app.get('/api/cron/news-notifications', async (req, res) => {
 
 app.post('/api/business-applications', requireNeon, async (req, res) => {
   try {
-    const { name, category, description, address, phone, hours, cost, email, tags = [] } = req.body || {};
+    const { name, category, description, address, phone, hours, cost, email, tags = [], websiteUrl = '', sourceUrl = '' } = req.body || {};
     if (![name, category, description, address, phone, hours, email].every((value) => typeof value === 'string' && value.trim())) {
       return res.status(400).json({ error: 'Complete all required business details.' });
     }
     const price = Number(cost);
     if (!Number.isInteger(price) || price < 1 || price > 4 || !Array.isArray(tags)) return res.status(400).json({ error: 'Invalid price range or tags.' });
+    for (const value of [websiteUrl, sourceUrl]) if (value && (typeof value !== 'string' || value.length > 2000 || !/^https:\/\//i.test(value))) return res.status(400).json({ error: 'Invalid business website or source URL.' });
     await ensureSubmissionSchema();
     const id = randomUUID();
-    await sql`INSERT INTO business_applications (id, name, category, description, address, phone, hours, cost, contact_email, tags)
-      VALUES (${id}, ${name.trim()}, ${category.trim()}, ${description.trim()}, ${address.trim()}, ${phone.trim()}, ${hours.trim()}, ${price}, ${email.trim()}, ${JSON.stringify(tags)})`;
+    await sql`INSERT INTO business_applications (id, name, category, description, address, phone, hours, cost, contact_email, tags, website_url, source_url)
+      VALUES (${id}, ${name.trim()}, ${category.trim()}, ${description.trim()}, ${address.trim()}, ${phone.trim()}, ${hours.trim()}, ${price}, ${email.trim()}, ${JSON.stringify(tags)}, ${websiteUrl}, ${sourceUrl})`;
     res.status(201).json({ id });
   } catch (error) {
     console.error('Business application create failed:', error);
     res.status(500).json({ error: 'Could not save the business application.' });
+  }
+});
+
+const businessImportHosts = {
+  instagram: ['instagram.com'], facebook: ['facebook.com', 'fb.com'],
+  nochisgo: ['nochisgo.com'], tiktok: ['tiktok.com'], yelp: ['yelp.com'], website: [],
+};
+const isPublicImportAddress = (address) => {
+  const value = String(address).toLowerCase();
+  if (isIP(value) === 4) {
+    const octets = value.split('.').map(Number);
+    return !(octets[0] === 0 || octets[0] === 10 || octets[0] === 127 || octets[0] >= 224 ||
+      (octets[0] === 169 && octets[1] === 254) || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
+      (octets[0] === 192 && octets[1] === 168) || (octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127));
+  }
+  if (isIP(value) === 6) return value === '::' || value === '::1' || value.startsWith('fc') || value.startsWith('fd') || value.startsWith('fe8') || value.startsWith('fe9') || value.startsWith('fea') || value.startsWith('feb') || value.startsWith('::ffff:');
+  return false;
+};
+const validateBusinessImportUrl = async (value, source) => {
+  let url;
+  try { url = new URL(String(value || '')); } catch { throw new Error('Pega un enlace HTTPS válido del negocio.'); }
+  if (url.protocol !== 'https:' || url.username || url.password || url.port) throw new Error('Usa un enlace HTTPS público sin usuario ni contraseña.');
+  const host = url.hostname.toLowerCase().replace(/\.$/, '');
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || isPublicImportAddress(host)) throw new Error('Ese enlace no es una página pública válida.');
+  const allowed = businessImportHosts[source];
+  if (!allowed) throw new Error('Selecciona una fuente compatible.');
+  if (allowed.length && !allowed.some((domain) => host === domain || host.endsWith(`.${domain}`))) throw new Error('El dominio no coincide con la fuente seleccionada.');
+  const records = isIP(host) ? [{ address: host }] : await lookup(host, { all: true, verbatim: true });
+  if (!records.length || records.some(({ address }) => isPublicImportAddress(address))) throw new Error('No se puede importar desde una dirección privada.');
+  return url;
+};
+const decodeImportHtml = (value) => String(value || '').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code))).replace(/&#x([\da-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)));
+const importText = (value, limit = 500) => decodeImportHtml(String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()).slice(0, limit);
+const importMeta = (html, key) => {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const tags = html.match(/<meta\b[^>]*>/gi) || [];
+  for (const tag of tags) {
+    const attrs = Object.fromEntries([...tag.matchAll(/([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g)].map((match) => [match[1].toLowerCase(), match[2] ?? match[3] ?? match[4] ?? '']));
+    if ((attrs.property || attrs.name || '').toLowerCase() === key.toLowerCase() || attrs.property?.toLowerCase() === escaped.toLowerCase()) return decodeImportHtml(attrs.content);
+  }
+  return '';
+};
+
+app.post('/api/business-applications/scrape', requireNeon, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    const source = String(req.body?.source || '').toLowerCase();
+    const url = await validateBusinessImportUrl(req.body?.url, source);
+    let response;
+    let currentUrl = url;
+    for (let hop = 0; hop < 4; hop += 1) {
+      response = await fetch(currentUrl, { redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PuntoNochiBusinessImport/1.0; +https://puntonochi.vercel.app)', Accept: 'text/html,application/xhtml+xml' }, signal: AbortSignal.timeout(10000) });
+      if (![301, 302, 303, 307, 308].includes(response.status)) break;
+      const location = response.headers.get('location');
+      if (!location) break;
+      currentUrl = await validateBusinessImportUrl(new URL(location, currentUrl).toString(), source);
+    }
+    if (!response?.ok) return res.status(422).json({ error: 'La plataforma no permitió leer esta página. Prueba con el enlace público del perfil o completa los datos manualmente.' });
+    const type = response.headers.get('content-type') || '';
+    if (!type.includes('text/html') && !type.includes('application/xhtml+xml')) return res.status(415).json({ error: 'El enlace no contiene una página web pública para importar.' });
+    const declaredLength = Number(response.headers.get('content-length') || 0);
+    if (declaredLength > 3_000_000) return res.status(413).json({ error: 'La página es demasiado grande para importarla.' });
+    const html = (await response.text()).slice(0, 3_000_000);
+    const jsonLd = [];
+    for (const match of html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+      try { jsonLd.push(JSON.parse(decodeImportHtml(match[1]))); } catch { /* Ignore invalid structured data and keep reading page metadata. */ }
+    }
+    const nodes = [];
+    const visit = (value) => { if (Array.isArray(value)) value.forEach(visit); else if (value && typeof value === 'object') { nodes.push(value); if (value['@graph']) visit(value['@graph']); } };
+    jsonLd.forEach(visit);
+    const business = nodes.find((item) => /LocalBusiness|Restaurant|Store|Hotel|Organization|FoodEstablishment/i.test(JSON.stringify(item['@type'] || '')) && (item.name || item.address)) || nodes.find((item) => item.name);
+    const structuredAddress = business?.address;
+    const address = typeof structuredAddress === 'string' ? structuredAddress : structuredAddress && typeof structuredAddress === 'object'
+      ? [structuredAddress.streetAddress, structuredAddress.addressLocality, structuredAddress.addressRegion, structuredAddress.postalCode].filter(Boolean).join(', ') : '';
+    const opening = business?.openingHoursSpecification;
+    const hours = Array.isArray(opening) ? opening.map((item) => `${item.dayOfWeek?.join?.(', ') || item.dayOfWeek || ''} ${item.opens || ''}${item.closes ? `–${item.closes}` : ''}`.trim()).filter(Boolean).join(' · ') : (Array.isArray(business?.openingHours) ? business.openingHours.join(' · ') : business?.openingHours || '');
+    const name = importText(business?.name || importMeta(html, 'og:site_name') || importMeta(html, 'og:title') || importMeta(html, 'twitter:title') || '', 180);
+    if (!name) return res.status(422).json({ error: 'No encontramos el nombre del negocio. Usa el enlace público correcto o completa el formulario manualmente.' });
+    res.set('Cache-Control', 'no-store');
+    return res.json({ name, description: importText(business?.description || importMeta(html, 'og:description') || importMeta(html, 'description'), 1200), category: importText(Array.isArray(business?.['@type']) ? business['@type'][0] : business?.['@type'] || '', 100), address: importText(address, 300), phone: importText(business?.telephone || '', 80), hours: importText(hours, 1200), websiteUrl: source === 'website' ? currentUrl.toString() : importText(business?.url || '', 500), sourceUrl: currentUrl.toString(), imageUrl: typeof business?.image === 'string' ? business.image : importMeta(html, 'og:image') });
+  } catch (error) {
+    const status = /dominio|HTTPS|pública|fuente|privada|enlace/i.test(error?.message || '') ? 400 : 502;
+    return res.status(status).json({ error: error instanceof Error ? error.message : 'No se pudo importar esta página. Inténtalo de nuevo.' });
   }
 });
 
@@ -1789,7 +1876,7 @@ app.get('/api/admin/business-claims', requireAdmin, requireNeon, async (_req, re
 app.get('/api/admin/business-applications', requireAdmin, requireNeon, async (_req, res) => {
   try {
     await ensureSubmissionSchema();
-    const applications = await sql`SELECT id, name, category, description, address, phone, hours, cost, contact_email AS "email", tags, location, google_place_id AS "googlePlaceId", maps_url AS "mapsUrl", website_url AS "websiteUrl", latitude, longitude, rating, review_count AS "reviewCount", google_data AS "googleData", created_at AS "createdAt" FROM business_applications WHERE status = 'pending' ORDER BY created_at ASC`;
+    const applications = await sql`SELECT id, name, category, description, address, phone, hours, cost, contact_email AS "email", tags, location, google_place_id AS "googlePlaceId", maps_url AS "mapsUrl", website_url AS "websiteUrl", source_url AS "sourceUrl", latitude, longitude, rating, review_count AS "reviewCount", google_data AS "googleData", created_at AS "createdAt" FROM business_applications WHERE status = 'pending' ORDER BY created_at ASC`;
     const withPhotos = await Promise.all(applications.map(async (application) => {
       const photos = await sql`SELECT id, file_name AS name, mime_type AS "mimeType", size_bytes AS "sizeBytes" FROM business_application_photos WHERE application_id = ${application.id} ORDER BY id`;
       return { ...application, photos: photos.map((photo) => ({ ...photo, url: `/api/admin/business-applications/${encodeURIComponent(application.id)}/photos/${photo.id}` })) };
@@ -1825,10 +1912,10 @@ app.patch('/api/admin/business-applications/:id', requireAdmin, requireNeon, asy
       const images = photos.map((photo) => `/api/business-applications/${encodeURIComponent(application.id)}/photos/${photo.id}`);
       const [existingPlace] = await sql`SELECT id FROM places WHERE id = ${placeId}`;
       if (existingPlace) {
-        await sql`UPDATE places SET name = ${application.name}, category = ${application.category}, subtitle = ${application.description}, location = ${application.location}, address = ${application.address}, map_url = ${application.maps_url || ''}, images = ${JSON.stringify(images)}::jsonb, logo = ${images[0] || ''}, rating = ${application.rating}, review_count = ${application.review_count}, cost = ${application.cost}, hours = ${application.hours}, lat = ${application.latitude}, lng = ${application.longitude}, phone = ${application.phone} WHERE id = ${placeId}`;
+        await sql`UPDATE places SET name = ${application.name}, category = ${application.category}, subtitle = ${application.description}, location = ${application.location || 'Nochistlán de Mejía, Zacatecas'}, address = ${application.address}, map_url = ${application.maps_url || ''}, website_url = ${application.website_url || ''}, images = ${JSON.stringify(images)}::jsonb, logo = ${images[0] || ''}, rating = ${application.rating}, review_count = ${application.review_count}, cost = ${application.cost}, hours = ${application.hours}, lat = ${application.latitude}, lng = ${application.longitude}, phone = ${application.phone} WHERE id = ${placeId}`;
       } else {
-        await sql`INSERT INTO places (id, name, category, subtitle, location, address, map_url, images, logo, rating, review_count, cost, hours, lat, lng, phone, sort_order)
-          VALUES (${placeId}, ${application.name}, ${application.category}, ${application.description}, ${application.location}, ${application.address}, ${application.maps_url || ''}, ${JSON.stringify(images)}::jsonb, ${images[0] || ''}, ${application.rating}, ${application.review_count}, ${application.cost}, ${application.hours}, ${application.latitude}, ${application.longitude}, ${application.phone}, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM places))`;
+        await sql`INSERT INTO places (id, name, category, subtitle, location, address, map_url, website_url, images, logo, rating, review_count, cost, hours, lat, lng, phone, sort_order)
+          VALUES (${placeId}, ${application.name}, ${application.category}, ${application.description}, ${application.location || 'Nochistlán de Mejía, Zacatecas'}, ${application.address}, ${application.maps_url || ''}, ${application.website_url || ''}, ${JSON.stringify(images)}::jsonb, ${images[0] || ''}, ${application.rating}, ${application.review_count}, ${application.cost}, ${application.hours}, ${application.latitude}, ${application.longitude}, ${application.phone}, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM places))`;
       }
     }
     await sql`UPDATE business_applications SET status = ${status}, reviewed_place_id = ${placeId}, reviewed_at = NOW() WHERE id = ${application.id}`;
