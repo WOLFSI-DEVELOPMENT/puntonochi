@@ -1473,16 +1473,79 @@ const validateBusinessImportUrl = async (value, source) => {
   if (!records.length || records.some(({ address }) => isPrivateImportAddress(address))) throw new Error('No se puede importar desde una dirección privada.');
   return url;
 };
-const decodeImportHtml = (value) => String(value || '').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code))).replace(/&#x([\da-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)));
-const importText = (value, limit = 500) => decodeImportHtml(String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()).slice(0, limit);
+const decodeImportHtml = (value) => String(value || '').replace(/&nbsp;|&#160;/gi, ' ').replace(/&amp;/gi, '&').replace(/&quot;|&#34;/gi, '"').replace(/&#39;|&apos;|&#x27;/gi, "'").replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&#(\d+);/g, (_, code) => { const point = Number(code); return point <= 0x10ffff ? String.fromCodePoint(point) : ''; }).replace(/&#x([\da-f]+);/gi, (_, code) => { const point = parseInt(code, 16); return point <= 0x10ffff ? String.fromCodePoint(point) : ''; });
+const importText = (value, limit = 500) => decodeImportHtml(String(value || '').replace(/<(script|style|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()).slice(0, limit);
 const importMeta = (html, key) => {
-  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const tags = html.match(/<meta\b[^>]*>/gi) || [];
   for (const tag of tags) {
     const attrs = Object.fromEntries([...tag.matchAll(/([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g)].map((match) => [match[1].toLowerCase(), match[2] ?? match[3] ?? match[4] ?? '']));
-    if ((attrs.property || attrs.name || '').toLowerCase() === key.toLowerCase() || attrs.property?.toLowerCase() === escaped.toLowerCase()) return decodeImportHtml(attrs.content);
+    if ([attrs.property, attrs.name, attrs.itemprop].some((value) => value?.toLowerCase() === key.toLowerCase())) return decodeImportHtml(attrs.content || attrs.value);
   }
   return '';
+};
+const importTitle = (html) => importText(html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] || html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1] || '', 300);
+const importItemprop = (html, key) => {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = html.match(new RegExp(`<([\\w-]+)\\b(?=[^>]*\\bitemprop\\s*=\\s*["']${escaped}["'])[^>]*>([\\s\\S]*?)<\\/\\1>`, 'i'));
+  if (!match) return '';
+  const tag = match[0].slice(0, match[0].indexOf('>') + 1);
+  const attrs = Object.fromEntries([...tag.matchAll(/([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g)].map((item) => [item[1].toLowerCase(), item[2] ?? item[3] ?? item[4] ?? '']));
+  return attrs.content || attrs.value || attrs.href || importText(match[2], 500);
+};
+const importCategory = (business, name, description) => {
+  const types = [].concat(business?.['@type'] || []).join(' ');
+  const text = `${types} ${name} ${description}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (/hotel|hostel|lodging|motel|alojamiento|hospedaje/.test(text)) return 'Hoteles y Rentas';
+  if (/restaurant|foodestablishment|bakery|cafe|coffee|bar|pizzeria|taqueria|restaurante|comida|cafeteria|antojitos|panaderia/.test(text)) return 'Restaurantes y antojos';
+  if (/supermarket|grocery|convenience|market|tienda de abarrotes|supermercado/.test(text)) return 'Supermercados';
+  if (/pharmacy|drugstore|farmacia/.test(text)) return 'Farmacia';
+  if (/beauty|hair|salon|spa|barber|belleza|estetica|peluqueria/.test(text)) return 'Belleza';
+  if (/doctor|dentist|hospital|medical|clinic|salud|medic/.test(text)) return 'Salud Esp.';
+  if (/school|college|university|education|escuela|educacion/.test(text)) return 'Educación';
+  if (/event|wedding|party|salon de eventos|fiesta/.test(text)) return 'Fiestas';
+  if (/car repair|auto repair|mechanic|automotive|mecanica|taller/.test(text)) return 'Mecánica';
+  if (/travel|tour|tourist|viaje|turismo/.test(text)) return 'Viajes y Vehículos';
+  if (/boutique|clothing|fashion|ropa|regalo/.test(text)) return 'Moda y Regalos';
+  return 'Otro';
+};
+const importJsonLd = (html) => {
+  const roots = [];
+  for (const match of html.matchAll(/<script\b[^>]*type\s*=\s*["']application\/ld\+json(?:\s*;[^"']*)?["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    try { roots.push(JSON.parse(match[1].replace(/^\s*<!--|-->\s*$/g, '').trim())); } catch { /* Ignore invalid structured data. */ }
+  }
+  const nodes = [];
+  const visit = (value, depth = 0) => {
+    if (depth > 12 || !value) return;
+    if (Array.isArray(value)) { value.forEach((child) => visit(child, depth + 1)); return; }
+    if (typeof value !== 'object') return;
+    nodes.push(value);
+    Object.entries(value).forEach(([key, child]) => { if (key === '@graph' || key === 'mainEntity' || key === 'mainEntityOfPage' || key === 'itemListElement' || key === 'about' || key === 'publisher') visit(child, depth + 1); });
+  };
+  roots.forEach((root) => visit(root));
+  return nodes;
+};
+const importBusinessNode = (nodes) => {
+  const score = (item) => {
+    const types = [].concat(item?.['@type'] || []).join(' ').toLowerCase();
+    let result = item?.name ? 4 : 0;
+    if (/localbusiness|restaurant|store|hotel|foodestablishment|cafe|bakery|professionalservice|medicalbusiness|beautysalon|touristinformationcenter/.test(types)) result += 12;
+    if (item?.address) result += 5;
+    if (item?.telephone) result += 3;
+    if (item?.openingHours || item?.openingHoursSpecification) result += 2;
+    return result;
+  };
+  return nodes.filter((item) => item.name).sort((a, b) => score(b) - score(a))[0] || null;
+};
+const importBusinessName = (value) => importText(value, 180)
+  .replace(/\s*[|–—-]\s*(Instagram|Facebook|TikTok|Yelp)(?:\s*[:|].*)?$/i, '')
+  .replace(/\s*\(@?[^)]{1,50}\)\s*$/, '')
+  .trim();
+const importHours = (business) => {
+  const opening = business?.openingHoursSpecification;
+  const entries = Array.isArray(opening) ? opening : opening ? [opening] : [];
+  const formatDay = (day) => String(day || '').split(/[\/#]/).pop().replace(/^[A-Z]/, (letter) => letter.toLocaleUpperCase('es-MX'));
+  const fromSpecs = entries.map((item) => `${[].concat(item.dayOfWeek || []).map(formatDay).join(', ')} ${item.opens || ''}${item.closes ? `–${item.closes}` : ''}`.trim()).filter(Boolean).join(' · ');
+  return fromSpecs || (Array.isArray(business?.openingHours) ? business.openingHours.join(' · ') : business?.openingHours || '');
 };
 
 app.post('/api/business-applications/scrape', requireNeon, async (req, res) => {
@@ -1490,38 +1553,82 @@ app.post('/api/business-applications/scrape', requireNeon, async (req, res) => {
   try {
     const source = String(req.body?.source || '').toLowerCase();
     const url = await validateBusinessImportUrl(req.body?.url, source);
-    let response;
-    let currentUrl = url;
-    for (let hop = 0; hop < 4; hop += 1) {
-      response = await fetch(currentUrl, { redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PuntoNochiBusinessImport/1.0; +https://puntonochi.vercel.app)', Accept: 'text/html,application/xhtml+xml' }, signal: AbortSignal.timeout(10000) });
-      if (![301, 302, 303, 307, 308].includes(response.status)) break;
-      const location = response.headers.get('location');
-      if (!location) break;
-      currentUrl = await validateBusinessImportUrl(new URL(location, currentUrl).toString(), source);
+    const fetchImportPage = async (requestedUrl) => {
+      let currentUrl = requestedUrl;
+      let response;
+      for (let hop = 0; hop < 4; hop += 1) {
+        response = await fetch(currentUrl, { redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PuntoNochiBusinessImport/2.0; +https://puntonochi.vercel.app)', Accept: 'text/html,application/xhtml+xml' }, signal: AbortSignal.timeout(4500) });
+        if (![301, 302, 303, 307, 308].includes(response.status)) break;
+        const location = response.headers.get('location');
+        if (!location) break;
+        currentUrl = await validateBusinessImportUrl(new URL(location, currentUrl).toString(), source);
+      }
+      if (!response?.ok) return { response, url: currentUrl, html: '' };
+      const type = response.headers.get('content-type') || '';
+      if (!type.includes('text/html') && !type.includes('application/xhtml+xml')) return { response, url: currentUrl, html: '', unsupported: true };
+      const declaredLength = Number(response.headers.get('content-length') || 0);
+      if (declaredLength > 3_000_000) return { response, url: currentUrl, html: '', tooLarge: true };
+      const reader = response.body?.getReader();
+      if (!reader) return { response, url: currentUrl, html: await response.text() };
+      const chunks = [];
+      let size = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > 3_000_000) { await reader.cancel(); return { response, url: currentUrl, html: '', tooLarge: true }; }
+        chunks.push(value);
+      }
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+      return { response, url: currentUrl, html: new TextDecoder().decode(bytes) };
+    };
+    const page = await fetchImportPage(url);
+    if (!page.response?.ok) return res.status(422).json({ error: 'La plataforma no permitió leer esta página. Prueba con el enlace público del perfil o completa los datos manualmente.' });
+    if (page.unsupported) return res.status(415).json({ error: 'El enlace no contiene una página web pública para importar.' });
+    if (page.tooLarge) return res.status(413).json({ error: 'La página es demasiado grande para importarla.' });
+    let html = page.html;
+    let nodes = importJsonLd(html);
+    let business = importBusinessNode(nodes);
+    let enrichedHtml = '';
+    // Many small business sites keep contact details on a separate page. Follow
+    // at most one same-site About/Contact page, and only when key data is absent.
+    if (source === 'website' && !(business?.address && business?.telephone)) {
+      const links = [...html.matchAll(/<a\b[^>]*>/gi)].map(([tag]) => {
+        const attrs = Object.fromEntries([...tag.matchAll(/([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g)].map((match) => [match[1].toLowerCase(), match[2] ?? match[3] ?? match[4] ?? '']));
+        const href = attrs.href;
+        const label = `${attrs.title || ''} ${attrs['aria-label'] || ''} ${tag}`.toLowerCase();
+        return href && /about|contact|ubicaci|nosotros|encuentranos|encu[eé]ntranos|location|horario/.test(`${href} ${label}`) ? href : '';
+      }).filter(Boolean);
+      const candidate = links.map((link) => { try { return new URL(decodeImportHtml(link), page.url); } catch { return null; } }).find((candidate) => candidate && candidate.origin === page.url.origin && candidate.pathname !== new URL(page.url).pathname);
+      if (candidate) {
+        try {
+          const contactPage = await fetchImportPage(await validateBusinessImportUrl(candidate.toString(), source));
+          if (contactPage.response?.ok && contactPage.html) {
+            enrichedHtml = contactPage.html;
+            nodes = [...nodes, ...importJsonLd(enrichedHtml)];
+            business = importBusinessNode(nodes);
+          }
+        } catch { /* Keep the primary page's data if the contact page is unavailable. */ }
+      }
     }
-    if (!response?.ok) return res.status(422).json({ error: 'La plataforma no permitió leer esta página. Prueba con el enlace público del perfil o completa los datos manualmente.' });
-    const type = response.headers.get('content-type') || '';
-    if (!type.includes('text/html') && !type.includes('application/xhtml+xml')) return res.status(415).json({ error: 'El enlace no contiene una página web pública para importar.' });
-    const declaredLength = Number(response.headers.get('content-length') || 0);
-    if (declaredLength > 3_000_000) return res.status(413).json({ error: 'La página es demasiado grande para importarla.' });
-    const html = (await response.text()).slice(0, 3_000_000);
-    const jsonLd = [];
-    for (const match of html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
-      try { jsonLd.push(JSON.parse(decodeImportHtml(match[1]))); } catch { /* Ignore invalid structured data and keep reading page metadata. */ }
-    }
-    const nodes = [];
-    const visit = (value) => { if (Array.isArray(value)) value.forEach(visit); else if (value && typeof value === 'object') { nodes.push(value); if (value['@graph']) visit(value['@graph']); } };
-    jsonLd.forEach(visit);
-    const business = nodes.find((item) => /LocalBusiness|Restaurant|Store|Hotel|Organization|FoodEstablishment/i.test(JSON.stringify(item['@type'] || '')) && (item.name || item.address)) || nodes.find((item) => item.name);
     const structuredAddress = business?.address;
     const address = typeof structuredAddress === 'string' ? structuredAddress : structuredAddress && typeof structuredAddress === 'object'
-      ? [structuredAddress.streetAddress, structuredAddress.addressLocality, structuredAddress.addressRegion, structuredAddress.postalCode].filter(Boolean).join(', ') : '';
-    const opening = business?.openingHoursSpecification;
-    const hours = Array.isArray(opening) ? opening.map((item) => `${item.dayOfWeek?.join?.(', ') || item.dayOfWeek || ''} ${item.opens || ''}${item.closes ? `–${item.closes}` : ''}`.trim()).filter(Boolean).join(' · ') : (Array.isArray(business?.openingHours) ? business.openingHours.join(' · ') : business?.openingHours || '');
-    const name = importText(business?.name || importMeta(html, 'og:site_name') || importMeta(html, 'og:title') || importMeta(html, 'twitter:title') || '', 180);
+      ? [structuredAddress.streetAddress, structuredAddress.addressLocality, structuredAddress.addressRegion, structuredAddress.postalCode, structuredAddress.addressCountry?.name || structuredAddress.addressCountry].filter(Boolean).join(', ')
+      : [importItemprop(html, 'streetAddress'), importItemprop(html, 'addressLocality'), importItemprop(html, 'addressRegion'), importItemprop(enrichedHtml, 'streetAddress'), importItemprop(enrichedHtml, 'addressLocality'), importItemprop(enrichedHtml, 'addressRegion')].filter(Boolean).join(', ');
+    const hours = importHours(business) || importItemprop(html, 'openingHours') || importMeta(html, 'openingHours') || importItemprop(enrichedHtml, 'openingHours');
+    const name = importBusinessName(business?.name || importMeta(html, 'og:site_name') || importMeta(html, 'og:title') || importMeta(html, 'twitter:title') || importTitle(html) || '');
     if (!name) return res.status(422).json({ error: 'No encontramos el nombre del negocio. Usa el enlace público correcto o completa el formulario manualmente.' });
+    const meta = (key) => importMeta(html, key) || importMeta(enrichedHtml, key);
+    const description = importText(business?.description || meta('og:description') || meta('description') || meta('twitter:description'), 1200);
+    const category = importCategory(business, name, description);
+    const image = typeof business?.image === 'string' ? business.image : Array.isArray(business?.image) ? business.image[0]?.url || business.image[0] : business?.image?.url || meta('og:image') || meta('twitter:image');
+    let imageUrl = '';
+    try { imageUrl = image ? new URL(image, page.url).toString() : ''; } catch { /* Ignore invalid image links. */ }
+    const phone = business?.telephone || meta('telephone') || importItemprop(html, 'telephone') || importItemprop(enrichedHtml, 'telephone') || html.match(/href\s*=\s*["']tel:([^"']+)/i)?.[1] || enrichedHtml.match(/href\s*=\s*["']tel:([^"']+)/i)?.[1] || '';
     res.set('Cache-Control', 'no-store');
-    return res.json({ name, description: importText(business?.description || importMeta(html, 'og:description') || importMeta(html, 'description'), 1200), category: importText(Array.isArray(business?.['@type']) ? business['@type'][0] : business?.['@type'] || '', 100), address: importText(address, 300), phone: importText(business?.telephone || '', 80), hours: importText(hours, 1200), websiteUrl: source === 'website' ? currentUrl.toString() : importText(business?.url || '', 500), sourceUrl: currentUrl.toString(), imageUrl: typeof business?.image === 'string' ? business.image : importMeta(html, 'og:image') });
+    return res.json({ name, description, category, address: importText(address, 300), phone: importText(phone, 80), hours: importText(hours, 1200), websiteUrl: source === 'website' ? page.url.toString() : importText(business?.url || '', 500), sourceUrl: page.url.toString(), imageUrl });
   } catch (error) {
     const status = /dominio|HTTPS|pública|fuente|privada|enlace/i.test(error?.message || '') ? 400 : 502;
     return res.status(status).json({ error: error instanceof Error ? error.message : 'No se pudo importar esta página. Inténtalo de nuevo.' });
