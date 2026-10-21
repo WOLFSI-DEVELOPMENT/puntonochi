@@ -51,7 +51,7 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
   const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadedPhotoCount, setUploadedPhotoCount] = useState(0);
-  const [mode, setMode] = useState<'choose' | 'add' | 'maps' | 'import' | 'claim'>('choose');
+  const [mode, setMode] = useState<'choose' | 'add' | 'maps' | 'import' | 'details' | 'claim'>('choose');
   const [mapsUrl, setMapsUrl] = useState('');
   const [importUrl, setImportUrl] = useState('');
   const [importSource, setImportSource] = useState<'instagram' | 'facebook' | 'website' | 'nochisgo' | 'tiktok' | 'yelp'>('website');
@@ -176,7 +176,9 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
         const match = categories.find((item) => normalized(item) === normalized(body.category) || normalized(item).includes(normalized(body.category)) || normalized(body.category).includes(normalized(item)));
         if (match) setCategory(match);
       }
-      setMode('add'); setAddStep(0);
+      // Continue into the details form. The "add" mode is the import-source
+      // picker, so returning there after a successful scrape looks like a reset.
+      setMode('details'); setAddStep(0);
     } catch (error) { setSubmitError(error instanceof Error ? error.message : 'No se pudo importar esta página. Inténtalo de nuevo.'); }
     finally { setIsSubmitting(false); }
   };
@@ -187,7 +189,7 @@ export function BusinessSubmissionSheet({ onClose }: { onClose: () => void }) {
       <motion.section {...sheetDrag} data-business-sheet data-desktop-sheet="side-left" role="dialog" aria-modal="true" aria-label="Registra tu negocio" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 32, stiffness: 360, mass: 0.82 }} className="fixed inset-x-3 bottom-3 z-[71] mx-auto flex max-h-[88dvh] w-auto max-w-md flex-col overflow-hidden rounded-[30px] bg-[#202124] text-white shadow-2xl">
         <div className="relative flex shrink-0 items-center justify-between border-b border-white/[0.07] px-5 pb-4 pt-7">
           <SheetDragHandle controls={sheetDrag.dragControls} className="absolute inset-x-0 top-0" />
-          {mode !== 'choose' && !submitted && !claimSubmitted && <button type="button" onClick={() => { setMode(mode === 'maps' || mode === 'import' ? 'add' : 'choose'); setSubmitError(''); }} aria-label="Volver a opciones" className="mr-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.07] text-white/80"><ArrowLeft className="h-5 w-5" /></button>}
+          {mode !== 'choose' && !submitted && !claimSubmitted && <button type="button" onClick={() => { setMode(mode === 'details' ? (sourceUrl ? 'import' : 'add') : mode === 'maps' || mode === 'import' ? 'add' : 'choose'); setSubmitError(''); }} aria-label="Volver a opciones" className="mr-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.07] text-white/80"><ArrowLeft className="h-5 w-5" /></button>}
           <div className="min-w-0 flex-1 pt-2"><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">PuntoNochi · Negocios</p><h2 className="mt-1 text-xl font-bold">{submitted || claimSubmitted ? 'Solicitud recibida' : mode === 'choose' ? 'Tu negocio en PuntoNochi' : mode === 'claim' ? 'Reclamar o editar' : mode === 'maps' ? 'Importar desde Maps' : mode === 'import' ? `Importar desde ${importSource === 'nochisgo' ? 'NochisGo' : importSource}` : 'Agregar negocio'}</h2></div>
           <button type="button" onClick={onClose} data-sheet-close aria-label="Cerrar" className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.08] text-white/80"><X className="h-5 w-5" /></button>
         </div>
