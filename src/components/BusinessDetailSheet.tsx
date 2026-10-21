@@ -1,7 +1,6 @@
-import { lazy, Suspense, useState, useEffect, useRef } from 'react';
+import { lazy, Suspense, useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Share, Phone, Globe, ShoppingBag, MoreHorizontal, Navigation, BookOpen, Link, MapPin, Map as MapIcon, MessageCircle, Twitter, Facebook, QrCode, Star, Instagram, Music2, Sparkles, HeartHandshake, CreditCard, Download, RotateCw } from 'lucide-react';
-import QRCode from 'qrcode';
 import { Place, Review } from '../types';
 import { mockPlaces } from '../data';
 import { getBusinessPath } from '../businessLinks';
@@ -13,6 +12,31 @@ import { canHypePlaceToday, getTotalHypes, HYPES_UPDATED_EVENT, hypePlace } from
 
 const BusinessLocationMap = lazy(() => import('./BusinessLocationMap').then((module) => ({ default: module.BusinessLocationMap })));
 const BusinessMapOverlay = lazy(() => import('./BusinessLocationMap').then((module) => ({ default: module.BusinessMapOverlay })));
+
+function DeferredBusinessLocationMap({ place }: { place: Place }) {
+  const sectionRef = useRef<HTMLElement>(null);
+  const [nearViewport, setNearViewport] = useState(false);
+  useEffect(() => {
+    const element = sectionRef.current;
+    if (!element || nearViewport) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      setNearViewport(true);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setNearViewport(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: '320px 0px' });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [nearViewport]);
+
+  return <section ref={sectionRef} className="mb-6 min-h-[250px]">
+    {nearViewport ? <Suspense fallback={<><h3 className="mb-3 text-[18px] font-bold text-white">Mapa</h3><div className="h-[210px] animate-pulse rounded-[24px] bg-[#292a2d]"/></>}><BusinessLocationMap place={place}/></Suspense> : <><h3 className="mb-3 text-[18px] font-bold text-white">Mapa</h3><div className="h-[210px] rounded-[24px] bg-[#202124]" aria-hidden="true"/> </>}
+  </section>;
+}
 
 const HOTEL_ROOM_IMAGES = [
   'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1c/2a/c0/a9/hotel-nochistlan.jpg?w=1400&h=-1&s=1',
@@ -80,10 +104,10 @@ type GoogleReview = {
 type GooglePlaceDetails = { weekdayDescriptions: string[]; reviews: GoogleReview[]; googleMapsUri: string };
 
 export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { place: Place, onClose: () => void, onSelectBusiness: (place: Place) => void }) {
-  const isHotelProfile = place.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es').includes('hotel nochistlan');
-  const galleryImages = isHotelProfile
+  const isHotelProfile = useMemo(() => place.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es').includes('hotel nochistlan'), [place.name]);
+  const galleryImages = useMemo(() => isHotelProfile
     ? [...HOTEL_SERVICE_IMAGES, ...HOTEL_ROOM_IMAGES, ...(place.communityPosts || []).map((post) => post.imageUrl)]
-    : place.images;
+    : place.images, [isHotelProfile, place.communityPosts, place.images]);
   const [communityReviews, setCommunityReviews] = useState<Review[]>([]);
   const [hypeCount, setHypeCount] = useState(() => getTotalHypes(place.id));
   const [canHypeToday, setCanHypeToday] = useState(() => canHypePlaceToday(place.id));
@@ -98,6 +122,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
   const [cardColor, setCardColor] = useState('#facc15');
   const [cardFeedback, setCardFeedback] = useState('');
   const cardQrRef = useRef<HTMLCanvasElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
   const [viewerState, setViewerState] = useState<{ index: number; direction: number } | null>(null);
   const [showWebsiteWarning, setShowWebsiteWarning] = useState(false);
   const [showPhoneModal, setShowPhoneModal] = useState(false);
@@ -105,7 +130,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
   const [showCommunityActions, setShowCommunityActions] = useState(false);
   const [communityReviewMode, setCommunityReviewMode] = useState<'menu' | 'reviews'>('menu');
   const [shareFeedback, setShareFeedback] = useState('');
-  const businessUrl = `${window.location.origin}${getBusinessPath(place, mockPlaces)}`;
+  const businessUrl = useMemo(() => `${window.location.origin}${getBusinessPath(place, mockPlaces)}`, [place]);
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=176x176&margin=8&data=${encodeURIComponent(businessUrl)}`;
   const shareText = `Mira ${place.name} en PuntoNochi`;
   const detailDrag = useSheetDrag(onClose);
@@ -117,7 +142,11 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
 
   useEffect(() => {
     if (!showDigitalCard || !cardQrRef.current) return;
-    void QRCode.toCanvas(cardQrRef.current, businessUrl, { width: 512, margin: 2, errorCorrectionLevel: 'H', color: { dark: '#111214', light: '#ffffff' } });
+    let active = true;
+    void import('qrcode').then(({ default: QRCode }) => {
+      if (active && cardQrRef.current) return QRCode.toCanvas(cardQrRef.current, businessUrl, { width: 512, margin: 2, errorCorrectionLevel: 'H', color: { dark: '#111214', light: '#ffffff' } });
+    });
+    return () => { active = false; };
   }, [showDigitalCard, businessUrl]);
 
   const downloadBusinessCard = async () => {
@@ -168,6 +197,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
     });
     const qrSize = Math.round(width * (cardLandscape ? .31 : .52));
     const qrCanvas = document.createElement('canvas');
+    const { default: QRCode } = await import('qrcode');
     await QRCode.toCanvas(qrCanvas, businessUrl, { width: qrSize, margin: 2, errorCorrectionLevel: 'H', color: { dark: '#111214', light: '#ffffff' } });
     const qrX = cardLandscape ? width - pad - qrSize : Math.round((width - qrSize) / 2);
     const qrY = cardLandscape ? Math.round((height - qrSize) / 2) : height - qrSize - pad * 1.35;
@@ -242,7 +272,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
     };
   }, []);
 
-  const todayName = new Intl.DateTimeFormat('es-MX', { weekday: 'long' }).format(new Date());
+  const todayName = useMemo(() => new Intl.DateTimeFormat('es-MX', { weekday: 'long' }).format(new Date()), []);
   const todaySchedule = place.weeklyHours?.[todayName.charAt(0).toLocaleUpperCase('es') + todayName.slice(1)];
   const is24Hours = Boolean(place.weeklyHours && Object.keys(place.weeklyHours).length === 7 && Object.values(place.weeklyHours).every((schedule) => !schedule.closed && schedule.intervals.length === 1 && schedule.intervals[0].open === '00:00' && schedule.intervals[0].close === '23:59'));
   const closingTime = is24Hours ? undefined : todaySchedule?.intervals?.at(-1)?.close;
@@ -257,20 +287,20 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
       return order.indexOf(a.toLocaleLowerCase('es')) - order.indexOf(b.toLocaleLowerCase('es'));
     }).map(([day, schedule]) => `${day}: ${is24Hours ? 'Abierto 24 horas' : schedule.closed ? 'Cerrado' : schedule.intervals.map(({ open, close }) => `${formatTime(open)}–${formatTime(close)}`).join(', ') || 'Horario no disponible'}`)
     : [];
-  const bestGoogleReviews = [...(googleDetails?.reviews || [])]
-    .sort((a, b) => b.rating - a.rating || (b.text?.length || 0) - (a.text?.length || 0));
+  const bestGoogleReviews = useMemo(() => [...(googleDetails?.reviews || [])]
+    .sort((a, b) => b.rating - a.rating || (b.text?.length || 0) - (a.text?.length || 0)), [googleDetails?.reviews]);
   const displayedRating = isHotelProfile ? 5 : place.rating;
-  const reviewSamples = communityReviews.length ? communityReviews : bestGoogleReviews;
-  const reviewAverage = isHotelProfile ? 5 : communityReviews.length
+  const reviewSamples = useMemo(() => communityReviews.length ? communityReviews : bestGoogleReviews, [communityReviews, bestGoogleReviews]);
+  const reviewAverage = useMemo(() => isHotelProfile ? 5 : communityReviews.length
     ? communityReviews.reduce((sum, review) => sum + review.rating, 0) / communityReviews.length
-    : place.rating || (reviewSamples.length ? reviewSamples.reduce((sum, review) => sum + review.rating, 0) / reviewSamples.length : 0);
+    : place.rating || (reviewSamples.length ? reviewSamples.reduce((sum, review) => sum + review.rating, 0) / reviewSamples.length : 0), [isHotelProfile, communityReviews, place.rating, reviewSamples]);
   const reviewTotal = communityReviews.length + (place.reviewCount || 0);
-  const ratingDistribution = [5, 4, 3, 2, 1].map((score) => ({ score, count: reviewSamples.filter((review) => review.rating === score).length }));
+  const ratingDistribution = useMemo(() => [5, 4, 3, 2, 1].map((score) => ({ score, count: reviewSamples.filter((review) => review.rating === score).length })), [reviewSamples]);
   const maxRatingCount = Math.max(1, ...ratingDistribution.map((item) => item.count));
-  const suggestedBusinesses = mockPlaces
+  const suggestedBusinesses = useMemo(() => mockPlaces
     .filter((business) => business.id !== place.id)
     .sort((a, b) => Number(b.category === place.category) - Number(a.category === place.category) || b.rating - a.rating)
-    .slice(0, 8);
+    .slice(0, 8), [place.id, place.category, mockPlaces]);
 
   const copyBusinessLink = async () => {
     try {
@@ -300,15 +330,20 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const ck = new CornerKit();
-      ck.applyAll('.ck-apply', { radius: 23, smoothing: 1 });
-      ck.applyAll('[data-detail-squircle]', { radius: 24, smoothing: 1 });
-      ck.applyAll('[data-suggested-business]', { radius: 22, smoothing: 1 });
-      if (window.matchMedia('(max-width: 767px)').matches) ck.applyAll('[data-business-sheet-squircle]', { radius: 32, smoothing: 1 });
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [place, reviewsLoading, communityReviews.length]);
+    const frame = window.requestAnimationFrame(() => {
+      const sheet = sheetRef.current;
+      if (!sheet) return;
+      const corners = new CornerKit();
+      const applyWithinSheet = (selector: string, config: { radius: number; smoothing: number }) => {
+        sheet.querySelectorAll<HTMLElement>(selector).forEach((element) => corners.apply(element, config));
+      };
+      applyWithinSheet('.ck-apply', { radius: 23, smoothing: 1 });
+      applyWithinSheet('[data-detail-squircle]', { radius: 24, smoothing: 1 });
+      applyWithinSheet('[data-suggested-business]', { radius: 22, smoothing: 1 });
+      if (window.matchMedia('(max-width: 767px)').matches) corners.apply(sheet, { radius: 32, smoothing: 1 });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
   const openViewer = (index: number) => setViewerState({ index, direction: 0 });
   const closeViewer = () => setViewerState(null);
 
@@ -369,17 +404,18 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
         onClick={onClose}
       />
       <motion.div
+        ref={sheetRef}
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
-        transition={{ type: 'tween', duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ type: 'tween', duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
         {...detailDrag}
         data-no-tab-swipe data-desktop-sheet="side-right" data-business-sheet-squircle
         className="fixed inset-x-0 bottom-0 z-[61] h-[min(92dvh,900px)] max-h-[calc(100dvh-env(safe-area-inset-top))] overflow-hidden rounded-t-[32px] [corner-shape:squircle] bg-[#171717] flex flex-col [will-change:transform]"
       >
         <SheetDragHandle controls={detailDrag.dragControls} tone="dark" className="absolute inset-x-0 top-0 z-20" />
         {isHotelProfile && <>
-          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-28 bg-gradient-to-t from-[#171717]/80 via-[#171717]/35 to-transparent backdrop-blur-[8px] [mask-image:linear-gradient(to_bottom,transparent,black_85%)]" />
+          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-28 bg-gradient-to-t from-[#171717]/80 via-[#171717]/35 to-transparent [mask-image:linear-gradient(to_bottom,transparent,black_85%)]" />
           <button type="button" data-external-url="https://www.tripadvisor.com.mx/Hotel_Review-g3181083-d21337544-Reviews-Hotel_Nochistlan-Nochistlan_Central_Mexico_and_Gulf_Coast.html" className="absolute bottom-[max(18px,env(safe-area-inset-bottom))] left-5 right-5 z-20 flex h-12 items-center justify-center rounded-full bg-[#1683f8] text-[15px] font-bold text-white transition-colors hover:bg-[#0d74e8] active:scale-[.99]">Reservar en TripAdvisor</button>
         </>}
 
@@ -389,6 +425,8 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
             <img 
               src={galleryImages[0]}
               alt={place.name} 
+              decoding="async"
+              fetchPriority="high"
               className="w-full h-full object-cover cursor-pointer" 
               onPointerDownCapture={(e) => e.stopPropagation()}
               onClick={() => openViewer(0)} 
@@ -555,9 +593,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
               </div>
             </div>
 
-            <Suspense fallback={<section className="mb-6"><h3 className="mb-3 text-[18px] font-bold text-white">Mapa</h3><div className="h-[210px] animate-pulse rounded-[24px] bg-[#292a2d]"/></section>}>
-              <BusinessLocationMap place={place} />
-            </Suspense>
+            <DeferredBusinessLocationMap place={place} />
 
             {/* Photos */}
             {!isHotelProfile && place.images.length > 0 && <section className="pb-4">
