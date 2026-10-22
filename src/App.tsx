@@ -31,16 +31,19 @@ import { WelcomePage } from './components/WelcomePage';
 import CornerKit from '@cornerkit/core';
 import { Category, Place, Colonia } from './types';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { getBookmarkedPlaceIds, recordProfileActiveSeconds } from './profileStorage';
+import { getBookmarkedPlaceIds, getHomeTheme, recordProfileActiveSeconds } from './profileStorage';
+import { readSearchLearning } from './searchLearning';
+import { rankHomeRecommendations } from './homeRecommendations';
 const PublicProfileSheet = React.lazy(() => import('./components/PublicProfileSheet').then((module) => ({ default: module.PublicProfileSheet })));
 const SettingsSheet = React.lazy(() => import('./components/SettingsSheet').then((module) => ({ default: module.SettingsSheet })));
 const BookmarksSheet = React.lazy(() => import('./components/BookmarksSheet').then((module) => ({ default: module.BookmarksSheet })));
 const AccountAuthSheet = React.lazy(() => import('./components/AccountSheets').then((module) => ({ default: module.AccountAuthSheet })));
 
-import { PublicMenuPage } from './components/PublicMenuPage';
-import { HotelProfileClaimPage } from './components/HotelProfileClaimPage';
-import { PuntoNochiComparisonPage } from './components/PuntoNochiComparisonPage';
-import { LegalPage, type LegalDocument } from './components/LegalPage';
+const PublicMenuPage = React.lazy(() => import('./components/PublicMenuPage').then((module) => ({ default: module.PublicMenuPage })));
+const HotelProfileClaimPage = React.lazy(() => import('./components/HotelProfileClaimPage').then((module) => ({ default: module.HotelProfileClaimPage })));
+const PuntoNochiComparisonPage = React.lazy(() => import('./components/PuntoNochiComparisonPage').then((module) => ({ default: module.PuntoNochiComparisonPage })));
+const LegalPage = React.lazy(() => import('./components/LegalPage').then((module) => ({ default: module.LegalPage })));
+import type { LegalDocument } from './components/LegalPage';
 import { PageLoadingSkeleton } from './components/PageLoadingSkeleton';
 import { Analytics, track } from '@vercel/analytics/react';
 import { getTotalHypes, HYPES_UPDATED_EVENT } from './hypes';
@@ -50,6 +53,33 @@ import { installAppLocalization } from './i18n';
 
 const SEO_SITE_ORIGIN = 'https://puntonochi.vercel.app';
 const HOME_SEARCH_PROMPTS = ['Busca un negocio…', '¿Se te antoja algo rico?', 'Encuentra servicios cerca', 'Explora lugares locales'];
+function HomeSearchPlaceholder() {
+  const [promptIndex, setPromptIndex] = useState(0);
+  const [typedLength, setTypedLength] = useState(0);
+  useEffect(() => {
+    let index = 0;
+    let typingTimer = 0;
+    const typePrompt = (nextIndex: number) => {
+      window.clearTimeout(typingTimer);
+      setPromptIndex(nextIndex);
+      setTypedLength(0);
+      let length = 0;
+      const typeNext = () => {
+        length += 1;
+        setTypedLength(length);
+        if (length < HOME_SEARCH_PROMPTS[nextIndex].length) typingTimer = window.setTimeout(typeNext, 42);
+      };
+      typingTimer = window.setTimeout(typeNext, 90);
+    };
+    typePrompt(index);
+    const interval = window.setInterval(() => {
+      index = (index + 1) % HOME_SEARCH_PROMPTS.length;
+      typePrompt(index);
+    }, 3000);
+    return () => { window.clearInterval(interval); window.clearTimeout(typingTimer); };
+  }, []);
+  return <span aria-hidden="true" className="min-w-0 truncate text-[13px]">{HOME_SEARCH_PROMPTS[promptIndex].slice(0, typedLength)}<span className="ml-px animate-pulse text-white/65">|</span></span>;
+}
 const homeCategoryIcon = (name: string) => {
   const category = name.toLocaleLowerCase();
   if (/comida/.test(category)) return Salad;
@@ -259,6 +289,16 @@ export default function App() {
   const [selectedBusiness, setSelectedBusiness] = useState<Place | null>(init.initialBusiness);
   const [publicMenuId] = useState<string | null>(init.initialMenuId);
   const [activeTab, setActiveTab] = useState(init.initialTab);
+  const [homeTheme, setHomeTheme] = useState(getHomeTheme);
+  useEffect(() => {
+    document.documentElement.dataset.appTheme = homeTheme;
+    document.documentElement.style.backgroundColor = homeTheme === 'light' ? '#fff' : '#121212';
+  }, [homeTheme]);
+  useEffect(() => {
+    const updateHomeTheme = (event: Event) => setHomeTheme((event as CustomEvent<{ theme: 'dark' | 'light' }>).detail?.theme || getHomeTheme());
+    window.addEventListener('puntonochi-home-theme-updated', updateHomeTheme);
+    return () => window.removeEventListener('puntonochi-home-theme-updated', updateHomeTheme);
+  }, []);
   const [tourismStarted, setTourismStarted] = useState(false);
   const [tourismArticleSlug, setTourismArticleSlug] = useState<string | null>(null);
   const [articleReturnTab, setArticleReturnTab] = useState('inicio');
@@ -292,8 +332,6 @@ export default function App() {
   const [searchCategory, setSearchCategory] = useState<Category | null>(null);
   const [dailyDropFlipped, setDailyDropFlipped] = useState(false);
   const [homeHighlightIndex, setHomeHighlightIndex] = useState(0);
-  const [heroSearchPromptIndex, setHeroSearchPromptIndex] = useState(0);
-  const [heroSearchTypedLength, setHeroSearchTypedLength] = useState(0);
   const [showSponsorSheet, setShowSponsorSheet] = useState(false);
   const [externalSiteToOpen, setExternalSiteToOpen] = useState<{ url: string; host: string } | null>(null);
   const [weatherSummary, setWeatherSummary] = useState<{ current: number | null; high: number | null; low: number | null; precipitationChance: number | null; weatherCode: number; days: { date: string; high: number | null; low: number | null; weatherCode: number }[] } | null>(null);
@@ -354,28 +392,6 @@ export default function App() {
     return () => { active = false; };
   }, []);
   useEffect(() => setDailyDropFlipped(false), [homeHighlightIndex]);
-  useEffect(() => {
-    let promptIndex = 0;
-    let typingTimer = 0;
-    const typePrompt = (index: number) => {
-      window.clearTimeout(typingTimer);
-      setHeroSearchPromptIndex(index);
-      setHeroSearchTypedLength(0);
-      let length = 0;
-      const typeNext = () => {
-        length += 1;
-        setHeroSearchTypedLength(length);
-        if (length < HOME_SEARCH_PROMPTS[index].length) typingTimer = window.setTimeout(typeNext, 42);
-      };
-      typingTimer = window.setTimeout(typeNext, 90);
-    };
-    typePrompt(promptIndex);
-    const interval = window.setInterval(() => {
-      promptIndex = (promptIndex + 1) % HOME_SEARCH_PROMPTS.length;
-      typePrompt(promptIndex);
-    }, 3000);
-    return () => { window.clearInterval(interval); window.clearTimeout(typingTimer); };
-  }, []);
   const loading = false;
   const [showWelcome, setShowWelcome] = useState(() => {
     if (!init.initShowWelcome) return false;
@@ -524,40 +540,19 @@ export default function App() {
 
   const [destacadosState, setDestacadosState] = useState({ index: 0, direction: 0 });
 
-  const suggestedPlaces = useMemo(() => {
-    const searches = readLocalList(RECENT_SEARCHES_KEY);
-    const recentPlaces = readLocalList(RECENT_PLACES_KEY);
-    const bookmarks = getBookmarkedPlaceIds();
-    const score = (place: Place) => {
-      const searchable = [place.name, place.category, place.subtitle, place.location, place.address].filter(Boolean).join(' ').toLocaleLowerCase('es');
-      const searchScore = searches.reduce((total, term, index) => {
-        const normalized = term.toLocaleLowerCase('es');
-        return total + (normalized && searchable.includes(normalized) ? 8 - Math.min(index, 6) : 0);
-      }, 0);
-      const bookmarkScore = bookmarks.includes(place.id) ? 12 : 0;
-      const viewedIndex = recentPlaces.indexOf(place.id);
-      const viewedScore = viewedIndex >= 0 ? 6 - Math.min(viewedIndex, 5) : 0;
-      const distance = distanceFromDevice(place, deviceLocation);
-      const proximityScore = distance === null ? 0 : Math.max(-20, 30 - distance * 2);
-      return searchScore + bookmarkScore + viewedScore + proximityScore + Math.min(place.reviewCount || 0, 100) / 100 + (place.rating || 0) / 10;
-    };
-    return [...mockPlaces]
-      .filter((place) => place.images?.length)
-      .sort((a, b) => {
-        const distanceA = distanceFromDevice(a, deviceLocation);
-        const distanceB = distanceFromDevice(b, deviceLocation);
-        if (distanceA !== null && distanceB !== null && Math.abs(distanceA - distanceB) > 0.01) return distanceA - distanceB;
-        if (distanceA !== null && distanceB === null) return -1;
-        if (distanceB !== null && distanceA === null) return 1;
-        return score(b) - score(a);
-      })
-      .slice(0, 8);
-  }, [directoryVersion, suggestionVersion, deviceLocation]);
+  const bookmarkedPlaceIds = useMemo(() => getBookmarkedPlaceIds(), [directoryVersion, suggestionVersion]);
+
+  const suggestedPlaces = useMemo(() => rankHomeRecommendations(mockPlaces, {
+    searches: readLocalList(RECENT_SEARCHES_KEY),
+    recentPlaces: readLocalList(RECENT_PLACES_KEY),
+    bookmarks: bookmarkedPlaceIds,
+    coordinates: deviceLocation ? { latitude: deviceLocation.latitude, longitude: deviceLocation.longitude } : null,
+    learning: readSearchLearning(),
+  }), [directoryVersion, suggestionVersion, deviceLocation, bookmarkedPlaceIds]);
 
   const favoritePlaces = useMemo(() => {
-    const ids = getBookmarkedPlaceIds();
-    return ids.map((id) => mockPlaces.find((place) => place.id === id)).filter((place): place is Place => Boolean(place));
-  }, [directoryVersion, suggestionVersion]);
+    return bookmarkedPlaceIds.map((id) => mockPlaces.find((place) => place.id === id)).filter((place): place is Place => Boolean(place));
+  }, [directoryVersion, bookmarkedPlaceIds]);
 
   const recentlyViewedPlaces = useMemo(() => {
     return readLocalList(RECENT_PLACES_KEY)
@@ -567,22 +562,13 @@ export default function App() {
   }, [directoryVersion, suggestionVersion]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const term = searchQuery.trim().replace(/\s+/g, ' ');
-      if (!showSearch || term.length < 2) return;
-      track('Search Submitted');
-      const recent = readLocalList(RECENT_SEARCHES_KEY).filter((item) => item.toLocaleLowerCase('es') !== term.toLocaleLowerCase('es'));
-      try { localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify([term, ...recent].slice(0, 12))); } catch { /* Suggestions still work without storage. */ }
-      void fetch('/api/activity/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: term }) }).catch(() => undefined);
-      setSuggestionVersion((version) => version + 1);
-    }, 700);
-    return () => window.clearTimeout(timer);
-  }, [searchQuery, showSearch]);
-
-  useEffect(() => {
     const refreshSuggestions = () => setSuggestionVersion((version) => version + 1);
     window.addEventListener('puntonochi-bookmarks-updated', refreshSuggestions);
-    return () => window.removeEventListener('puntonochi-bookmarks-updated', refreshSuggestions);
+    window.addEventListener('puntonochi-search-history-updated', refreshSuggestions);
+    return () => {
+      window.removeEventListener('puntonochi-bookmarks-updated', refreshSuggestions);
+      window.removeEventListener('puntonochi-search-history-updated', refreshSuggestions);
+    };
   }, []);
 
   useEffect(() => {
@@ -968,48 +954,48 @@ export default function App() {
     </>}
   </AnimatePresence>;
 
-  if (publicMenuId) return <><PublicMenuPage id={publicMenuId}/>{externalSiteConfirmation}</>;
-  if (window.location.pathname === '/punto-nochi-vs-nochisgo' || window.location.pathname === '/punto-nochi-vs-nochisgo/') return <><PuntoNochiComparisonPage />{externalSiteConfirmation}</>;
-  if (window.location.pathname === '/reclamar/hotelnochistlan') return <><HotelProfileClaimPage onRequireAccount={() => setShowAccountAuth(true)} onClose={() => { window.history.pushState({}, '', '/explorar'); setActiveTab('explorar'); }} />{showAccountAuth && <AccountAuthSheet onClose={() => setShowAccountAuth(false)}/>} {externalSiteConfirmation}</>;
+  if (publicMenuId) return <React.Suspense fallback={null}><PublicMenuPage id={publicMenuId}/>{externalSiteConfirmation}</React.Suspense>;
+  if (window.location.pathname === '/punto-nochi-vs-nochisgo' || window.location.pathname === '/punto-nochi-vs-nochisgo/') return <React.Suspense fallback={null}><PuntoNochiComparisonPage />{externalSiteConfirmation}</React.Suspense>;
+  if (window.location.pathname === '/reclamar/hotelnochistlan') return <React.Suspense fallback={null}><HotelProfileClaimPage onRequireAccount={() => setShowAccountAuth(true)} onClose={() => { window.history.pushState({}, '', '/explorar'); setActiveTab('explorar'); }} />{showAccountAuth && <AccountAuthSheet onClose={() => setShowAccountAuth(false)}/>} {externalSiteConfirmation}</React.Suspense>;
 
   return (
-    <AutoLayoutRoot id="app-root" className={`auto-layout-root relative min-h-screen bg-[#08090b] ${activeTab === 'explorar' || activeTab === 'inicio' || activeTab === 'turismo' ? 'pb-0' : 'pb-36'} font-sans text-neutral-900 selection:bg-blue-100`} style={{ fontFamily: "'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif" }}>
+    <AutoLayoutRoot id="app-root" data-home-theme={activeTab === 'inicio' ? homeTheme : 'dark'} data-app-theme={homeTheme} data-active-tab={activeTab} className={`auto-layout-root relative min-h-screen ${homeTheme === 'light' && activeTab === 'inicio' ? 'bg-[#f4f5f7]' : homeTheme === 'light' && ['puntoshorts', 'explorar', 'turismo'].includes(activeTab) ? 'bg-white' : 'bg-[#08090b]'} ${activeTab === 'explorar' || activeTab === 'inicio' || activeTab === 'turismo' ? 'pb-0' : 'pb-36'} font-sans text-neutral-900 selection:bg-blue-100`} style={{ fontFamily: "'Google Sans Flex', 'Google Sans', 'Plus Jakarta Sans', sans-serif" }}>
       {/* Dynamic Main Content based on activeTab */}
       <AnimatePresence mode="sync" initial={false}>
       {activeTab === 'inicio' && (
-        <motion.main key="home-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }} className={`${timerActive ? 'pt-14' : ''} touch-pan-y`}>
-          {timerActive && <motion.div layout initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="fixed left-[5px] right-[5px] top-[max(5px,env(safe-area-inset-top))] z-40 mx-auto flex max-w-[520px] items-center gap-2 rounded-full border border-[#ff9f0a] bg-[#171719]/85 px-3 py-2 text-white shadow-lg backdrop-blur-xl"><Timer className="h-3.5 w-3.5 text-[#ff9f0a]"/><span className="text-[9px] font-semibold uppercase tracking-wider text-white/55">Temporizador</span><motion.span key={timerDisplay} initial={{ opacity: .6, y: 2 }} animate={{ opacity: 1, y: 0 }} className="ml-auto font-mono text-sm font-bold tabular-nums text-[#ffb347]">{timerDisplay}</motion.span></motion.div>}
+        <motion.main key="home-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }} data-home-screen data-home-theme={homeTheme} className={`${timerActive ? 'pt-14' : ''} touch-pan-y`}>
+          {timerActive && <motion.div data-home-timer layout initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="fixed left-[5px] right-[5px] top-[max(5px,env(safe-area-inset-top))] z-40 mx-auto flex max-w-[520px] items-center gap-2 rounded-full border border-[#ff9f0a] bg-[#171719]/85 px-3 py-2 text-white shadow-lg backdrop-blur-xl"><Timer className="h-3.5 w-3.5 text-[#ff9f0a]"/><span className="text-[9px] font-semibold uppercase tracking-wider text-white/55">Temporizador</span><motion.span key={timerDisplay} initial={{ opacity: .6, y: 2 }} animate={{ opacity: 1, y: 0 }} className="ml-auto font-mono text-sm font-bold tabular-nums text-[#ffb347]">{timerDisplay}</motion.span></motion.div>}
           {/* Header Section */}
-          <div className="sticky top-0 z-30 -mx-5 isolate px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-2 lg:top-0 lg:pt-3">
-            <div aria-hidden="true" className="pointer-events-none absolute -left-5 -right-5 -top-8 z-0 h-[108px] bg-gradient-to-b from-[#161719]/80 via-[#161719]/45 to-transparent backdrop-blur-[10px] [mask-image:linear-gradient(to_bottom,black_0%,black_42%,transparent_100%)]" />
-            <div className="absolute left-[25px] top-[calc(max(1rem,env(safe-area-inset-top))+1px)] z-20 flex h-10 items-center gap-0.5 rounded-full bg-white/[.08] p-1 backdrop-blur-xl lg:top-[13px]">
+          <div data-home-header className="sticky top-0 z-30 -mx-5 isolate px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-2 lg:top-0 lg:pt-3">
+            <div data-home-header-glow aria-hidden="true" className="pointer-events-none absolute -left-5 -right-5 -top-8 z-0 h-[108px] bg-gradient-to-b from-[#161719]/80 via-[#161719]/45 to-transparent backdrop-blur-[10px] [mask-image:linear-gradient(to_bottom,black_0%,black_42%,transparent_100%)]" />
+            <div data-home-controls className="absolute left-[25px] top-[calc(max(1rem,env(safe-area-inset-top))+1px)] z-20 flex h-10 items-center gap-0.5 rounded-full bg-white/[.08] p-1 backdrop-blur-xl lg:top-[13px]">
               <button type="button" onClick={() => setShowBookmarksSheet(true)} aria-label="Abrir guardados" title="Guardados" className="flex h-8 w-10 items-center justify-center rounded-full text-white/85 transition-colors hover:bg-white/[.08] active:scale-95"><Bookmark aria-hidden="true" className="h-[17px] w-[17px]" strokeWidth={2}/></button>
               <span aria-hidden="true" className="h-4 w-px shrink-0 bg-white/15" />
               <button type="button" onClick={() => setShowProfileSettings(true)} aria-label="Abrir ajustes" title="Ajustes" className="flex h-8 w-10 items-center justify-center rounded-full text-white/85 transition-colors hover:bg-white/[.08] active:scale-95"><Settings2 aria-hidden="true" className="h-[17px] w-[17px]" strokeWidth={2}/></button>
             </div>
             <div className="absolute right-[25px] top-[calc(max(1rem,env(safe-area-inset-top))+1px)] z-20 flex items-center gap-2 lg:top-[13px]">
-            <button type="button" onClick={() => setWeatherUnit((unit) => { const next = unit === 'C' ? 'F' : 'C'; try { localStorage.setItem(WEATHER_UNIT_KEY, next); } catch { /* Keep the unit for this session if storage is unavailable. */ } return next; })} aria-label={`Temperatura actual en grados ${weatherUnit === 'C' ? 'Celsius' : 'Fahrenheit'}. Toca para cambiar a grados ${weatherUnit === 'C' ? 'Fahrenheit' : 'Celsius'}`} title={`Cambiar a °${weatherUnit === 'C' ? 'F' : 'C'}`} className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-white/[.08] px-2.5 text-white/85 backdrop-blur-xl transition-colors hover:bg-white/[.13] active:scale-95"><CloudSun aria-hidden="true" className="h-[17px] w-[17px] text-amber-200" strokeWidth={1.8}/><span className="min-w-[30px] text-[12px] font-semibold tabular-nums">{formatWeatherTemperature(weatherSummary?.current, weatherUnit)}</span></button>
-            {signedInAccount && <button type="button" onClick={() => setPublicProfileId(signedInAccount.id)} aria-label="Abrir mi perfil público" title="Mi perfil" className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-[#292a2d] p-[2px] text-white shadow-sm ring-1 ring-white/15 transition-transform active:scale-95">
+            <button data-home-weather-control type="button" onClick={() => setWeatherUnit((unit) => { const next = unit === 'C' ? 'F' : 'C'; try { localStorage.setItem(WEATHER_UNIT_KEY, next); } catch { /* Keep the unit for this session if storage is unavailable. */ } return next; })} aria-label={`Temperatura actual en grados ${weatherUnit === 'C' ? 'Celsius' : 'Fahrenheit'}. Toca para cambiar a grados ${weatherUnit === 'C' ? 'Fahrenheit' : 'Celsius'}`} title={`Cambiar a °${weatherUnit === 'C' ? 'F' : 'C'}`} className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-white/[.08] px-2.5 text-white/85 backdrop-blur-xl transition-colors hover:bg-white/[.13] active:scale-95"><CloudSun aria-hidden="true" className="h-[17px] w-[17px] text-amber-200" strokeWidth={1.8}/><span className="min-w-[30px] text-[12px] font-semibold tabular-nums">{formatWeatherTemperature(weatherSummary?.current, weatherUnit)}</span></button>
+            {signedInAccount && <button data-home-profile-control type="button" onClick={() => setPublicProfileId(signedInAccount.id)} aria-label="Abrir mi perfil público" title="Mi perfil" className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-[#292a2d] p-[2px] text-white shadow-sm ring-1 ring-white/15 transition-transform active:scale-95">
               {signedInAccount.picture ? <img src={signedInAccount.picture} alt="" referrerPolicy="no-referrer" className="h-full w-full rounded-full object-cover"/> : <span className="flex h-full w-full items-center justify-center rounded-full bg-blue-500 text-sm font-bold">{signedInAccount.name.slice(0, 1).toUpperCase()}</span>}
             </button>}
             </div>
-            <div className="pointer-events-none relative z-20 flex h-10 items-center justify-center gap-2 pt-0.5 text-white" aria-label="PuntoNochi">
+            <div data-home-brand className="pointer-events-none relative z-20 flex h-10 items-center justify-center gap-2 pt-0.5 text-white" aria-label="PuntoNochi">
               <span aria-hidden="true" className="h-[9px] w-[9px] rounded-full bg-white" />
               <span className="text-[15px] font-bold tracking-[-0.035em]">PuntoNochi</span>
             </div>
           </div>
           <section className="relative mx-auto mb-8 w-full max-w-3xl px-5">
             <div className="mt-3 mb-4">
-              <h1 className="mb-2 px-1 text-[clamp(34px,9vw,46px)] font-extrabold leading-[.96] tracking-[-.055em] text-white">Descubre Nochistlán</h1>
-              <p className="mb-4 px-1 text-[15px] font-medium leading-snug text-white/60">Negocios, lugares, eventos y más, todo en un solo lugar.</p>
-              <button type="button" onClick={() => { setSearchCategory(null); setSearchQuery(''); setShowSearch(true); }} aria-label="Abrir búsqueda" className="flex h-[50px] w-full items-center gap-3 rounded-full bg-[#38393c]/85 px-4 text-left text-white/55 backdrop-blur-[12px] backdrop-saturate-125 transition-colors hover:bg-[#404145]/90 active:bg-[#47484c]/90">
+              <h1 data-home-title className="mb-2 px-1 text-[clamp(34px,9vw,46px)] font-extrabold leading-[.96] tracking-[-.055em] text-white">Descubre Nochistlán</h1>
+              <p data-home-subtitle className="mb-4 px-1 text-[15px] font-medium leading-snug text-white/60">Negocios, lugares, eventos y más, todo en un solo lugar.</p>
+              <button data-home-search type="button" onClick={() => { setSearchCategory(null); setSearchQuery(''); setShowSearch(true); }} aria-label="Abrir búsqueda" className="flex h-[50px] w-full items-center gap-3 rounded-full bg-[#38393c]/85 px-4 text-left text-white/55 backdrop-blur-[12px] backdrop-saturate-125 transition-colors hover:bg-[#404145]/90 active:bg-[#47484c]/90">
                 <Search aria-hidden="true" className="h-[18px] w-[18px] shrink-0 text-white/60" />
-                <span aria-hidden="true" className="min-w-0 truncate text-[13px]">{HOME_SEARCH_PROMPTS[heroSearchPromptIndex].slice(0, heroSearchTypedLength)}<span className="ml-px animate-pulse text-white/65">|</span></span>
+                <HomeSearchPlaceholder />
               </button>
               <div aria-label="Explorar categorías" className="mt-3 flex snap-x snap-mandatory gap-2 overflow-x-auto scroll-smooth pb-1 scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch', maskImage: 'linear-gradient(to right, transparent 0, #000 20px, #000 calc(100% - 20px), transparent 100%)', WebkitMaskImage: 'linear-gradient(to right, transparent 0, #000 20px, #000 calc(100% - 20px), transparent 100%)' }}>
                 {categories.slice(0, 12).map((category) => {
                   const CategoryIcon = homeCategoryIcon(category.name);
-                  return <button key={category.id} type="button" onClick={() => { setSearchCategory(category); setSearchQuery(category.name); setShowSearch(true); }} className="flex h-9 shrink-0 snap-start items-center gap-2 rounded-full bg-[#292a2d] px-3 text-[11px] font-semibold text-white/85 transition-colors hover:bg-[#303135] active:bg-[#35363a]">
+                  return <button data-home-chip key={category.id} type="button" onClick={() => { setSearchCategory(category); setSearchQuery(category.name); setShowSearch(true); }} className="flex h-9 shrink-0 snap-start items-center gap-2 rounded-full bg-[#292a2d] px-3 text-[11px] font-semibold text-white/85 transition-colors hover:bg-[#303135] active:bg-[#35363a]">
                     <CategoryIcon aria-hidden="true" className="h-[17px] w-[17px] shrink-0 text-white/85" strokeWidth={1.9} />
                     <span>{category.name}</span>
                   </button>;
@@ -1017,9 +1003,9 @@ export default function App() {
               </div>
             </div>
             <div className="mt-4">
-              <motion.div role="group" aria-label="Pregunta del día, pronóstico y patrocinadores" className="ck-home-daily-drop-card relative min-h-[156px] overflow-hidden rounded-[24px] bg-[#292a2d] text-white">
+              <motion.div data-home-daily role="group" aria-label="Pregunta del día, pronóstico y patrocinadores" className="ck-home-daily-drop-card relative min-h-[156px] overflow-hidden rounded-[24px] bg-[#292a2d] text-white">
                 <div className={`absolute inset-0 flex transition-transform duration-500 ${reduceMotion ? 'transition-none' : '[transition-timing-function:cubic-bezier(.22,1,.36,1)]'}`} style={{ width: '300%', transform: `translateX(-${homeHighlightIndex * 33.333333}%)` }}>
-                  <div className="h-full w-1/3 shrink-0">
+                  <div data-home-neutral-panel className="h-full w-1/3 shrink-0">
                     {!dailyDropFlipped ? <button type="button" onClick={() => setDailyDropFlipped(true)} aria-label="Voltear para ver la respuesta del día" className="flex h-full w-full flex-col items-start justify-center px-6 py-5 text-left">
                       <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Pregunta del día</span>
                       <span className="mt-2 text-[18px] font-semibold leading-snug">{dailyDropQuestion}</span>
@@ -1031,7 +1017,7 @@ export default function App() {
                       <span className="mt-3 text-[11px] font-medium text-white/40">Toca para volver</span>
                     </button>}
                   </div>
-                  <div role="group" aria-label={`Pronóstico del tiempo para Nochistlán: ${weatherDescription(weatherSummary?.weatherCode)}`} className="relative flex h-full w-1/3 shrink-0 flex-col justify-between overflow-hidden px-4 py-3 sm:px-5" style={{ background: 'linear-gradient(135deg, #347bb4 0%, #285f98 52%, #214e80 100%)' }}>
+                  <div data-home-weather-panel role="group" aria-label={`Pronóstico del tiempo para Nochistlán: ${weatherDescription(weatherSummary?.weatherCode)}`} className="relative flex h-full w-1/3 shrink-0 flex-col justify-between overflow-hidden px-4 py-3 sm:px-5" style={{ background: 'linear-gradient(135deg, #347bb4 0%, #285f98 52%, #214e80 100%)' }}>
                     <div className="flex min-w-0 items-start justify-between gap-2">
                       <div className="min-w-0"><p className="truncate text-xs font-semibold text-white/90">Nochistlán</p><p className="truncate text-[10px] text-white/65">Zacatecas</p></div>
                       <WeatherIcon code={weatherSummary?.weatherCode} className="h-5 w-5 shrink-0 text-white" />
@@ -1048,7 +1034,7 @@ export default function App() {
                       </div>)}
                     </div>
                   </div>
-                  <div className="flex h-full w-1/3 shrink-0 flex-col items-start justify-center px-6 py-4">
+                  <div data-home-neutral-panel className="flex h-full w-1/3 shrink-0 flex-col items-start justify-center px-6 py-4">
                     <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">Patrocinadores</span>
                     <span className="mt-2 text-lg font-semibold">Haz crecer tu negocio en Nochistlán</span>
                     <button type="button" onClick={() => setShowSponsorSheet(true)} className="mt-3 inline-flex h-10 items-center justify-center rounded-full bg-white px-5 text-xs font-bold text-[#202124] transition-transform active:scale-[.98]">Quiero ser patrocinador</button>
@@ -1056,7 +1042,7 @@ export default function App() {
                 </div>
               </motion.div>
               <div role="tablist" aria-label="Contenido destacado" className="mt-2 flex justify-center gap-1.5">
-                {['Pregunta del día', 'Pronóstico', 'Patrocinadores'].map((label, index) => <button key={label} type="button" role="tab" aria-label={`Mostrar ${label.toLocaleLowerCase('es-MX')}`} aria-selected={homeHighlightIndex === index} onClick={() => setHomeHighlightIndex(index)} className={`h-1.5 rounded-full transition-all ${homeHighlightIndex === index ? 'w-5 bg-white/75' : 'w-1.5 bg-white/25'}`}/>) }
+                {['Pregunta del día', 'Pronóstico', 'Patrocinadores'].map((label, index) => <button key={label} type="button" role="tab" aria-label={`Mostrar ${label.toLocaleLowerCase('es-MX')}`} aria-selected={homeHighlightIndex === index} onClick={() => setHomeHighlightIndex(index)} className={`h-1.5 rounded-full transition-all ${homeHighlightIndex === index ? `w-5 ${homeTheme === 'light' ? 'bg-[#343a46]' : 'bg-white/75'}` : `w-1.5 ${homeTheme === 'light' ? 'bg-[#343a46]/25' : 'bg-white/25'}`}`}/>) }
               </div>
             </div>
           </section>
@@ -1085,7 +1071,7 @@ export default function App() {
                 categories.map((cat) => {
                   const itemCount = mockPlaces.filter(p => p.category === cat.name).length;
                   return (
-                    <div 
+                    <div data-home-category-card
                       key={cat.id} 
                       onClick={() => setSelectedCategory(cat)}
                       className={`ck-home-category-card squircle-24 w-[140px] h-[160px] shrink-0 snap-start ${cat.gradient} p-4 flex flex-col justify-between shadow-[0_4px_12px_rgba(0,0,0,0.05)] text-white relative overflow-hidden cursor-pointer hover:opacity-90 active:scale-95 transition-all`}
@@ -1125,17 +1111,17 @@ export default function App() {
           <motion.section initial={reduceMotion ? false : { opacity: 0, y: 8 }} whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }} viewport={{ once: true, amount: .08 }} transition={reduceMotion ? { duration: 0 } : { duration: .2, ease: 'easeOut' }} className="mb-10">
             <div className="px-5 mb-4">
               <h2 className="text-2xl font-bold">{deviceLocation ? 'Cerca de ti' : 'Sugeridos'}</h2>
-              <p className="text-[15px] text-neutral-500 font-medium mt-0.5">{deviceLocation ? 'Negocios ordenados por distancia a tu ubicación' : 'Negocios para ti, según lo que buscas y guardas'}</p>
+              <p className="text-[15px] text-neutral-500 font-medium mt-0.5">{deviceLocation ? 'Cerca de ti, según tus intereses y la calidad del lugar' : 'Negocios para ti, según lo que buscas y guardas'}</p>
             </div>
 
             <div className="flex touch-pan-x gap-4 overflow-x-auto overscroll-x-contain scroll-smooth px-5 pb-2 scrollbar-hide snap-x snap-mandatory" style={{ WebkitOverflowScrolling: 'touch' }}>
               {loading ? [1, 2, 3].map((item) => <div key={item} className="h-[220px] w-[250px] shrink-0 animate-pulse rounded-[28px] bg-neutral-200 snap-start" />) : suggestedPlaces.map((place) => (
-                <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
+                <button data-home-photo-card type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
                   <img src={place.images[0]} alt={place.name} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
                   <div className="absolute left-4 right-4 top-4 flex items-center justify-between">
                     <span className="rounded-full bg-black/35 px-3 py-1 text-xs font-semibold backdrop-blur-sm">{place.category}</span>
-                    {getBookmarkedPlaceIds().includes(place.id) && <Bookmark className="h-4 w-4 fill-white drop-shadow" />}
+                    {bookmarkedPlaceIds.includes(place.id) && <Bookmark className="h-4 w-4 fill-white drop-shadow" />}
                   </div>
                   <div className="absolute bottom-4 left-4 right-4">
                     <h3 className="line-clamp-2 text-lg font-bold leading-tight"><VerifiedBusinessName name={place.name}/></h3>
@@ -1154,7 +1140,7 @@ export default function App() {
               <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Vuelve rápido a los negocios que visitaste</p>
             </div>
             {recentlyViewedPlaces.length ? <div className="flex touch-pan-x snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain scroll-smooth px-5 pb-2 scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
-              {recentlyViewedPlaces.map((place) => <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-neutral-200 text-left text-white shadow-sm transition-transform active:scale-[0.98]">
+              {recentlyViewedPlaces.map((place) => <button data-home-photo-card type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-neutral-200 text-left text-white shadow-sm transition-transform active:scale-[0.98]">
                 {place.images?.[0] ? <img src={place.images[0]} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 flex items-center justify-center bg-[#303135]"><Store className="h-12 w-12 text-white/25"/></div>}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
                 <span className="absolute left-4 top-4 rounded-full bg-black/35 px-3 py-1 text-xs font-semibold backdrop-blur-sm">{place.category}</span>
@@ -1170,7 +1156,7 @@ export default function App() {
               <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Lo que la comunidad está buscando y visitando</p>
             </div>
             <div className="flex touch-pan-x snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain scroll-smooth px-5 pb-2 scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
-              {popularPlaces.map((place) => <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[30px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
+              {popularPlaces.map((place) => <button data-home-photo-card type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[30px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
                 <img src={place.images[0]} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
                 <span className="absolute left-4 top-4 inline-flex items-center gap-1 rounded-full bg-[#7773e8] px-2.5 py-1 text-[11px] font-bold text-white shadow-[0_4px_12px_rgba(38,33,120,.25)]"><Flame className="h-3.5 w-3.5 fill-white"/>En tendencia</span>
@@ -1187,7 +1173,7 @@ export default function App() {
               <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Negocios agregados recientemente</p>
             </div>
             {recentlyAddedPlaces.length ? <div className="flex touch-pan-x snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain scroll-smooth px-5 pb-2 scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
-              {recentlyAddedPlaces.map((place) => <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
+              {recentlyAddedPlaces.map((place) => <button data-home-photo-card type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-suggested-card relative h-[220px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
                 {place.images?.[0] ? <img src={place.images[0]} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 flex items-center justify-center bg-[#303135]"><Store className="h-12 w-12 text-white/25"/></div>}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent" />
                 <span className="absolute left-4 top-4 bg-[#1a73e8] px-2.5 py-1 text-[11px] font-bold text-white">NUEVO</span>
@@ -1203,7 +1189,7 @@ export default function App() {
               <p className="mt-0.5 text-[15px] font-medium text-neutral-500">Tus negocios guardados</p>
             </div>
             {favoritePlaces.length ? <div className="flex touch-pan-x gap-3 overflow-x-auto overscroll-x-contain scroll-smooth px-5 pb-2 scrollbar-hide snap-x snap-mandatory" style={{ WebkitOverflowScrolling: 'touch' }}>
-              {favoritePlaces.map((place) => <button type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-favorite-card relative h-[150px] w-[190px] shrink-0 snap-start overflow-hidden rounded-[24px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
+              {favoritePlaces.map((place) => <button data-home-photo-card type="button" key={place.id} onClick={() => { setSelectedCategory(null); setSelectedBusiness(place); }} className="ck-home-favorite-card relative h-[150px] w-[190px] shrink-0 snap-start overflow-hidden rounded-[24px] bg-neutral-200 text-left text-white shadow-sm active:scale-[0.98] transition-transform">
                 {place.images?.[0] && <img src={place.images[0]} alt={place.name} loading="lazy" className="absolute inset-0 h-full w-full object-cover"/>}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent"/>
                 <Bookmark className="absolute right-3 top-3 h-4 w-4 fill-white drop-shadow"/>
@@ -1251,7 +1237,7 @@ export default function App() {
                       setSelectedCategory(null);
                       setSelectedBusiness(place);
                     }}
-                    className="ck-app-card rounded-[26px] absolute w-[85%] h-full bg-white cursor-pointer p-[5px]"
+                    data-home-photo-card className="ck-app-card rounded-[26px] absolute w-[85%] h-full bg-white cursor-pointer p-[5px]"
                     role="button"
                     tabIndex={0}
                     onKeyDown={(event) => {
@@ -1338,15 +1324,15 @@ export default function App() {
       )}
 
         {activeTab === 'explorar' && <motion.div key="explore-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={null}><BusinessExplorePage places={mockPlaces} directoryVersion={directoryVersion} onSelectBusiness={(business) => setSelectedBusiness(business)} onOpenSearch={(query) => { setSearchQuery(query || ''); setShowSearch(true); }}/></React.Suspense></motion.div>}
-        {activeTab === 'turismo' && <motion.main key="turismo-page" aria-label="Turismo" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 1.005 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={reduceMotion ? { duration: .12 } : { duration: .28, ease: 'easeOut' }} className={`relative ${tourismStarted ? 'h-dvh' : 'tourism-landing-fullbleed'} w-full overflow-hidden bg-black`}>
+        {activeTab === 'turismo' && <motion.main data-tourism-landing={!tourismStarted || undefined} key="turismo-page" aria-label="Turismo" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 1.005 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={reduceMotion ? { duration: .12 } : { duration: .28, ease: 'easeOut' }} className={`relative ${tourismStarted ? 'h-dvh' : 'tourism-landing-fullbleed'} w-full overflow-hidden bg-black`}>
           {tourismStarted ? <React.Suspense fallback={<div className="min-h-dvh bg-black"/>}><TourismArticleCarousel initialArticleSlug={tourismArticleSlug} onBack={() => setTourismStarted(false)} onOpenArticle={openArticleReader}/></React.Suspense> : <>
           <img src="https://res.cloudinary.com/dwthgcx5j/image/upload/v1792360806/Golden_Hour_Colonial_Plaza_aqcowh.png" alt="" aria-hidden="true" className="absolute inset-0 h-full min-h-dvh w-full object-contain object-center"/>
           <div aria-hidden="true" className="tourism-progressive-blur"/>
-          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-[360px] bg-gradient-to-t from-black/80 via-black/30 to-transparent"/>
-          <div className="absolute inset-x-0 bottom-[calc(92px+env(safe-area-inset-bottom,0px))] z-10 mx-auto flex w-full max-w-md flex-col items-center px-6 text-center text-white">
+          <div data-tourism-landing-overlay aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-[360px] bg-gradient-to-t from-black/80 via-black/30 to-transparent"/>
+          <div data-tourism-landing-content className="absolute inset-x-0 bottom-[calc(92px+env(safe-area-inset-bottom,0px))] z-10 mx-auto flex w-full max-w-md flex-col items-center px-6 text-center text-white">
             <h1 className="text-[clamp(34px,9vw,46px)] font-bold leading-[.98] tracking-[-.045em]">Bienvenido a Nochistlán</h1>
             <p className="mt-3 max-w-xs text-sm leading-relaxed text-white/80">Descubre la historia, naturaleza y cultura de nuestro pueblo mágico.</p>
-            <button type="button" onClick={() => setTourismStarted(true)} className="mt-6 flex h-12 w-full max-w-[280px] items-center justify-center rounded-full border-0 bg-white/[.18] px-6 text-sm font-semibold text-white shadow-[0_8px_28px_rgba(0,0,0,.2)] outline-none backdrop-blur-xl transition-colors hover:bg-white/[.24] active:scale-[.98]">Comenzar</button>
+            <button data-tourism-start type="button" onClick={() => setTourismStarted(true)} className="mt-6 flex h-12 w-full max-w-[280px] items-center justify-center rounded-full border-0 bg-white/[.18] px-6 text-sm font-semibold text-white shadow-[0_8px_28px_rgba(0,0,0,.2)] outline-none backdrop-blur-xl transition-colors hover:bg-white/[.24] active:scale-[.98]">Comenzar</button>
             <p className="mt-4 text-[10px] font-medium tracking-wide text-white/65">Turismo local · Nochistlán, Zacatecas</p>
           </div>
           </>}
@@ -1380,7 +1366,7 @@ export default function App() {
           </motion.section>
         </>}
       </AnimatePresence>
-      <AnimatePresence>{legalDocument && <LegalPage document={legalDocument} onClose={() => { setLegalDocument(null); window.history.replaceState({}, '', '/'); }}/>}</AnimatePresence>
+      <AnimatePresence>{legalDocument && <React.Suspense fallback={null}><LegalPage document={legalDocument} onClose={() => { setLegalDocument(null); window.history.replaceState({}, '', '/'); }}/></React.Suspense>}</AnimatePresence>
 
       {/* Bottom Navigation & Search */}
       {activeTab !== 'ask-nochi' && activeTab !== 'guias' && !showAdminPage && !legalDocument && (

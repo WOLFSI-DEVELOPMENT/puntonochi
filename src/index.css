@@ -1,5 +1,139 @@
 @import "tailwindcss";
 
+#app-root[data-home-theme="light"] [class*="text-neutral-500"],
+#app-root[data-home-theme="light"] .text-neutral-500 {
+  color: #667085 !important;
+}
+#app-root[data-home-theme="light"] [class*="text-neutral-400"],
+#app-root[data-home-theme="light"] .text-neutral-400 {
+  color: #747b88 !important;
+}
+#app-root[data-home-theme="light"] [class*="bg-neutral-50"],
+#app-root[data-home-theme="light"] .bg-neutral-50,
+#app-root[data-home-theme="light"] [class*="bg-neutral-100"],
+#app-root[data-home-theme="light"] .bg-neutral-100 {
+  background-color: #f1f2f4 !important;
+  color: #343a46 !important;
+}
+#app-root[data-home-theme="light"] [class*="bg-neutral-200"],
+#app-root[data-home-theme="light"] .bg-neutral-200 {
+  background-color: #f1f2f4 !important;
+}
+#app-root[data-home-theme="light"] [data-home-header-glow] {
+  background: linear-gradient(to bottom, rgba(255,255,255,.97), rgba(255,255,255,.76) 58%, transparent) !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+#app-root[data-home-theme="light"] [data-home-controls] {
+  background: #f1f2f4 !important;
+  box-shadow: 0 2px 12px rgba(20,30,50,.08);
+}
+#app-root[data-home-theme="light"] [data-home-controls] button,
+#app-root[data-home-theme="light"] [data-home-weather-control] {
+  color: #374151 !important;
+}
+#app-root[data-home-theme="light"] [data-home-controls] > span {
+  background: rgba(55,65,81,.18) !important;
+}
+#app-root[data-home-theme="light"] [data-home-weather-control] {
+  background: #f1f2f4 !important;
+  box-shadow: 0 2px 12px rgba(20,30,50,.08);
+}
+#app-root[data-home-theme="light"] [data-home-brand],
+#app-root[data-home-theme="light"] [data-home-title] {
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-brand] > span:first-child {
+  background: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-subtitle] {
+  color: #667085 !important;
+}
+#app-root[data-home-theme="light"] [data-home-search] {
+  background: #f1f2f4 !important;
+  color: #667085 !important;
+  box-shadow: 0 2px 14px rgba(20,30,50,.07);
+}
+#app-root[data-home-theme="light"] [data-home-search] svg {
+  color: #667085 !important;
+}
+#app-root[data-home-theme="light"] [data-home-chip] {
+  background: #f1f2f4 !important;
+  color: #343a46 !important;
+  box-shadow: 0 1px 8px rgba(20,30,50,.06);
+}
+#app-root[data-home-theme="light"] [data-home-chip] svg {
+  color: #555f70 !important;
+}
+#app-root[data-home-theme="light"] [data-home-daily] {
+  background: #f1f2f4 !important;
+  color: #202124 !important;
+  box-shadow: 0 8px 26px rgba(20,30,50,.08);
+}
+#app-root[data-home-theme="light"] [data-home-neutral-panel] * {
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-neutral-panel] .text-white\/45,
+#app-root[data-home-theme="light"] [data-home-neutral-panel] .text-white\/40 {
+  color: #747b88 !important;
+}
+#app-root[data-home-theme="light"] [data-home-neutral-panel] button {
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-profile-control] {
+  background: #f1f2f4 !important;
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-timer] {
+  border-color: #e1e3e6 !important;
+  background: #f1f2f4 !important;
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-timer] span {
+  color: #374151 !important;
+}
+#app-root[data-home-theme="light"] [data-home-weather-panel] {
+  background: #f1f2f4 !important;
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-weather-panel] * {
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-weather-panel] .text-white\/65,
+#app-root[data-home-theme="light"] [data-home-weather-panel] .text-white\/55 {
+  color: #667085 !important;
+}
+#app-root[data-home-theme="light"] [data-home-weather-panel] .text-amber-200 {
+  color: #b7791f !important;
+}
+#app-root[data-home-theme="light"] [data-home-photo-card] {
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-photo-card] .bg-gradient-to-t {
+  background: linear-gradient(to top, rgba(255,255,255,.96), rgba(255,255,255,.55) 44%, rgba(255,255,255,.04) 100%) !important;
+}
+#app-root[data-home-theme="light"] [data-home-photo-card] :is(h3, p, span) {
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-photo-card] [class*="bg-black"] {
+  background: rgba(241,242,244,.9) !important;
+}
+#app-root[data-home-theme="light"] [data-home-photo-card] [class*="bg-[#7773e8]"],
+#app-root[data-home-theme="light"] [data-home-photo-card] [class*="bg-[#1a73e8]"] {
+  background: #e3e5e8 !important;
+}
+#app-root[data-home-theme="light"] [data-home-category-card] {
+  background: #f1f2f4 !important;
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-category-card] p {
+  color: #667085 !important;
+}
+#app-root[data-home-theme="light"] [data-home-screen] .home-footer {
+  background: #f1f2f4 !important;
+  color: #202124 !important;
+}
+
 .tourism-progressive-blur {
   position: absolute;
   z-index: 1;
@@ -14,8 +148,11 @@
 /* The app root reserves the device safe area for normal pages. The tourism
    welcome screen is edge-to-edge, so cancel that inset explicitly. */
 .tourism-landing-fullbleed {
-  margin-top: calc(-1 * env(safe-area-inset-top, 0px));
-  height: calc(100dvh + env(safe-area-inset-top, 0px));
+  margin-top: 0;
+  height: 100dvh;
+}
+#app-root[data-active-tab="turismo"] {
+  padding-top: 0 !important;
 }
 
 .youtube-short-player iframe {

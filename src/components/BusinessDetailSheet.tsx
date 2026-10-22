@@ -8,10 +8,28 @@ import CornerKit from '@cornerkit/core';
 import { CommunityActionsSheet } from './CommunityActionsSheet';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 import { VerifiedBusinessName } from './VerifiedBusinessName';
+import { AdSenseUnit } from './AdSenseUnit';
 import { canHypePlaceToday, getTotalHypes, HYPES_UPDATED_EVENT, hypePlace } from '../hypes';
 
 const BusinessLocationMap = lazy(() => import('./BusinessLocationMap').then((module) => ({ default: module.BusinessLocationMap })));
 const BusinessMapOverlay = lazy(() => import('./BusinessLocationMap').then((module) => ({ default: module.BusinessMapOverlay })));
+
+function BusinessPhoto({ place, className }: { place: Place; className: string }) {
+  const candidates = [...(place.images || []), ...(place.communityPosts || []).map((post) => post.imageUrl), place.logo]
+    .filter((image): image is string => Boolean(image?.trim()))
+    .filter((image, index, all) => all.indexOf(image) === index);
+  const [imageIndex, setImageIndex] = useState(0);
+  useEffect(() => setImageIndex(0), [place.id]);
+  const src = candidates[imageIndex];
+
+  if (!src) {
+    return <span aria-hidden="true" className={`${className} grid place-items-center bg-[#e5e7eb] text-sm font-bold text-[#4b5563]`}>
+      {place.name.trim().split(/\s+/).slice(0, 2).map((word) => word[0]).join('').toLocaleUpperCase('es-MX')}
+    </span>;
+  }
+
+  return <img key={`${place.id}-${imageIndex}`} src={src} alt="" aria-hidden="true" referrerPolicy="no-referrer" onError={() => setImageIndex((index) => index + 1)} className={className} />;
+}
 
 function DeferredBusinessLocationMap({ place }: { place: Place }) {
   const sectionRef = useRef<HTMLElement>(null);
@@ -410,7 +428,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
         exit={{ y: "100%" }}
         transition={{ type: 'tween', duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
         {...detailDrag}
-        data-no-tab-swipe data-desktop-sheet="side-right" data-business-sheet-squircle
+        data-no-tab-swipe data-desktop-sheet="side-right" data-business-sheet-squircle data-business-detail-sheet
         className="fixed inset-x-0 bottom-0 z-[61] h-[min(92dvh,900px)] max-h-[calc(100dvh-env(safe-area-inset-top))] overflow-hidden rounded-t-[32px] [corner-shape:squircle] bg-[#171717] flex flex-col [will-change:transform]"
       >
         <SheetDragHandle controls={detailDrag.dragControls} tone="dark" className="absolute inset-x-0 top-0 z-20" />
@@ -419,7 +437,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
           <button type="button" data-external-url="https://www.tripadvisor.com.mx/Hotel_Review-g3181083-d21337544-Reviews-Hotel_Nochistlan-Nochistlan_Central_Mexico_and_Gulf_Coast.html" className="absolute bottom-[max(18px,env(safe-area-inset-bottom))] left-5 right-5 z-20 flex h-12 items-center justify-center rounded-full bg-[#1683f8] text-[15px] font-bold text-white transition-colors hover:bg-[#0d74e8] active:scale-[.99]">Reservar en TripAdvisor</button>
         </>}
 
-        <div data-no-tab-swipe className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-8">
+        <div data-no-tab-swipe className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-24">
           {/* Hero Section */}
           <div className="relative w-full h-[240px]">
             <img 
@@ -450,7 +468,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
 
             {/* Logo */}
             <div className="absolute -bottom-10 left-5 z-10 w-20 h-20 rounded-full border-4 border-[#171717] bg-[#292a2d] overflow-hidden">
-              <img src={place.logo} alt={place.name} className="w-full h-full object-cover" />
+              <BusinessPhoto place={place} className="w-full h-full object-cover" />
             </div>
           </div>
 
@@ -646,6 +664,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
                 </button>)}
               </div>
             </section>}
+            <AdSenseUnit placement="business-detail-bottom" />
           </div>
         </div>
       </motion.div>
@@ -793,7 +812,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
               data-desktop-sheet="popup" className="fixed inset-x-4 bottom-8 z-[71] bg-white rounded-3xl p-6 shadow-2xl flex flex-col items-center text-center"
             >
               <div className="w-20 h-20 rounded-full border-4 border-neutral-100 bg-white overflow-hidden shadow-sm mb-4">
-                <img src={place.logo} alt={place.name} className="w-full h-full object-cover" />
+                <BusinessPhoto place={place} className="w-full h-full object-cover" />
               </div>
               <h3 className="font-bold text-xl text-neutral-900 mb-2">Sitio Externo</h3>
               <p className="text-neutral-500 text-[15px] leading-snug mb-6 px-2">

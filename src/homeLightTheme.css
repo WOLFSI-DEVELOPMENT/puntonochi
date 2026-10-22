@@ -1,0 +1,441 @@
+/* Styles for the optional Home light theme. Kept separate from dark UI rules. */
+html[data-app-theme="light"] { background: #fff; }
+#app-root[data-home-theme="light"] {
+  background: #fff !important;
+  color: #202124 !important;
+}
+
+#app-root[data-home-theme="light"] [data-home-screen] {
+  color: #202124 !important;
+}
+
+/* Business details opens above Home, so keep its theme scoped to this sheet. */
+#app-root[data-app-theme="light"] [data-business-detail-sheet] {
+  background: #fff !important;
+  color: #202124 !important;
+}
+#app-root[data-app-theme="light"] [data-business-detail-sheet] > div[data-no-tab-swipe] {
+  background: #fff !important;
+}
+#app-root[data-app-theme="light"] [data-business-detail-sheet] > div[data-no-tab-swipe] > .relative.z-\[1\] {
+  background: #fff !important;
+}
+#app-root[data-app-theme="light"] [data-business-detail-sheet] h1 {
+  color: #000 !important;
+}
+#app-root[data-app-theme="light"] [data-business-detail-sheet] [class~="bg-[#171717]"],
+#app-root[data-app-theme="light"] [data-business-detail-sheet] [class~="bg-[#202124]"],
+#app-root[data-app-theme="light"] [data-business-detail-sheet] [class~="bg-[#292a2d]"],
+#app-root[data-app-theme="light"] [data-business-detail-sheet] [class~="bg-[#2b2c30]"] {
+  background-color: #f1f2f4 !important;
+}
+#app-root[data-app-theme="light"] [data-business-detail-sheet] [data-suggested-business] {
+  background-color: #f1f2f4 !important;
+}
+#app-root[data-app-theme="light"] [data-business-detail-sheet] [data-suggested-business] > div:last-child {
+  background: #f1f2f4 !important;
+}
+#app-root[data-app-theme="light"] [data-business-detail-sheet] [class~="text-white"],
+#app-root[data-app-theme="light"] [data-business-detail-sheet] [class*="text-white/"] {
+  color: #000 !important;
+}
+#app-root[data-app-theme="light"] [data-business-detail-sheet] [class*="bg-black/40"] {
+  color: #fff !important;
+}
+#app-root[data-app-theme="light"] [data-business-detail-sheet] [class*="border-[#171717]"] {
+  border-color: #fff !important;
+}
+#app-root[data-app-theme="light"] [data-business-detail-sheet] [class*="bg-gradient-to-b"] {
+  background-image: linear-gradient(to bottom, transparent, rgba(255,255,255,.58), #fff) !important;
+}
+#app-root[data-app-theme="light"] [data-business-detail-sheet] [class*="bg-gradient-to-t"] {
+  background-image: linear-gradient(to top, rgba(255,255,255,.84), rgba(255,255,255,.36), transparent) !important;
+}
+
+/* Profile and sign-in dialogs use the same light surfaces as the rest of the app. */
+#app-root[data-app-theme="light"] [data-profile-sheet],
+#app-root[data-app-theme="light"] [data-account-sheet] {
+  background: #fff !important;
+  color: #111 !important;
+  box-shadow: 0 18px 60px rgba(20,30,50,.18) !important;
+}
+#app-root[data-app-theme="light"] [data-profile-sheet] > div:first-child {
+  border-color: #e5e7eb !important;
+}
+#app-root[data-app-theme="light"] [data-profile-sheet] [class~="bg-[#292a2d]"],
+#app-root[data-app-theme="light"] [data-account-sheet] [class~="bg-[#292a2d]"],
+#app-root[data-app-theme="light"] [data-account-sheet] [class~="bg-[#151618]"],
+#app-root[data-app-theme="light"] [data-profile-sheet] [class~="bg-[#202124]"],
+#app-root[data-app-theme="light"] [data-account-sheet] [class~="bg-[#202124]"] {
+  background: #f1f2f4 !important;
+}
+#app-root[data-app-theme="light"] [data-profile-sheet] [class*="text-white/"],
+#app-root[data-app-theme="light"] [data-account-sheet] [class*="text-white/"] {
+  color: #4b5563 !important;
+}
+#app-root[data-app-theme="light"] [data-profile-sheet] [class~="text-white"],
+#app-root[data-app-theme="light"] [data-account-sheet] [class~="text-white"] {
+  color: #111 !important;
+}
+#app-root[data-app-theme="light"] [data-profile-sheet] [class*="text-blue-200"],
+#app-root[data-app-theme="light"] [data-profile-sheet] [class*="text-blue-300"],
+#app-root[data-app-theme="light"] [data-account-sheet] [class*="text-blue-"] {
+  color: #2563eb !important;
+}
+#app-root[data-app-theme="light"] [data-profile-sheet] [class*="bg-blue-500"],
+#app-root[data-app-theme="light"] [data-account-sheet] [class*="bg-blue-500"] {
+  color: #fff !important;
+}
+/* Keep the primary phone sign-in action high contrast in light mode. */
+#app-root[data-app-theme="light"] [data-account-sheet] button[class*="bg-white"] {
+  background: #000 !important;
+  color: #fff !important;
+}
+#app-root[data-app-theme="light"] [data-account-sheet] button[class*="bg-white"] svg {
+  color: #fff !important;
+}
+#app-root[data-app-theme="light"] [data-profile-sheet] input,
+#app-root[data-app-theme="light"] [data-profile-sheet] select,
+#app-root[data-app-theme="light"] [data-account-sheet] input {
+  border-color: #d7dbe1 !important;
+  background-color: #f1f2f4 !important;
+  color: #111 !important;
+}
+#app-root[data-app-theme="light"] [data-profile-sheet] input::placeholder,
+#app-root[data-app-theme="light"] [data-account-sheet] input::placeholder {
+  color: #7b8491 !important;
+}
+#app-root[data-app-theme="light"] [data-profile-sheet] [data-sheet-close],
+#app-root[data-app-theme="light"] [data-account-sheet] [data-sheet-close] {
+  background: #eceef1 !important;
+  color: #202124 !important;
+}
+#app-root[data-app-theme="light"] [data-profile-sheet] [class*="border-white/"],
+#app-root[data-app-theme="light"] [data-account-sheet] [class*="border-white/"] {
+  border-color: #d7dbe1 !important;
+}
+#app-root[data-app-theme="light"] [data-profile-sheet] [class*="bg-white/"],
+#app-root[data-app-theme="light"] [data-account-sheet] [class*="bg-white/"] {
+  background-color: #e8eaed !important;
+}
+
+/* Explore shares the optional light palette, without changing dark mode. */
+#app-root[data-app-theme="light"] [data-explore-page] {
+  background: #fff !important;
+  color: #000 !important;
+}
+#app-root[data-app-theme="light"][data-active-tab="explorar"] {
+  background: #fff !important;
+}
+
+/* Turismo welcome and discovery screens use the light app canvas. */
+#app-root[data-app-theme="light"][data-active-tab="turismo"] {
+  background: #fff !important;
+  padding-top: 0 !important;
+}
+#app-root[data-app-theme="light"] [data-tourism-landing] {
+  background: #fff !important;
+}
+#app-root[data-app-theme="light"] [data-tourism-landing-overlay] {
+  background: linear-gradient(to top, rgba(255,255,255,.98), rgba(255,255,255,.78) 52%, transparent) !important;
+}
+#app-root[data-app-theme="light"] [data-tourism-landing-content] {
+  color: #111 !important;
+  text-shadow: none !important;
+}
+#app-root[data-app-theme="light"] [data-tourism-landing-content] p {
+  color: #424750 !important;
+}
+#app-root[data-app-theme="light"] [data-tourism-start] {
+  background: rgba(241,242,244,.92) !important;
+  color: #000 !important;
+  box-shadow: 0 5px 18px rgba(20,30,50,.1) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+}
+
+#app-root[data-app-theme="light"] [data-tourism-discovery] {
+  background: #fff !important;
+  color: #111 !important;
+}
+#app-root[data-app-theme="light"] [data-tourism-active-card] {
+  background: #f1f2f4 !important;
+  box-shadow: 0 18px 48px rgba(20,30,50,.16) !important;
+}
+#app-root[data-app-theme="light"] [data-tourism-active-card] > button:first-child > span[aria-hidden="true"]:not(.tourism-card-progressive-blur) {
+  background: linear-gradient(to bottom, rgba(255,255,255,.08) 0%, transparent 38%, rgba(241,242,244,.84) 100%) !important;
+}
+#app-root[data-app-theme="light"] [data-tourism-active-card] .tourism-card-progressive-blur {
+  background: linear-gradient(to top, rgba(241,242,244,.9), rgba(241,242,244,.25) 65%, transparent);
+}
+#app-root[data-app-theme="light"] [data-tourism-card-title] {
+  color: #111 !important;
+  text-shadow: 0 1px 8px rgba(255,255,255,.65) !important;
+}
+#app-root[data-app-theme="light"] [data-tourism-card-footer] {
+  background: linear-gradient(to top, #f1f2f4 0%, rgba(241,242,244,.96) 68%, transparent 100%) !important;
+}
+#app-root[data-app-theme="light"] [data-tourism-card-footer] [class*="text-white/"] {
+  color: #424750 !important;
+}
+#app-root[data-app-theme="light"] [data-tourism-card-footer] [class*="bg-white/"] {
+  background: #e1e4e8 !important;
+  color: #202124 !important;
+}
+#app-root[data-app-theme="light"] [data-tourism-card-bookmark] {
+  background: rgba(241,242,244,.92) !important;
+  color: #111 !important;
+  box-shadow: 0 2px 10px rgba(20,30,50,.15);
+}
+#app-root[data-app-theme="light"] [data-tourism-discovery] .tourism-discovery-background img {
+  filter: blur(16px) brightness(1.08) saturate(.85) !important;
+}
+#app-root[data-app-theme="light"] [data-tourism-discovery-overlay] {
+  background: rgba(255,255,255,.55) !important;
+}
+#app-root[data-app-theme="light"] [data-tourism-back],
+#app-root[data-app-theme="light"] [data-tourism-label] {
+  background: rgba(255,255,255,.84) !important;
+  color: #202124 !important;
+  box-shadow: 0 2px 12px rgba(20,30,50,.08);
+}
+#app-root[data-app-theme="light"] [data-tourism-hint] {
+  color: #343a46 !important;
+}
+#app-root[data-app-theme="light"] [data-tourism-pagination] button[aria-current="step"] {
+  background: #202124 !important;
+}
+#app-root[data-app-theme="light"] [data-tourism-pagination] button:not([aria-current="step"]) {
+  background: #b9bec7 !important;
+}
+#app-root[data-app-theme="light"] [data-tourism-discovery-footer] {
+  background: linear-gradient(to top, rgba(255,255,255,.9), transparent) !important;
+}
+#app-root[data-app-theme="light"] [data-explore-page] [class~="text-white"],
+#app-root[data-app-theme="light"] [data-explore-page] [class*="text-white/"] {
+  color: #202124 !important;
+}
+#app-root[data-app-theme="light"] [data-explore-page] [data-explore-card] [class*="bg-black/55"] {
+  color: #fff !important;
+}
+#app-root[data-app-theme="light"] [data-explore-page] [data-explore-card] {
+  background: #f1f2f4 !important;
+  box-shadow: 0 2px 10px rgba(20,30,50,.07) !important;
+  --tw-ring-color: transparent !important;
+}
+#app-root[data-app-theme="light"] [data-explore-page] [data-explore-card-content] {
+  background: #f1f2f4 !important;
+  color: #000 !important;
+}
+#app-root[data-app-theme="light"] [data-explore-page] [data-explore-card-content] [class~="text-white"],
+#app-root[data-app-theme="light"] [data-explore-page] [data-explore-card-content] [class*="text-white/"] {
+  color: #000 !important;
+}
+#app-root[data-app-theme="light"] [data-explore-page] > div:first-child label {
+  background: #f1f2f4 !important;
+  color: #424750 !important;
+}
+#app-root[data-app-theme="light"] [data-explore-page] input {
+  color: #000 !important;
+}
+#app-root[data-app-theme="light"] [data-explore-page] input::placeholder {
+  color: #747b88 !important;
+}
+#app-root[data-app-theme="light"] [data-explore-page] > section > div > span {
+  color: #667085 !important;
+}
+#app-root[data-app-theme="light"] [data-explore-page] [class*="bg-white/"] {
+  background-color: #f1f2f4 !important;
+  color: #343a46 !important;
+}
+
+/* PuntoShorts keeps video controls over the media, but uses a white page shell. */
+#app-root[data-app-theme="light"][data-active-tab="puntoshorts"] [data-shorts-page],
+#app-root[data-app-theme="light"][data-active-tab="puntoshorts"] [data-shorts-frame] {
+  background-color: #fff !important;
+}
+#app-root[data-app-theme="light"][data-active-tab="puntoshorts"] [data-shorts-ambient] {
+  display: none !important;
+}
+#app-root[data-app-theme="light"] .pn-progressive-mobile .lgn-tab[aria-selected="true"] {
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+#app-root[data-app-theme="light"] .pn-progressive-mobile .lgn-tab[aria-selected="true"] > span[aria-hidden="true"] {
+  display: none !important;
+}
+
+#app-root[data-app-theme="light"] .pn-progressive-mobile::before {
+  background: linear-gradient(to top, rgba(255,255,255,.98), rgba(255,255,255,.88) 58%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  backdrop-filter: blur(18px) saturate(145%);
+}
+
+/* Active destinations stay icon-only, without a pill beneath the icon. */
+#app-root[data-app-theme="light"] .pn-progressive-mobile .lgn-tab {
+  color: #c4c7cc !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+#app-root[data-app-theme="light"] .pn-progressive-mobile .lgn-tab[aria-selected="true"] {
+  color: #000 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+#app-root[data-app-theme="light"] .pn-progressive-mobile .lgn-tab .lgn-ico,
+#app-root[data-app-theme="light"] .pn-progressive-mobile .lgn-tab svg {
+  color: #c4c7cc !important;
+  opacity: 1 !important;
+}
+#app-root[data-app-theme="light"] .pn-progressive-mobile .lgn-tab svg path {
+  fill: #c4c7cc !important;
+}
+#app-root[data-app-theme="light"] .pn-progressive-mobile .lgn-tab[aria-selected="true"] .lgn-ico,
+#app-root[data-app-theme="light"] .pn-progressive-mobile .lgn-tab[aria-selected="true"] svg {
+  color: #000 !important;
+}
+#app-root[data-app-theme="light"] .pn-progressive-mobile .lgn-tab[aria-selected="true"] svg path {
+  fill: #000 !important;
+}
+
+#app-root[data-home-theme="light"] [class*="text-neutral-500"],
+#app-root[data-home-theme="light"] .text-neutral-500 {
+  color: #667085 !important;
+}
+#app-root[data-home-theme="light"] [class*="text-neutral-400"],
+#app-root[data-home-theme="light"] .text-neutral-400 {
+  color: #747b88 !important;
+}
+#app-root[data-home-theme="light"] [class*="bg-neutral-50"],
+#app-root[data-home-theme="light"] .bg-neutral-50,
+#app-root[data-home-theme="light"] [class*="bg-neutral-100"],
+#app-root[data-home-theme="light"] .bg-neutral-100 {
+  background-color: #f1f2f4 !important;
+  color: #343a46 !important;
+}
+#app-root[data-home-theme="light"] [class*="bg-neutral-200"],
+#app-root[data-home-theme="light"] .bg-neutral-200 {
+  background-color: #f1f2f4 !important;
+}
+#app-root[data-home-theme="light"] [data-home-header-glow] {
+  background: linear-gradient(to bottom, rgba(255,255,255,.97), rgba(255,255,255,.76) 58%, transparent) !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+#app-root[data-home-theme="light"] [data-home-controls] {
+  background: #f1f2f4 !important;
+  box-shadow: 0 2px 12px rgba(20,30,50,.08);
+}
+#app-root[data-home-theme="light"] [data-home-controls] button,
+#app-root[data-home-theme="light"] [data-home-weather-control] {
+  color: #374151 !important;
+}
+#app-root[data-home-theme="light"] [data-home-controls] > span {
+  background: rgba(55,65,81,.18) !important;
+}
+#app-root[data-home-theme="light"] [data-home-weather-control] {
+  background: #f1f2f4 !important;
+  box-shadow: 0 2px 12px rgba(20,30,50,.08);
+}
+#app-root[data-home-theme="light"] [data-home-brand],
+#app-root[data-home-theme="light"] [data-home-title] {
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-brand] > span:first-child {
+  background: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-subtitle] {
+  color: #667085 !important;
+}
+#app-root[data-home-theme="light"] [data-home-search] {
+  background: #f1f2f4 !important;
+  color: #667085 !important;
+  box-shadow: 0 2px 14px rgba(20,30,50,.07);
+}
+#app-root[data-home-theme="light"] [data-home-search] svg {
+  color: #667085 !important;
+}
+#app-root[data-home-theme="light"] [data-home-chip] {
+  background: #f1f2f4 !important;
+  color: #343a46 !important;
+  box-shadow: 0 1px 8px rgba(20,30,50,.06);
+}
+#app-root[data-home-theme="light"] [data-home-chip] svg {
+  color: #555f70 !important;
+}
+#app-root[data-home-theme="light"] [data-home-daily] {
+  background: #f1f2f4 !important;
+  color: #202124 !important;
+  box-shadow: 0 8px 26px rgba(20,30,50,.08);
+}
+#app-root[data-home-theme="light"] [data-home-neutral-panel] * {
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-neutral-panel] .text-white\/45,
+#app-root[data-home-theme="light"] [data-home-neutral-panel] .text-white\/40 {
+  color: #747b88 !important;
+}
+#app-root[data-home-theme="light"] [data-home-neutral-panel] button {
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-profile-control] {
+  background: #f1f2f4 !important;
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-timer] {
+  border-color: #e1e3e6 !important;
+  background: #f1f2f4 !important;
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-timer] span {
+  color: #374151 !important;
+}
+#app-root[data-home-theme="light"] [data-home-weather-panel] {
+  background: #f1f2f4 !important;
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-weather-panel] * {
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-weather-panel] .text-white\/65,
+#app-root[data-home-theme="light"] [data-home-weather-panel] .text-white\/55 {
+  color: #667085 !important;
+}
+#app-root[data-home-theme="light"] [data-home-weather-panel] .text-amber-200 {
+  color: #b7791f !important;
+}
+#app-root[data-home-theme="light"] [data-home-photo-card] {
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-photo-card] .bg-gradient-to-t {
+  background: linear-gradient(to top, rgba(255,255,255,.96), rgba(255,255,255,.55) 44%, rgba(255,255,255,.04) 100%) !important;
+}
+#app-root[data-home-theme="light"] [data-home-photo-card] :is(h3, p, span) {
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-photo-card] [class*="bg-black"] {
+  background: rgba(241,242,244,.9) !important;
+}
+#app-root[data-home-theme="light"] [data-home-photo-card] [class*="bg-[#7773e8]"],
+#app-root[data-home-theme="light"] [data-home-photo-card] [class*="bg-[#1a73e8]"] {
+  background: #e3e5e8 !important;
+}
+#app-root[data-home-theme="light"] [data-home-category-card] {
+  background: #f1f2f4 !important;
+  color: #202124 !important;
+}
+#app-root[data-home-theme="light"] [data-home-category-card] p {
+  color: #667085 !important;
+}
+#app-root[data-home-theme="light"] [data-home-screen] .home-footer {
+  background: #f1f2f4 !important;
+  color: #202124 !important;
+}

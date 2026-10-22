@@ -5,6 +5,9 @@ import { Place } from '../types';
 import CornerKit from '@cornerkit/core';
 import { VerifiedBusinessName } from './VerifiedBusinessName';
 import { AYUNTAMIENTO_SHORTS } from '../shortsData';
+import { getBookmarkedPlaceIds } from '../profileStorage';
+import { SEARCH_LEARNING_KEY, readSearchLearning } from '../searchLearning';
+import { AdSenseUnit } from './AdSenseUnit';
 
 const ASK_RECENTS_KEY = 'puntonochi-ask-nochi-recent-v1';
 const AskNochiMap = lazy(() => import('./BusinessLocationMap').then((module) => ({ default: module.BusinessLocationMap })));
@@ -45,6 +48,16 @@ function allWordsMatch(words: string[], text: string) {
 }
 
 const SEARCH_RECENTS_KEY = 'puntonochi-recent-searches-v1';
+const SEARCH_STOP_WORDS = new Set(['a', 'al', 'algun', 'algo', 'algunos', 'cerca', 'con', 'de', 'del', 'donde', 'el', 'en', 'la', 'las', 'lo', 'los', 'lugar', 'lugares', 'me', 'mi', 'necesito', 'negocio', 'negocios', 'para', 'por', 'puedo', 'que', 'quiero', 'quisiera', 'un', 'una', 'unos', 'unas', 'busco', 'buscar']);
+const SEARCH_INTENTS = [
+  { words: ['comer', 'comida', 'desayunar', 'desayuno', 'cenar', 'cena', 'tacos', 'antojo', 'hambre', 'restaurante', 'cafeteria', 'rico', 'rica', 'delicioso', 'deliciosa'], categories: ['restaur', 'comida', 'caf', 'panader', 'reposter', 'bar'] },
+  { words: ['dormir', 'hospedaje', 'hotel', 'alojamiento', 'hospedar'], categories: ['hotel', 'hosped', 'alojamiento', 'renta'] },
+  { words: ['visitar', 'turismo', 'pasear', 'atraccion', 'historia', 'turistico'], categories: ['turismo', 'iglesia', 'templo', 'parque', 'plaza', 'museo'] },
+  { words: ['salud', 'medicina', 'doctor', 'medico', 'farmacia', 'medicamento'], categories: ['farm', 'medic', 'salud', 'doctor', 'clinica'] },
+  { words: ['comprar', 'tienda', 'mercado', 'super', 'abarrotes'], categories: ['tienda', 'mercado', 'super', 'abarrote', 'compra'] },
+  { words: ['escuela', 'estudiar', 'colegio', 'educacion'], categories: ['escuel', 'colegio', 'educacion', 'universidad'] },
+];
+
 function shortSearchLabel(short: { id: string; title?: string; authorName?: string }) {
   if (short.title?.trim()) return short.title.trim();
   if (short.id === 'puntonochi-short-1') return 'Descubre Nochistlán';
@@ -58,8 +71,28 @@ function shortSearchLabel(short: { id: string; title?: string; authorName?: stri
 function readRecentSearches() {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(SEARCH_RECENTS_KEY) || '[]');
-    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim()).slice(0, 6) : [];
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).slice(0, 6) : [];
   } catch { return []; }
+}
+
+function rememberSearch(rawQuery: string, place?: Place) {
+  const query = rawQuery.trim().replace(/\s+/g, ' ');
+  if (query.length >= 2) {
+    const recent = readRecentSearches().filter((item) => normalizeSearchText(item) !== normalizeSearchText(query));
+    try { localStorage.setItem(SEARCH_RECENTS_KEY, JSON.stringify([query, ...recent].slice(0, 12))); } catch { /* Search stays usable when storage is unavailable. */ }
+  }
+  if (place) {
+    const learning = readSearchLearning();
+    const categoryKey = normalizeSearchText(place.category);
+    if (categoryKey) learning.categories[categoryKey] = (learning.categories[categoryKey] || 0) + 1;
+    learning.places[place.id] = (learning.places[place.id] || 0) + 1;
+    try { localStorage.setItem(SEARCH_LEARNING_KEY, JSON.stringify(learning)); } catch { /* Personalization is optional. */ }
+  }
+  window.dispatchEvent(new Event('puntonochi-search-history-updated'));
+}
+
+function categoryIntentMatches(word: string, category: string) {
+  return SEARCH_INTENTS.some((intent) => intent.words.includes(word) && intent.categories.some((keyword) => category.includes(keyword)));
 }
 
 function BusinessCard({ place, onSelect }: { place: Place; onSelect: (place: Place) => void }) {
@@ -365,8 +398,27 @@ export function SearchPage({ query, onClose, onSelectBusiness, onOpenEvents, onO
   const touchStartY = useRef<number | null>(null);
   const deferredQuery = useDeferredValue(query);
   const normalized = normalizeSearchText(deferredQuery);
-  const words = useMemo(() => normalized.split(/\s+/).filter(Boolean), [normalized]);
-  const recentSearches = useMemo(readRecentSearches, []);
+  const words = useMemo(() => normalized.split(/\s+/).filter((word) => word && !SEARCH_STOP_WORDS.has(word)), [normalized]);
+  const [recentSearches, setRecentSearches] = useState(readRecentSearches);
+  const [learning, setLearning] = useState(readSearchLearning);
+  const [bookmarkedIds, setBookmarkedIds] = useState(getBookmarkedPlaceIds);
+  useEffect(() => {
+    const refresh = () => { setRecentSearches(readRecentSearches()); setLearning(readSearchLearning()); setBookmarkedIds(getBookmarkedPlaceIds()); };
+    window.addEventListener('puntonochi-search-history-updated', refresh);
+    window.addEventListener('puntonochi-bookmarks-updated', refresh);
+    return () => { window.removeEventListener('puntonochi-search-history-updated', refresh); window.removeEventListener('puntonochi-bookmarks-updated', refresh); };
+  }, []);
+  const personalizedCategories = useMemo(() => {
+    const categories = new Map<string, { label: string; score: number }>();
+    places.forEach((place) => {
+      const key = normalizeSearchText(place.category);
+      if (!key) return;
+      const current = categories.get(key);
+      const score = learning.categories[key] || 0;
+      if (!current || score > current.score) categories.set(key, { label: place.category, score });
+    });
+    return [...categories.values()].sort((a, b) => b.score - a.score).slice(0, 5);
+  }, [places, learning]);
   const popularSuggestions = useMemo(() => [...places].sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.reviewCount || 0) - (a.reviewCount || 0)).slice(0, 5), [places]);
   useEffect(() => {
     let active = true;
@@ -395,23 +447,29 @@ export function SearchPage({ query, onClose, onSelectBusiness, onOpenEvents, onO
     place,
     name: normalizeSearchText(place.name),
     category: normalizeSearchText(place.category),
-    searchable: normalizeSearchText([place.name, place.category, place.subtitle, place.location, place.address].filter(Boolean).join(' ')),
+    searchable: normalizeSearchText([place.name, place.category, place.subtitle, place.location, place.address, ...(place.goodToKnow || [])].filter(Boolean).join(' ')),
   })), [places]);
 
   const results = useMemo(() => {
     if (!normalized) return [];
     return indexedPlaces.map(({ place, name, category, searchable }) => {
-      if (!allWordsMatch(words, searchable)) return null;
+      if (!words.length || !words.every((word) => fuzzyTokenMatch(word, searchable) || categoryIntentMatches(word, category))) return null;
       const score = (name === normalized ? 100 : name.startsWith(normalized) ? 60 : name.includes(normalized) ? 35 : 0)
         + (category === normalized ? 45 : category.includes(normalized) ? 25 : 0)
         + (words.filter((word) => name.includes(word)).length * 8)
+        + (words.filter((word) => categoryIntentMatches(word, category)).length * 18)
+        + Math.min(16, (learning.categories[category] || 0) * 2)
+        + Math.min(20, (learning.places[place.id] || 0) * 4)
+        + (bookmarkedIds.includes(place.id) ? 8 : 0)
         + (place.rating || 0)
         + Math.min(place.reviewCount || 0, 100) / 100;
       return { place, score };
     }).filter((match): match is { place: Place; score: number } => Boolean(match))
       .sort((a, b) => b.score - a.score)
       .map(({ place }) => place);
-  }, [indexedPlaces, normalized, words]);
+  }, [indexedPlaces, normalized, words, learning, bookmarkedIds]);
+
+  const similarRecentSearches = useMemo(() => recentSearches.filter((term) => normalized.length >= 2 && words.length > 0 && normalizeSearchText(term) !== normalized && (normalizeSearchText(term).includes(normalized) || words.some((word) => normalizeSearchText(term).split(/\s+/).some((recentWord) => fuzzyTokenMatch(word, recentWord))))).slice(0, 4), [recentSearches, normalized, words]);
 
   const matchingEvents = useMemo(() => events.filter((item) => allWordsMatch(words, normalizeSearchText([item.title, item.location, item.description].join(' ')))), [events, words]);
   const matchingShorts = useMemo(() => shorts.filter((item) => allWordsMatch(words, normalizeSearchText([item.id, shortSearchLabel(item), item.description, item.authorName, 'Ayuntamiento Nochistlán PuntoNochi'].join(' ')))), [shorts, words]);
@@ -436,7 +494,7 @@ export function SearchPage({ query, onClose, onSelectBusiness, onOpenEvents, onO
           <div className="flex items-center gap-2">
           <div role="search" className="flex h-[50px] min-w-0 flex-1 items-center gap-3 rounded-full bg-white/[.09] px-4 text-white/70 backdrop-blur-xl focus-within:bg-white/[.13]">
             <Search aria-hidden="true" className="h-[18px] w-[18px] shrink-0 text-white/65" />
-            <input value={query} onChange={(event) => onSearchTerm(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') onClose(); }} placeholder="Buscar en Nochistlán" aria-label="Buscar negocios, eventos, videos y perfiles" autoComplete="off" className="min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-white/40" />
+            <input value={query} onChange={(event) => onSearchTerm(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') onClose(); if (event.key === 'Enter') { rememberSearch(query); setRecentSearches(readRecentSearches()); } }} placeholder="Buscar en Nochistlán" aria-label="Buscar negocios, eventos, videos y perfiles" autoComplete="off" className="min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-white/40" />
             <button type="button" aria-label="Buscar por voz" title="Buscar por voz" onClick={() => window.dispatchEvent(new Event('puntonochi-open-voice-search'))} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/65 transition-colors hover:bg-white/[.1] hover:text-white active:scale-95"><Mic aria-hidden="true" className="h-[18px] w-[18px]" /></button>
             {query && <button type="button" aria-label="Borrar búsqueda" onClick={() => onSearchTerm('')} className="flex h-7 w-7 items-center justify-center rounded-full text-white/55 hover:bg-white/[.08]"><X className="h-4 w-4" /></button>}
           </div>
@@ -447,20 +505,23 @@ export function SearchPage({ query, onClose, onSelectBusiness, onOpenEvents, onO
           </div>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6">
-          {normalized.length < 2 ? <div className="space-y-5 pt-2 text-sm text-white/65">
+          {normalized.length < 2 || words.length === 0 ? <div className="space-y-5 pt-2 text-sm text-white/65">
             <p>{categoryScoped && categoryName ? `Busca negocios de ${categoryName}.` : 'Busca negocios, eventos, PuntoShorts y perfiles públicos.'}</p>
             {recentSearches.length > 0 && <div><p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/40"><Clock3 className="h-3.5 w-3.5"/>Búsquedas recientes</p><div className="flex flex-wrap gap-2">{recentSearches.map((term) => <button key={term} type="button" onClick={() => onSearchTerm(term)} className="rounded-full bg-white/[0.08] px-3 py-2 text-white/80 hover:bg-white/[0.13]">{term}</button>)}</div></div>}
-            {activeKind === 'businesses' && <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/40">Lugares populares</p><div className="flex flex-wrap gap-2">{popularSuggestions.map((place) => <button key={place.id} type="button" onClick={() => { onClose(); onSelectBusiness(place); }} className="rounded-full bg-white/[0.08] px-3 py-2 text-white/80 hover:bg-white/[0.13]">{place.name}</button>)}</div></div>}
+            {activeKind === 'businesses' && personalizedCategories.some((item) => item.score > 0) && <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/40">Según lo que sueles buscar</p><div className="flex flex-wrap gap-2">{personalizedCategories.filter((item) => item.score > 0).map((item) => <button key={item.label} type="button" onClick={() => onSearchTerm(item.label)} className="rounded-full bg-white/[0.08] px-3 py-2 text-white/80 hover:bg-white/[0.13]">{item.label}</button>)}</div></div>}
+            {activeKind === 'businesses' && <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/40">{personalizedCategories.some((item) => item.score > 0) ? 'También populares' : 'Lugares populares'}</p><div className="flex flex-wrap gap-2">{popularSuggestions.map((place) => <button key={place.id} type="button" onClick={() => { rememberSearch('', place); onClose(); onSelectBusiness(place); }} className="rounded-full bg-white/[0.08] px-3 py-2 text-white/80 hover:bg-white/[0.13]">{place.name}</button>)}</div></div>}
           </div> : <>
+          {similarRecentSearches.length > 0 && <div className="mb-3 pt-2"><p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-white/40">Tus búsquedas parecidas</p><div className="flex flex-wrap gap-2">{similarRecentSearches.map((term) => <button key={term} type="button" onClick={() => onSearchTerm(term)} className="rounded-full bg-white/[.08] px-3 py-1.5 text-xs text-white/75">{term}</button>)}</div></div>}
           <h1 className="mb-3 pt-2 text-sm font-semibold text-white/55">{activeKind === 'businesses' ? (categoryScoped && categoryName ? `${categoryName} · ${visibleCount}` : `Negocios · ${visibleCount}`) : `${({ events: 'Eventos', shorts: 'PuntoShorts', profiles: 'Perfiles públicos', businesses: 'Negocios' } as const)[activeKind]} · ${visibleCount}`}</h1>
           <div className="space-y-3">
-            {activeKind === 'businesses' && results.map((place) => <BusinessCard key={`place-${place.id}`} place={place} onSelect={(item) => { onClose(); onSelectBusiness(item); }} />)}
-            {activeKind === 'events' && matchingEvents.map((item) => <button type="button" key={`event-${item.id}`} onClick={() => { onClose(); onOpenEvents(); }} className="w-full overflow-hidden rounded-[24px] bg-[#292a2d] text-left"><div className="flex items-center gap-3 p-3">{item.imageUrl ? <img src={item.imageUrl} alt="" className="h-20 w-24 shrink-0 rounded-2xl object-cover"/> : <span className="flex h-20 w-24 shrink-0 items-center justify-center rounded-2xl bg-white/10"><CalendarDays className="h-6 w-6"/></span>}<span className="min-w-0"><span className="block font-bold">{item.title}</span><span className="mt-1 block text-xs text-white/60">{item.date}{item.time ? ` · ${item.time}` : ''}</span><span className="mt-1 block truncate text-xs text-white/45">{item.location}</span></span></div></button>)}
-            {activeKind === 'shorts' && matchingShorts.map((item) => <button type="button" key={`short-${item.id}`} onClick={() => { onClose(); onOpenShort(item.id); }} className="flex w-full items-center gap-3 rounded-[22px] bg-[#292a2d] p-3 text-left"><span className="flex h-16 w-12 shrink-0 items-center justify-center rounded-[15px] bg-white/[.08]"><Film className="h-5 w-5 text-white/70"/></span><span className="min-w-0"><span className="block truncate font-bold">{shortSearchLabel(item)}</span><span className="mt-1 block line-clamp-2 text-xs text-white/55">{item.description || item.authorName || 'Videos de Nochistlán'}</span></span></button>)}
-            {activeKind === 'profiles' && matchingProfiles.map((profile) => <button type="button" key={profile.id} onClick={() => { onClose(); onOpenProfile(profile.id); }} className="flex w-full items-center gap-3 rounded-[22px] bg-[#292a2d] p-3 text-left"><span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/[.1] text-base font-bold">{profile.picture ? <img src={profile.picture} alt="" className="h-full w-full object-cover"/> : profile.name.slice(0, 1).toUpperCase()}</span><span className="min-w-0"><span className="block truncate font-bold">{profile.name}</span><span className="mt-1 block truncate text-xs text-white/55">{profile.bio || 'Perfil público de PuntoNochi'}</span></span></button>)}
+            {activeKind === 'businesses' && results.map((place) => <BusinessCard key={`place-${place.id}`} place={place} onSelect={(item) => { rememberSearch(query, item); onClose(); onSelectBusiness(item); }} />)}
+            {activeKind === 'events' && matchingEvents.map((item) => <button type="button" key={`event-${item.id}`} onClick={() => { rememberSearch(query); onClose(); onOpenEvents(); }} className="w-full overflow-hidden rounded-[24px] bg-[#292a2d] text-left"><div className="flex items-center gap-3 p-3">{item.imageUrl ? <img src={item.imageUrl} alt="" className="h-20 w-24 shrink-0 rounded-2xl object-cover"/> : <span className="flex h-20 w-24 shrink-0 items-center justify-center rounded-2xl bg-white/10"><CalendarDays className="h-6 w-6"/></span>}<span className="min-w-0"><span className="block font-bold">{item.title}</span><span className="mt-1 block text-xs text-white/60">{item.date}{item.time ? ` · ${item.time}` : ''}</span><span className="mt-1 block truncate text-xs text-white/45">{item.location}</span></span></div></button>)}
+            {activeKind === 'shorts' && matchingShorts.map((item) => <button type="button" key={`short-${item.id}`} onClick={() => { rememberSearch(query); onClose(); onOpenShort(item.id); }} className="flex w-full items-center gap-3 rounded-[22px] bg-[#292a2d] p-3 text-left"><span className="flex h-16 w-12 shrink-0 items-center justify-center rounded-[15px] bg-white/[.08]"><Film className="h-5 w-5 text-white/70"/></span><span className="min-w-0"><span className="block truncate font-bold">{shortSearchLabel(item)}</span><span className="mt-1 block line-clamp-2 text-xs text-white/55">{item.description || item.authorName || 'Videos de Nochistlán'}</span></span></button>)}
+            {activeKind === 'profiles' && matchingProfiles.map((profile) => <button type="button" key={profile.id} onClick={() => { rememberSearch(query); onClose(); onOpenProfile(profile.id); }} className="flex w-full items-center gap-3 rounded-[22px] bg-[#292a2d] p-3 text-left"><span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/[.1] text-base font-bold">{profile.picture ? <img src={profile.picture} alt="" className="h-full w-full object-cover"/> : profile.name.slice(0, 1).toUpperCase()}</span><span className="min-w-0"><span className="block truncate font-bold">{profile.name}</span><span className="mt-1 block truncate text-xs text-white/55">{profile.bio || 'Perfil público de PuntoNochi'}</span></span></button>)}
             {visibleCount === 0 && <div className="rounded-[24px] bg-white/[0.06] px-4 py-7 text-center"><p className="text-sm font-semibold text-white/80">No encontramos resultados para “{deferredQuery.trim()}”.</p><p className="mt-1 text-sm text-white/55">Prueba con otras palabras.</p></div>}
           </div>
           </>}
+          <AdSenseUnit placement="search-bottom" />
         </div>
       </section>
     </motion.main>

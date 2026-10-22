@@ -35,7 +35,7 @@ export function HomeEventsSection({ onViewAll, onOpenEvent }: { onViewAll: () =>
       <button type="button" onClick={onViewAll} className="shrink-0 text-sm font-semibold text-[#1a73e8]">Ver todos</button>
     </div>
     <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 scrollbar-hide">
-      {loading ? [0, 1].map((item) => <div key={item} className="h-[190px] w-[250px] shrink-0 animate-pulse rounded-[24px] bg-neutral-200"/>) : events.slice(0, 8).map((event) => <button key={event.id} type="button" onClick={() => onOpenEvent(event.id)} className="group relative h-[190px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[24px] bg-[#25383e] text-left text-white">
+      {loading ? [0, 1].map((item) => <div key={item} className="h-[190px] w-[250px] shrink-0 animate-pulse rounded-[24px] bg-neutral-200"/>) : events.slice(0, 8).map((event) => <button data-home-photo-card key={event.id} type="button" onClick={() => onOpenEvent(event.id)} className="group relative h-[190px] w-[250px] shrink-0 snap-start overflow-hidden rounded-[24px] bg-[#25383e] text-left text-white">
         {event.imageUrl && <img src={event.imageUrl} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"/>}
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent"/>
         <span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-semibold backdrop-blur-xl"><CalendarDays className="h-3 w-3"/>{eventDay(event.date)}{event.time ? ` · ${event.time}` : ''}</span>

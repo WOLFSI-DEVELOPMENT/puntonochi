@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { LogOut, UserRound, X } from 'lucide-react';
-import { getNavDesign, setNavDesign, type NavDesign } from '../profileStorage';
+import { LogOut, Moon, Sun, UserRound, X } from 'lucide-react';
+import { getHomeTheme, getNavDesign, setHomeTheme, setNavDesign, type HomeTheme, type NavDesign } from '../profileStorage';
 import { getAppLanguage, setAppLanguage, type AppLanguage } from '../i18n';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 
@@ -17,15 +17,18 @@ export function SettingsSheet({ account, onClose, onRequireAuth }: { account: Ac
   const drag = useSheetDrag(onClose);
   const [language, setLanguage] = useState<AppLanguage>(getAppLanguage);
   const [navDesign, setCurrentNavDesign] = useState<NavDesign>(getNavDesign);
+  const [homeTheme, setCurrentHomeTheme] = useState<HomeTheme>(getHomeTheme);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     const onLanguage = (event: Event) => setLanguage((event as CustomEvent<{ language: AppLanguage }>).detail?.language || getAppLanguage());
     const onNav = () => setCurrentNavDesign(getNavDesign());
+    const onHomeTheme = (event: Event) => setCurrentHomeTheme((event as CustomEvent<{ theme: HomeTheme }>).detail?.theme || getHomeTheme());
     window.addEventListener('puntonochi-language-changed', onLanguage);
     window.addEventListener('puntonochi-nav-design-updated', onNav);
-    return () => { window.removeEventListener('puntonochi-language-changed', onLanguage); window.removeEventListener('puntonochi-nav-design-updated', onNav); };
+    window.addEventListener('puntonochi-home-theme-updated', onHomeTheme);
+    return () => { window.removeEventListener('puntonochi-language-changed', onLanguage); window.removeEventListener('puntonochi-nav-design-updated', onNav); window.removeEventListener('puntonochi-home-theme-updated', onHomeTheme); };
   }, []);
 
   useEffect(() => {
@@ -48,6 +51,7 @@ export function SettingsSheet({ account, onClose, onRequireAuth }: { account: Ac
 
   const setLanguageChoice = (next: AppLanguage) => { setLanguage(next); setAppLanguage(next); };
   const setNavigationChoice = (next: NavDesign) => { setCurrentNavDesign(next); setNavDesign(next); };
+  const setHomeThemeChoice = (next: HomeTheme) => { setCurrentHomeTheme(next); setHomeTheme(next); };
 
   return <>
     <motion.button data-sheet-close aria-label="Cerrar ajustes" onClick={onClose} className="fixed inset-0 z-[129] bg-black/60 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
@@ -65,6 +69,7 @@ export function SettingsSheet({ account, onClose, onRequireAuth }: { account: Ac
           <button type="button" aria-pressed={language === 'en'} onClick={() => setLanguageChoice('en')} className={`h-10 rounded-full text-sm font-semibold transition-colors ${language === 'en' ? 'bg-[#45464a] text-white' : 'text-white/55'}`}><span className="mr-2" aria-hidden="true">🇺🇸</span>English</button>
         </div></section>
         <section className="py-5"><div className="mb-3"><h3 className="text-sm font-semibold">Estilo de navegación</h3><p className="mt-1 text-xs text-white/45">Elige cómo quieres ver la barra inferior.</p></div><div className="grid grid-cols-3 rounded-full bg-[#2b2c2f] p-1" role="group" aria-label="Estilo de navegación">{navOptions.map((option) => <button key={option.id} type="button" aria-pressed={navDesign === option.id} onClick={() => setNavigationChoice(option.id)} className={`h-10 rounded-full px-2 text-xs font-semibold transition-colors ${navDesign === option.id ? 'bg-[#45464a] text-white' : 'text-white/55'}`}>{option.label}</button>)}</div></section>
+        <section className="py-5"><div className="mb-3"><h3 className="text-sm font-semibold">Apariencia</h3><p className="mt-1 text-xs text-white/45">El tema claro se aplica a las pantallas compatibles.</p></div><div className="grid grid-cols-2 rounded-full bg-[#2b2c2f] p-1" role="group" aria-label="Apariencia"><button type="button" aria-pressed={homeTheme === 'dark'} onClick={() => setHomeThemeChoice('dark')} className={`flex h-10 items-center justify-center gap-2 rounded-full text-sm font-semibold transition-colors ${homeTheme === 'dark' ? 'bg-[#45464a] text-white' : 'text-white/55'}`}><Moon className="h-4 w-4"/>Oscuro</button><button type="button" aria-pressed={homeTheme === 'light'} onClick={() => setHomeThemeChoice('light')} className={`flex h-10 items-center justify-center gap-2 rounded-full text-sm font-semibold transition-colors ${homeTheme === 'light' ? 'bg-[#45464a] text-white' : 'text-white/55'}`}><Sun className="h-4 w-4"/>Claro</button></div></section>
       </div>
     </motion.section>
   </>;

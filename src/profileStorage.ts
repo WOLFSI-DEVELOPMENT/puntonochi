@@ -2,7 +2,21 @@ export const PROFILE_ACTIVITY_KEY = 'puntonochi-profile-activity-v1';
 export const BOOKMARKS_KEY = 'puntonochi-bookmarks-v1';
 export const ARTICLE_BOOKMARKS_KEY = 'puntonochi-article-bookmarks-v1';
 export const NAV_DESIGN_KEY = 'puntonochi-nav-design-v1';
+export const HOME_THEME_KEY = 'puntonochi-home-theme-v1';
 export type NavDesign = 'dynamic' | 'simple' | 'experimental';
+export type HomeTheme = 'dark' | 'light';
+
+export function getHomeTheme(): HomeTheme {
+  try { return localStorage.getItem(HOME_THEME_KEY) === 'light' ? 'light' : 'dark'; }
+  catch { return 'dark'; }
+}
+
+export function setHomeTheme(theme: HomeTheme) {
+  try {
+    localStorage.setItem(HOME_THEME_KEY, theme);
+  } catch { /* The current view can still use the in-memory choice. */ }
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('puntonochi-home-theme-updated', { detail: { theme } }));
+}
 
 export function getNavDesign(): NavDesign {
   try {
