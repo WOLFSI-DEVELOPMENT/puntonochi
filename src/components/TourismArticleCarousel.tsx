@@ -75,7 +75,7 @@ export function TourismArticleCarousel({ onBack, onOpenArticle, initialArticleSl
           <button type="button" onClick={(event) => onOpenArticle(activeArticle.slug, event.currentTarget.getBoundingClientRect())} aria-label={`Leer ${activeArticle.title}`} className="absolute inset-0 z-0 w-full text-left">
             <motion.div layoutId={`article-image-${activeArticle.slug}`} className="absolute inset-0"><ArticleCover id={activeArticle.id} sizes="270px" className="h-full w-full object-cover opacity-80"/></motion.div>
             <span aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/5 to-black/85"/>
-            <span aria-hidden="true" className="tourism-card-progressive-blur absolute inset-x-0 bottom-0 h-[62%]"/>
+            <span aria-hidden="true" className="tourism-card-progressive-blur absolute inset-x-0 bottom-0 h-[72%]"/>
             <span data-tourism-card-title className="absolute inset-x-4 top-4 pr-12 text-[clamp(21px,6vw,27px)] font-extrabold leading-[1.04] tracking-[-.04em] drop-shadow-[0_2px_18px_rgba(0,0,0,.5)]">{activeArticle.title}</span>
             <span data-tourism-card-footer className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#101113] via-[#101113]/95 to-transparent px-4 pb-4 pt-20">
               <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[.16em] text-white/55"><span>{activeArticle.category}</span><span aria-hidden="true" className="h-1 w-1 rounded-full bg-white/35"/><Clock3 className="h-3 w-3"/>{activeArticle.readMinutes} min</span>

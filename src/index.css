@@ -169,10 +169,11 @@
 
 .tourism-card-progressive-blur {
   pointer-events: none;
-  -webkit-backdrop-filter: blur(18px) saturate(125%);
-  backdrop-filter: blur(18px) saturate(125%);
-  -webkit-mask-image: linear-gradient(to top, #000 0%, #000 42%, rgba(0,0,0,.72) 72%, transparent 100%);
-  mask-image: linear-gradient(to top, #000 0%, #000 42%, rgba(0,0,0,.72) 72%, transparent 100%);
+  background: linear-gradient(to top, rgba(16,17,19,.48) 0%, rgba(16,17,19,.32) 58%, rgba(16,17,19,.04) 100%);
+  -webkit-backdrop-filter: blur(24px) saturate(135%);
+  backdrop-filter: blur(24px) saturate(135%);
+  -webkit-mask-image: linear-gradient(to top, #000 0%, #000 24%, rgba(0,0,0,.82) 62%, rgba(0,0,0,.3) 84%, transparent 100%);
+  mask-image: linear-gradient(to top, #000 0%, #000 24%, rgba(0,0,0,.82) 62%, rgba(0,0,0,.3) 84%, transparent 100%);
 }
 
 .reader-image-progressive-blur {
