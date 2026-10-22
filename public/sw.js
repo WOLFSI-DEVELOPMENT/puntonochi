@@ -1,4 +1,4 @@
-const CACHE_NAME = 'puntonochi-shell-v6';
+const CACHE_NAME = 'puntonochi-shell-v7';
 const APP_SHELL = ['/', '/manifest.webmanifest', '/pwa-192.png', '/favicon.png'];
 
 self.addEventListener('install', (event) => {
@@ -53,14 +53,9 @@ self.addEventListener('fetch', (event) => {
       }
       return response;
     });
-    // A returning PWA should open from its saved shell immediately, even on a slow network.
-    // Refresh the shell in the background; use the network on the first visit when no copy exists.
-    event.waitUntil(networkUpdate.then(() => undefined).catch(() => undefined));
-    event.respondWith(
-      caches.match('/')
-        .then((cached) => cached || networkUpdate)
-        .catch(() => networkUpdate)
-    );
+    // Keep HTML and its hashed JavaScript chunks from different deployments from getting mixed.
+    // Use the saved shell only when the network is unavailable.
+    event.respondWith(networkUpdate.catch(() => caches.match('/')));
     return;
   }
 
