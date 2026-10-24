@@ -27,7 +27,6 @@ const BusinessPromotionSheet = React.lazy(() => import('./components/BusinessPro
 const BusinessSubmissionSheet = React.lazy(() => import('./components/BusinessSubmissionSheet').then((module) => ({ default: module.BusinessSubmissionSheet })));
 const AdminPage = React.lazy(() => import('./components/AdminPage').then((module) => ({ default: module.AdminPage })));
 const SmartOnboarding = React.lazy(() => import('./components/SmartOnboarding').then((module) => ({ default: module.SmartOnboarding })));
-import { WelcomePage } from './components/WelcomePage';
 import CornerKit from '@cornerkit/core';
 import { Category, Place, Colonia } from './types';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
@@ -96,7 +95,6 @@ const homeCategoryIcon = (name: string) => {
   if (/emerg|seguridad|polic[ií]|bombero/.test(category)) return Siren;
   return Store;
 };
-const WELCOME_SEEN_KEY = 'puntonochi-welcome-seen-v1';
 type SignedInAccount = { id: string; name: string; email: string; picture: string | null; phone?: string };
 type DeviceLocation = { latitude: number; longitude: number; accuracy: number; updatedAt: string };
 function readDeviceLocation(): DeviceLocation | null {
@@ -217,7 +215,6 @@ export default function App() {
     let initShowAdmin = false;
     let initShowSearch = false;
     let initialLegalDocument: LegalDocument | null = null;
-    const initShowWelcome = path === '/' || /^\/inicio\/?$/.test(path);
 
     if (parts.length > 0) {
       if (parts[0] === 'privacidad') {
@@ -266,7 +263,7 @@ export default function App() {
       }
     }
     
-    return { initialTab, initialCategory, initialBusiness, initialMenuId, initShowAllCategories, initShowColonias, initShowAdmin, initShowSearch, initShowWelcome, initialLegalDocument };
+    return { initialTab, initialCategory, initialBusiness, initialMenuId, initShowAllCategories, initShowColonias, initShowAdmin, initShowSearch, initialLegalDocument };
   };
 
   const init = getInitialState();
@@ -393,12 +390,6 @@ export default function App() {
   }, []);
   useEffect(() => setDailyDropFlipped(false), [homeHighlightIndex]);
   const loading = false;
-  const [showWelcome, setShowWelcome] = useState(() => {
-    if (!init.initShowWelcome) return false;
-    try { return localStorage.getItem(WELCOME_SEEN_KEY) !== 'true'; }
-    catch { return true; }
-  });
-  const [welcomeTransitionDone, setWelcomeTransitionDone] = useState(true);
   const [publicProfileId, setPublicProfileId] = useState<string | null>(null);
   const [showBookmarksSheet, setShowBookmarksSheet] = useState(false);
   const [showAccountAuth, setShowAccountAuth] = useState(() => new URLSearchParams(window.location.search).has('accountAuthError'));
@@ -500,16 +491,6 @@ export default function App() {
     window.addEventListener('open-profile-settings', openSettings);
     return () => { window.removeEventListener('open-public-profile', openProfile); window.removeEventListener('open-profile-settings', openSettings); };
   }, []);
-
-  const finishWelcome = () => {
-    track('Welcome Continue', { destination: 'search' });
-    try { localStorage.setItem(WELCOME_SEEN_KEY, 'true'); } catch { /* Welcome still closes if storage is unavailable. */ }
-    setShowWelcome(false);
-    setSearchQuery('');
-    setShowSearch(true);
-    setWelcomeTransitionDone(false);
-    window.setTimeout(() => setWelcomeTransitionDone(true), 360);
-  };
 
   useEffect(() => {
     let lastActivityCheck = Date.now();
@@ -1464,8 +1445,7 @@ export default function App() {
           </React.Suspense>
         )}
 
-        <React.Suspense fallback={null}><SmartOnboarding enabled={!loading && !showWelcome && welcomeTransitionDone && !showAdminPage} onLocation={setDeviceLocation} /></React.Suspense>
-        {showWelcome && !showAdminPage && <WelcomePage onContinue={finishWelcome} />}
+        <React.Suspense fallback={null}><SmartOnboarding enabled={!loading && !showAdminPage} onLocation={setDeviceLocation} /></React.Suspense>
         {publicProfileId && <React.Suspense fallback={null}><PublicProfileSheet profileId={publicProfileId} onClose={() => setPublicProfileId(null)} onCreateShort={() => { setPublicProfileId(null); setShowReelCreator(true); }} /></React.Suspense>}
         {showAccountAuth && <React.Suspense fallback={null}><AccountAuthSheet onClose={() => setShowAccountAuth(false)}/></React.Suspense>}
       </AnimatePresence>
