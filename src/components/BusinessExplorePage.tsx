@@ -1,10 +1,13 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpRight, Clock3, MapPin, Search, SlidersHorizontal, Star, Store, X } from 'lucide-react';
+import { Clock3, MapPin, Search, SlidersHorizontal, Star, Store, X } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import type { Place } from '../types';
 import { categories as directoryCategories } from '../data';
 import { VerifiedBusinessName } from './VerifiedBusinessName';
 import { isInstalledMobilePwa } from '../pwaDisplay';
+import CornerKit from '@cornerkit/core';
+
+const exploreCorners = new CornerKit();
 
 const PAGE_SIZE = 24;
 const WEEKDAY_KEYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -65,20 +68,28 @@ function BusinessTile({ place, onSelect }: { place: Place; onSelect: () => void 
     transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: 'easeOut' }}
     style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 240px' }}
     data-explore-card
-    className="group relative block w-full touch-pan-y overflow-hidden rounded-[15px] bg-[#202124] p-[5px] text-left shadow-[0_3px_12px_rgba(0,0,0,.18)] outline-none ring-1 ring-white/[.06] transition-transform duration-150 active:scale-[.99] focus-visible:ring-2 focus-visible:ring-blue-300 [corner-shape:squircle]"
+    className="group relative block w-full touch-pan-y overflow-hidden rounded-[26px] bg-[#202124] p-0 text-left shadow-[0_3px_12px_rgba(0,0,0,.18)] outline-none transition-transform duration-150 active:scale-[.99] focus-visible:ring-2 focus-visible:ring-blue-300"
   >
-    <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[10px] bg-[#292a2d]">
+    <div data-explore-card-photo className="relative aspect-[4/3] w-full overflow-hidden rounded-none bg-[#292a2d]">
+      {image && <img src={image} alt="" aria-hidden="true" loading="lazy" decoding="async" className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-75 blur-2xl saturate-150" />}
       {image
-        ? <img src={image} alt="" loading="lazy" decoding="async" fetchPriority="low" onError={() => setImageIndex((index) => index + 1)} className="h-full w-full object-cover transition-transform duration-300 ease-out [@media(hover:hover)]:group-hover:scale-[1.03]" />
+        ? <img src={image} alt="" loading="lazy" decoding="async" fetchPriority="low" onError={() => setImageIndex((index) => index + 1)} className="relative h-full w-full object-cover transition-transform duration-300 ease-out [@media(hover:hover)]:group-hover:scale-[1.03]" />
         : <div className="flex h-full items-center justify-center bg-[radial-gradient(ellipse_at_25%_20%,rgba(96,165,250,.24),transparent_48%),linear-gradient(145deg,#30333a,#191a1d)]"><Store aria-hidden="true" className="h-9 w-9 text-white/30"/></div>}
       <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
-      <span className="absolute left-2.5 top-2.5 max-w-[calc(100%-20px)] truncate rounded-full border border-white/10 bg-black/55 px-2.5 py-1 text-[9px] font-semibold text-white/90">{place.category || 'Negocio local'}</span>
-      <span className="absolute bottom-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white/85" aria-hidden="true"><ArrowUpRight className="h-3.5 w-3.5"/></span>
+      <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-b from-transparent to-[#1d1e21]" />
+      <span className="absolute left-2.5 top-2.5 max-w-[calc(100%-20px)] truncate rounded-full bg-black/30 px-2.5 py-1 text-[9px] font-semibold text-white/90 backdrop-blur-xl">{place.category || 'Negocio local'}</span>
     </div>
-    <span data-explore-card-content className="mt-[5px] block rounded-[16px] bg-[#292a2d] px-2.5 pb-2 pt-2">
+    <span data-explore-card-content className="relative isolate block overflow-hidden rounded-none bg-[#1d1e21] px-3 pb-2.5 pt-2.5">
+      {/* Ambient glow that grows out from under the photo: transparent at the top, frosted toward the text */}
+      <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden [mask-image:linear-gradient(to_bottom,transparent_0%,black_70%)]">
+        {image && <img src={image} alt="" className="absolute inset-0 h-full w-full scale-150 object-cover opacity-60 blur-3xl saturate-150" />}
+        <span className="absolute inset-0 bg-[#1d1e21]/50 backdrop-blur-2xl" />
+      </span>
+      <span className="relative block">
       <span className="line-clamp-2 text-[11px] font-bold leading-4 text-white"><VerifiedBusinessName name={place.name}/></span>
       <span className="mt-1 flex min-w-0 items-center gap-1 text-[9px] text-white/55"><MapPin aria-hidden="true" className="h-3 w-3 shrink-0"/><span className="truncate">{place.location || 'Nochistlán'}</span></span>
       <span className="mt-1 flex items-center gap-1 text-[9px] text-white/65"><Star aria-hidden="true" className="h-3 w-3 fill-amber-300 text-amber-300"/>{place.rating ? place.rating.toFixed(1) : 'Nuevo'}<span className="text-white/35">·</span><span className={place.isOpen ? 'text-emerald-300/85' : 'text-white/45'}>{place.isOpen ? 'Abierto' : 'Ver horario'}</span></span>
+      </span>
     </span>
   </motion.button>;
 }
@@ -128,6 +139,13 @@ export function BusinessExplorePage({ places, directoryVersion, onSelectBusiness
   }, [filteredPlaces.length, visibleCount]);
 
   const shownPlaces = filteredPlaces.slice(0, visibleCount);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      exploreCorners.applyAll('[data-explore-card]', { radius: 26, smoothing: 1 });
+    }, 40);
+    return () => window.clearTimeout(timer);
+  }, [shownPlaces]);
+
   return <main
     data-explore-page
     style={installedMobilePwa ? { paddingTop: 'calc(max(env(safe-area-inset-top, 0px), 24px) + 12px)' } : undefined}

@@ -545,6 +545,28 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
                   {HOTEL_SERVICE_IMAGES.map((image, index) => <button key={image} type="button" data-detail-squircle aria-label={`Ver foto del hotel ${index + 1}`} onPointerDownCapture={(event) => event.stopPropagation()} onClick={() => openViewer(index)} className="h-[150px] w-[72%] max-w-[280px] shrink-0 snap-start overflow-hidden rounded-[20px] bg-[#292a2d]"><img src={image} alt={`Hotel y servicios ${index + 1} de Hotel Nochistlán`} loading="lazy" className="h-full w-full object-cover"/></button>)}
                 </div>
               </section>}
+            {/* Photos */}
+            {!isHotelProfile && place.images.length > 0 && <section className="pb-4">
+              <h3 className="mb-3 text-[18px] font-bold text-white">Fotos</h3>
+              {place.images.length > 1 ? <div className="grid aspect-[4/3] grid-cols-2 grid-rows-2 gap-1.5 overflow-hidden rounded-[24px]" data-detail-squircle>
+                {place.images.slice(0, 3).map((img, index) => (
+                  <button
+                    key={`${img}-${index}`}
+                    type="button"
+                    aria-label={`Abrir foto ${index + 1} de ${place.images.length}`}
+                    className={`relative min-h-0 overflow-hidden bg-[#292a2d] active:opacity-80 ${index === 0 ? 'row-span-2' : ''} ${index === 1 && place.images.length === 2 ? 'row-span-2' : ''}`}
+                    onPointerDownCapture={(event) => event.stopPropagation()}
+                    onClick={() => openViewer(index)}
+                  >
+                    <img src={img} alt={`Foto ${index + 1} de ${place.name}`} loading="lazy" className="pointer-events-none h-full w-full object-cover" />
+                    {index === 2 && place.images.length > 3 && <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-2xl font-bold text-white">+{place.images.length - 3}</span>}
+                  </button>
+                ))}
+              </div> : <button type="button" data-detail-squircle aria-label="Abrir foto del negocio" className="h-[240px] w-[180px] overflow-hidden bg-[#292a2d] active:opacity-80" onPointerDownCapture={(event) => event.stopPropagation()} onClick={() => openViewer(0)}>
+                <img src={place.images[0]} alt={`Foto de ${place.name}`} loading="lazy" className="h-full w-full object-cover" />
+              </button>}
+              {!!place.communityPosts?.length && <div className="mt-3 space-y-2">{place.communityPosts.slice(0, 6).map((post) => <article key={post.id} className="flex items-center gap-3 rounded-[18px] bg-[#202124] p-2.5">{post.profileId ? <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: post.profileId }))} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">{post.authorPicture ? <img src={post.authorPicture} alt="" referrerPolicy="no-referrer" className="h-8 w-8 shrink-0 rounded-full object-cover"/> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs">{(post.authorName || '?').slice(0, 1)}</span>}<span className="min-w-0"><span className="block truncate text-xs font-semibold">Foto de {post.authorName || 'la comunidad'}</span><span className="mt-0.5 block line-clamp-1 text-[11px] text-white/45">{post.caption || 'Ver perfil y publicaciones'}</span></span></button> : <span className="min-w-0 flex-1 truncate text-xs text-white/45">Foto compartida por la comunidad</span>}<button type="button" aria-label="Abrir foto compartida" onPointerDownCapture={(event) => event.stopPropagation()} onClick={() => { const imageIndex = galleryImages.findIndex((image) => image === post.imageUrl); if (imageIndex >= 0) openViewer(imageIndex); }} className="h-11 w-11 shrink-0 overflow-hidden rounded-xl"><img src={post.imageUrl} alt="" className="h-full w-full object-cover"/></button></article>)}</div>}
+            </section>}
               <section aria-labelledby="place-hours-title" className="pt-1 text-white">
                 <h3 id="place-hours-title" className="mb-2 text-[17px] font-bold">Horario</h3>
                 <div className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 scrollbar-hide">
@@ -613,28 +635,6 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
 
             <DeferredBusinessLocationMap place={place} />
 
-            {/* Photos */}
-            {!isHotelProfile && place.images.length > 0 && <section className="pb-4">
-              <h3 className="mb-3 text-[18px] font-bold text-neutral-900">Fotos</h3>
-              {place.images.length > 1 ? <div className="grid aspect-[4/3] grid-cols-2 grid-rows-2 gap-1.5 overflow-hidden rounded-[24px]" data-detail-squircle>
-                {place.images.slice(0, 3).map((img, index) => (
-                  <button
-                    key={`${img}-${index}`}
-                    type="button"
-                    aria-label={`Abrir foto ${index + 1} de ${place.images.length}`}
-                    className={`relative min-h-0 overflow-hidden bg-[#292a2d] active:opacity-80 ${index === 0 ? 'row-span-2' : ''} ${index === 1 && place.images.length === 2 ? 'row-span-2' : ''}`}
-                    onPointerDownCapture={(event) => event.stopPropagation()}
-                    onClick={() => openViewer(index)}
-                  >
-                    <img src={img} alt={`Foto ${index + 1} de ${place.name}`} loading="lazy" className="pointer-events-none h-full w-full object-cover" />
-                    {index === 2 && place.images.length > 3 && <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-2xl font-bold text-white">+{place.images.length - 3}</span>}
-                  </button>
-                ))}
-              </div> : <button type="button" data-detail-squircle aria-label="Abrir foto del negocio" className="h-[240px] w-[180px] overflow-hidden bg-[#292a2d] active:opacity-80" onPointerDownCapture={(event) => event.stopPropagation()} onClick={() => openViewer(0)}>
-                <img src={place.images[0]} alt={`Foto de ${place.name}`} loading="lazy" className="h-full w-full object-cover" />
-              </button>}
-              {!!place.communityPosts?.length && <div className="mt-3 space-y-2">{place.communityPosts.slice(0, 6).map((post) => <article key={post.id} className="flex items-center gap-3 rounded-[18px] bg-[#202124] p-2.5">{post.profileId ? <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('open-public-profile', { detail: post.profileId }))} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">{post.authorPicture ? <img src={post.authorPicture} alt="" referrerPolicy="no-referrer" className="h-8 w-8 shrink-0 rounded-full object-cover"/> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs">{(post.authorName || '?').slice(0, 1)}</span>}<span className="min-w-0"><span className="block truncate text-xs font-semibold">Foto de {post.authorName || 'la comunidad'}</span><span className="mt-0.5 block line-clamp-1 text-[11px] text-white/45">{post.caption || 'Ver perfil y publicaciones'}</span></span></button> : <span className="min-w-0 flex-1 truncate text-xs text-white/45">Foto compartida por la comunidad</span>}<button type="button" aria-label="Abrir foto compartida" onPointerDownCapture={(event) => event.stopPropagation()} onClick={() => { const imageIndex = galleryImages.findIndex((image) => image === post.imageUrl); if (imageIndex >= 0) openViewer(imageIndex); }} className="h-11 w-11 shrink-0 overflow-hidden rounded-xl"><img src={post.imageUrl} alt="" className="h-full w-full object-cover"/></button></article>)}</div>}
-            </section>}
 
             {suggestedBusinesses.length > 0 && <section className="mt-2 pb-5" aria-labelledby="suggested-businesses-title">
               <div className="mb-3 flex items-end justify-between gap-3">
@@ -1023,12 +1023,12 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
             </div>
 
             <div className="flex min-h-0 flex-1 items-center justify-center py-2">
-              <article className={`relative isolate overflow-hidden text-[#171717] transition-[width,height] duration-300 ${cardLandscape ? 'grid aspect-video w-full max-h-[32dvh] max-w-[440px] grid-cols-[1.35fr_.85fr] items-stretch gap-2 rounded-[26px] px-5 py-4 text-left' : 'flex aspect-[9/16] max-h-[43dvh] w-[min(68vw,270px)] flex-col items-center rounded-[26px] px-5 py-5 text-center'}`} style={{ backgroundColor: cardColor }}>
+              <article className={`relative isolate overflow-hidden text-[#171717] transition-[width,height] duration-300 ${cardLandscape ? 'grid aspect-video w-full max-h-[32dvh] max-w-[440px] grid-cols-[1.35fr_.85fr] items-stretch gap-2 rounded-[26px] px-5 py-4 text-left' : 'flex aspect-[9/16] w-[min(66vw,265px)] flex-col items-center justify-between rounded-[32px] px-6 py-7 text-center'}`} style={{ backgroundColor: cardColor }}>
                 <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 rounded-[inherit] bg-white/25 backdrop-blur-xl" />
                 <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-12 -z-10 h-36 w-36 rounded-full bg-white/20 blur-2xl"/>
                 <div className={`flex min-w-0 flex-col ${cardLandscape ? 'items-start justify-center pr-1' : 'items-center'}`}>
                   {place.logo && <img src={place.logo} alt="" className={`mb-2 rounded-full border-2 border-black/10 object-cover ${cardLandscape ? 'h-8 w-8' : 'h-12 w-12'}`}/>}
-                  <h4 className={`line-clamp-2 w-full break-words font-extrabold leading-tight ${cardLandscape ? 'text-base' : 'text-[22px]'}`}>{place.name}</h4>
+                  <h4 className={`line-clamp-2 w-full break-words font-extrabold leading-tight ${cardLandscape ? 'text-base' : 'text-[24px]'}`}>{place.name}</h4>
                   <p className={`mt-1 line-clamp-1 text-[11px] font-semibold opacity-65 ${cardLandscape ? 'w-full' : ''}`}>{place.category}{place.location ? ` · ${place.location}` : ''}</p>
                   {place.subtitle && place.subtitle.toLocaleLowerCase('es') !== 'establishment' && <p className="mt-1 line-clamp-2 text-[10px] opacity-60">{place.subtitle}</p>}
                   {place.rating > 0 && <p className="mt-1 text-[10px] font-semibold opacity-75">★ {place.rating.toFixed(1)} · {place.reviewCount || 0} reseñas</p>}
@@ -1038,7 +1038,7 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
                   {place.hours && <p className="mt-1 line-clamp-1 text-[9px] opacity-60">{place.hours}</p>}
                 </div>
                 <div className={`flex min-w-0 flex-col items-center justify-center ${cardLandscape ? 'border-l border-black/10 pl-2' : 'mt-auto pt-3'}`}>
-                  <div className={`rounded-[20px] bg-white p-2 shadow-[0_5px_18px_rgba(0,0,0,.14)] ${cardLandscape ? '' : ''}`}><canvas ref={cardQrRef} aria-label={`Código QR para ver ${place.name}`} className={cardLandscape ? 'h-[82px] w-[82px]' : 'h-[96px] w-[96px]'}/></div>
+                  <div className="rounded-[24px] bg-white p-3 shadow-[0_5px_18px_rgba(0,0,0,.14)]"><canvas ref={cardQrRef} aria-label={`Código QR para ver ${place.name}`} className={cardLandscape ? 'h-[82px] w-[82px]' : 'h-[116px] w-[116px]'}/></div>
                   <span className="mt-2 text-center text-[9px] font-bold tracking-wide opacity-65">ESCANEA PARA VER EL NEGOCIO</span>
                 </div>
               </article>

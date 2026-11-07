@@ -1218,7 +1218,7 @@ export default function App() {
                       setSelectedCategory(null);
                       setSelectedBusiness(place);
                     }}
-                    data-home-photo-card className="ck-app-card rounded-[26px] absolute w-[85%] h-full bg-white cursor-pointer p-[5px]"
+                    data-home-photo-card className="ck-app-card rounded-[26px] absolute w-[85%] h-full bg-white/[.16] backdrop-blur-2xl cursor-pointer p-[5px] ring-0 border-0 shadow-[0_10px_30px_rgba(0,0,0,.18)]"
                     role="button"
                     tabIndex={0}
                     onKeyDown={(event) => {
@@ -1351,7 +1351,7 @@ export default function App() {
 
       {/* Bottom Navigation & Search */}
       {activeTab !== 'ask-nochi' && activeTab !== 'guias' && !showAdminPage && !legalDocument && (
-        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onOpenSearch={() => { setSearchCategory(null); setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => { setSearchQuery(''); setShowSearch(false); }} onOpenProfile={() => { if (signedInAccount) setPublicProfileId(signedInAccount.id); else setShowAccountAuth(true); }} onSelectBusiness={(place) => setSelectedBusiness(place)} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} profileEmail={signedInAccount?.email} timerEndAt={timerEndAt} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onStopTimer={stopTimer} onTimerComplete={completeTimer} searchQuery={searchQuery} searchOpen={showSearch} />
+        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onCreateReel={async () => { const response = await fetch('/api/account/session', { cache: 'no-store', credentials: 'same-origin' }); const session = await response.json().catch(() => ({})); if (session.authenticated) setShowReelCreator(true); else setShowAccountAuth(true); }} onOpenSearch={() => { setSearchCategory(null); setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => { setSearchQuery(''); setShowSearch(false); }} onOpenProfile={() => { if (signedInAccount) setPublicProfileId(signedInAccount.id); else setShowAccountAuth(true); }} onSelectBusiness={(place) => setSelectedBusiness(place)} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} profileEmail={signedInAccount?.email} timerEndAt={timerEndAt} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onStopTimer={stopTimer} onTimerComplete={completeTimer} searchQuery={searchQuery} searchOpen={showSearch} />
       )}
 
       {/* Pages & Overlays */}

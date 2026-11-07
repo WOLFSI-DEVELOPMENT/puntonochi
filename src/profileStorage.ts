@@ -18,19 +18,13 @@ export function setHomeTheme(theme: HomeTheme) {
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('puntonochi-home-theme-updated', { detail: { theme } }));
 }
 
+// The navbar is locked to the Dinámica design; there is no switching.
 export function getNavDesign(): NavDesign {
-  try {
-    const value = localStorage.getItem(NAV_DESIGN_KEY);
-    return value === 'dynamic' || value === 'simple' || value === 'experimental' ? value : 'experimental';
-  }
-  catch { return 'experimental'; }
+  return 'dynamic';
 }
 
-export function setNavDesign(design: NavDesign) {
-  try {
-    localStorage.setItem(NAV_DESIGN_KEY, design);
-    window.dispatchEvent(new Event('puntonochi-nav-design-updated'));
-  } catch { /* The in-memory choice can still be used if storage is unavailable. */ }
+export function setNavDesign(_design: NavDesign) {
+  // No-op: the navbar design is locked.
 }
 
 export type ProfileActivity = { activeSecondsByDay: Record<string, number> };

@@ -239,6 +239,7 @@ const Avatar = ({ src, alt, timerActive = false }) => {
 
 /* ---------- Dark liquid glass tokens ---------- */
 const BLUR = "blur(6px) saturate(190%) brightness(1.06)";
+const FROSTED_BLUR = "blur(12px) saturate(180%) brightness(1.04)"; // navbar only: a touch more frosted
 
 const darkGlass = (tint) => ({
   background: supportsBlur
@@ -259,8 +260,8 @@ const darkGlass = (tint) => ({
 const TABS = [
   { id: "home", label: "Home", icon: "home" },
   { id: "explore", label: "Explore", icon: "explore" },
+  { id: "create", label: "Subir reel", icon: "add" },
   { id: "puntoshorts", label: "PuntoShorts", icon: "video_library" },
-  { id: "turismo", label: "Turismo", icon: "tourism" },
   { id: "profile", label: "Profile", avatar: true },
 ];
 
@@ -547,7 +548,7 @@ const OPEN_W = 480;
 const SEARCH_IDLE_W = 62;
 
 /* ---------- The navbar ---------- */
-export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch, onOpenProfile, onSelectBusiness, profilePicture, profileName, timerEndAt, onStartTimer, onPauseTimer, onResumeTimer, onStopTimer, searchQuery: externalSearchQuery, searchOpen: externalSearchOpen }) {
+export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch, onOpenProfile, onSelectBusiness, profilePicture, profileName, timerEndAt, onStartTimer, onPauseTimer, onResumeTimer, onStopTimer, searchQuery: externalSearchQuery, searchOpen: externalSearchOpen, onCreateReel }) {
   const onChange = (id) => onChangeTab(({ home: 'inicio', explore: 'explorar' })[id] || id);
   const onSearchOpenChange = (open) => open ? onOpenSearch() : onCloseSearch();
   const avatarSrc = profilePicture;
@@ -799,6 +800,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
 
   const select = (id) => {
     if (id === 'profile') { setMenuOpen(false); onOpenProfile(); return; }
+    if (id === 'create') { setMenuOpen(false); onCreateReel && onCreateReel(); return; }
     setMenuOpen(false);
     if (id === active) return;
     setActive(id);
@@ -882,13 +884,13 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
           role="tablist"
           aria-hidden={searching}
           style={{
-            ...(experimentalNav ? { background: 'transparent', backdropFilter: 'none', WebkitBackdropFilter: 'none', boxShadow: 'none', isolation: 'auto', transform: 'none' } : darkGlass("rgba(58,50,46,0.20)")),
+            ...(experimentalNav ? { background: 'transparent', backdropFilter: 'none', WebkitBackdropFilter: 'none', boxShadow: 'none', isolation: 'auto', transform: 'none' } : { ...darkGlass("rgba(58,50,46,0.30)"), backdropFilter: FROSTED_BLUR, WebkitBackdropFilter: FROSTED_BLUR }),
             position: "absolute",
             left: 0,
             top: 0,
             bottom: 0,
             zIndex: 1,
-            width: experimentalNav ? '100%' : `calc(100% - ${SEARCH_IDLE_W + 10}px)`,
+            width: '100%',
             height: experimentalNav ? '100%' : BAR_H,
             padding: experimentalNav ? '7px 14px calc(7px + env(safe-area-inset-bottom, 0px))' : 3,
             gap: experimentalNav ? 5 : 0,
@@ -1051,7 +1053,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
           role="search"
           style={{
             ...darkGlass("rgba(38,32,28,0.30)"),
-            display: experimentalNav ? 'none' : undefined,
+            display: 'none',
             position: "absolute",
             right: 0,
             top: 0,
