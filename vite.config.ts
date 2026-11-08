@@ -12,6 +12,8 @@ export default defineConfig(() => {
       },
     },
     server: {
+      // Pre-transform the entry files so the first localhost load isn't blank for seconds.
+      warmup: { clientFiles: ['./src/main.tsx', './src/App.tsx', './src/components/BottomNav.tsx'] },
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
       proxy: {
@@ -22,7 +24,18 @@ export default defineConfig(() => {
       }
     },
     build: {
-      target: 'esnext'
+      target: 'esnext',
+      rollupOptions: {
+        output: {
+          // Vendor code in its own long-cached chunks: downloads in parallel and
+          // survives app updates, so returning users only fetch the changed app code.
+          manualChunks: {
+            react: ['react', 'react-dom', 'react-router-dom'],
+            motion: ['motion/react'],
+            icons: ['lucide-react'],
+          },
+        },
+      },
     }
   };
 });

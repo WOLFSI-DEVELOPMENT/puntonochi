@@ -44,6 +44,7 @@ const PuntoNochiComparisonPage = React.lazy(() => import('./components/PuntoNoch
 const LegalPage = React.lazy(() => import('./components/LegalPage').then((module) => ({ default: module.LegalPage })));
 import type { LegalDocument } from './components/LegalPage';
 import { PageLoadingSkeleton } from './components/PageLoadingSkeleton';
+import { WhatsNewOverlay } from './components/WhatsNewOverlay';
 import { Analytics, track } from '@vercel/analytics/react';
 import { getTotalHypes, HYPES_UPDATED_EVENT } from './hypes';
 import { getDailyDropChoices, getDailyDropQuestion } from './dailyDrop';
@@ -1453,6 +1454,7 @@ export default function App() {
       <AnimatePresence>{showProfileSettings && <React.Suspense fallback={null}><SettingsSheet key="settings-sheet" account={signedInAccount} onClose={() => setShowProfileSettings(false)} onRequireAuth={() => { setShowProfileSettings(false); setShowAccountAuth(true); }} /></React.Suspense>}</AnimatePresence>
       {externalSiteConfirmation}
       <Analytics />
+      <WhatsNewOverlay />
     </AutoLayoutRoot>
   );
 }
