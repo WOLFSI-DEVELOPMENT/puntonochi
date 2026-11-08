@@ -548,7 +548,7 @@ const OPEN_W = 480;
 const SEARCH_IDLE_W = 62;
 
 /* ---------- The navbar ---------- */
-export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch, onOpenProfile, onSelectBusiness, profilePicture, profileName, timerEndAt, onStartTimer, onPauseTimer, onResumeTimer, onStopTimer, searchQuery: externalSearchQuery, searchOpen: externalSearchOpen, onCreateReel }) {
+export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch, onOpenProfile, onSelectBusiness, profilePicture, profileName, timerEndAt, onStartTimer, onPauseTimer, onResumeTimer, onStopTimer, searchQuery: externalSearchQuery, searchOpen: externalSearchOpen, onCreateReel, profileEmail: _profileEmail, onTimerComplete: _onTimerComplete }) {
   const onChange = (id) => onChangeTab(({ home: 'inicio', explore: 'explorar' })[id] || id);
   const onSearchOpenChange = (open) => open ? onOpenSearch() : onCloseSearch();
   const avatarSrc = profilePicture;

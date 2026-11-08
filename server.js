@@ -9,7 +9,7 @@ import { pathToFileURL } from 'node:url';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import experimentalBusinesses from './server/data/experimental-nochisgo-businesses.json' with { type: 'json' };
-import { neon } from '@neondatabase/serverless';
+import { createSql } from './db.js';
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse } from '@simplewebauthn/server';
 import { OAuth2Client } from 'google-auth-library';
 import { GoogleGenAI } from '@google/genai';
@@ -25,7 +25,7 @@ const port = 3001;
 app.use(cors());
 app.use(express.json({ limit: '100mb' }));
 
-const sql = process.env.DATABASE_URL ? neon(process.env.DATABASE_URL) : null;
+const sql = createSql();
 const storageSettings = {
   endpoint: process.env.NEON_STORAGE_ENDPOINT || process.env.AWS_ENDPOINT_URL_S3,
   accessKeyId: process.env.NEON_STORAGE_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID,
@@ -58,7 +58,7 @@ const storageUnavailableMessage = () => {
 };
 
 const requireNeon = (req, res, next) => {
-  if (!sql) return res.status(503).json({ error: 'Neon is not configured. Set DATABASE_URL in the server environment.' });
+  if (!sql) return res.status(503).json({ error: 'Database is not configured. Set SUPABASE_DATABASE_URL in the server environment.' });
   next();
 };
 

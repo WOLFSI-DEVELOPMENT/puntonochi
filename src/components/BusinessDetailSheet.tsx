@@ -473,8 +473,8 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
           </div>
 
           <div className="relative z-[1] -mt-7 rounded-t-[32px] [corner-shape:squircle] bg-[#202124] px-5 pt-20 pb-6">
-            <h1 className="mb-1 text-[28px] font-bold leading-tight text-neutral-900"><VerifiedBusinessName name={place.name}/></h1>
-            <p className="text-[15px] font-medium text-neutral-600">
+            <h1 className="mb-1 text-[28px] font-bold leading-tight text-white"><VerifiedBusinessName name={place.name}/></h1>
+            <p className="text-[15px] font-medium text-white/60">
               {place.category} • <span className="text-[#1a73e8] hover:underline cursor-pointer">{place.location}</span>
             </p>
             {isHotelProfile && place.description ? <p className="mt-2 text-[13px] leading-relaxed text-white/65">{place.description}</p> : place.subtitle && place.subtitle.toLocaleLowerCase('es') !== 'establishment' && <p className="mt-1 text-[13px] text-white/55">{place.subtitle}</p>}
@@ -621,14 +621,14 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
                 <p className="mt-2 text-[11px] leading-relaxed text-white/40">Reseñas ordenadas por relevancia. Google no verifica todas las reseñas.</p>
               </section> : null}
               <div className="flex flex-col">
-                <span className="text-[13px] text-neutral-500 font-semibold mb-1">Lo que debes saber</span>
+                <span className="text-[13px] text-white/55 font-semibold mb-1">Lo que debes saber</span>
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {(place.goodToKnow || []).map(tag => (
-                    <span key={tag} className="bg-neutral-100 text-neutral-700 px-2 py-1 rounded-md text-[12px] font-semibold">
+                    <span key={tag} className="bg-white/[.08] text-white/80 px-2 py-1 rounded-md text-[12px] font-semibold">
                       {tag}
                     </span>
                   ))}
-                  {(!place.goodToKnow || place.goodToKnow.length === 0) && <span className="text-[14px] text-neutral-500">No hay información adicional.</span>}
+                  {(!place.goodToKnow || place.goodToKnow.length === 0) && <span className="text-[14px] text-white/50">No hay información adicional.</span>}
                 </div>
               </div>
             </div>

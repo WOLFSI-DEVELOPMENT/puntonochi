@@ -1,4 +1,4 @@
-import { neon } from '@neondatabase/serverless';
+import { createSql, databaseUrl } from '../../db.js';
 import webpush from 'web-push';
 
 let schemaReady;
@@ -15,11 +15,11 @@ async function ensureSchema(sql) {
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed.' });
   if (!process.env.CRON_SECRET || req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) return res.status(401).json({ error: 'Unauthorized.' });
-  if (!process.env.DATABASE_URL || !process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) return res.status(503).json({ error: 'Missing DATABASE_URL or VAPID keys.' });
+  if (!databaseUrl() || !process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) return res.status(503).json({ error: 'Missing DATABASE_URL or VAPID keys.' });
 
   try {
     webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'https://puntonochi.vercel.app', process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
-    const sql = neon(process.env.DATABASE_URL);
+    const sql = createSql();
     await ensureSchema(sql);
     let article = null;
     if (process.env.GNEWS_API_KEY) {

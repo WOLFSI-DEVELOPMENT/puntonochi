@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Activity, ArrowRight, Bookmark, CalendarDays, Fingerprint, Globe2, LogOut, UserRound, X } from 'lucide-react';
+import { Activity, ArrowRight, Bookmark, CalendarDays, Fingerprint, Globe2, Hourglass, LogOut, UserRound, X } from 'lucide-react';
 import type { Place } from '../types';
 import { mockPlaces } from '../data';
 import { getBookmarkedPlaceIds, getProfileActivity, profileDateKey, setBookmarkedPlaceIds, type ProfileActivity } from '../profileStorage';
