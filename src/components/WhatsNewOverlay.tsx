@@ -76,14 +76,14 @@ export function WhatsNewOverlay() {
         <p className="mt-3 text-center text-[15px] text-white/55">Actualizamos la app. Esto es lo nuevo:</p>
 
         <ul className="mt-10 space-y-7 pb-8">
-          {FEATURES.map(({ icon: Icon, color, title, text }, index) => <motion.li
+          {FEATURES.map(({ icon: Icon, title, text }, index) => <motion.li
             key={title}
             initial={reduceMotion ? false : { opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.25 + index * 0.08, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             className="flex items-start gap-4"
           >
-            <Icon aria-hidden="true" className="mt-0.5 h-9 w-9 shrink-0" style={{ color }} strokeWidth={1.8} />
+            <Icon aria-hidden="true" className="mt-0.5 h-9 w-9 shrink-0 text-white" strokeWidth={1.8} />
             <div>
               <h2 className="text-[16px] font-semibold leading-snug">{title}</h2>
               <p className="mt-0.5 text-[14px] leading-snug text-white/60">{text}</p>

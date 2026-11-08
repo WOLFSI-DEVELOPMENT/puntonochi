@@ -78,6 +78,7 @@ const CSS_TEXT = `
 .lgn-tab:active .lgn-ico { transform: scale(0.88); transition-duration: 120ms; }
 .lgn-s-ico .lgn-ico,
 .lgn-item .lgn-ico { opacity: 1; }
+.lgn-lens .lgn-ico { opacity: 1; }
 .lgn-item {
   -webkit-appearance: none;
   appearance: none;
@@ -303,7 +304,7 @@ function LiquidLens({ index, tabs, avatarSrc, timerActive }) {
         <svg width="0" height="0" aria-hidden="true" style={{ position: "absolute" }}>
           <filter id={lens.id} x="0" y="0" width="100%" height="100%" filterUnits="objectBoundingBox" colorInterpolationFilters="sRGB">
             <feImage href={lens.url} xlinkHref={lens.url} x="0" y="0" width={lens.w} height={lens.h} preserveAspectRatio="none" result="map" />
-            <feDisplacementMap in="SourceGraphic" in2="map" scale="22" xChannelSelector="R" yChannelSelector="G" />
+            <feDisplacementMap in="SourceGraphic" in2="map" scale="14" xChannelSelector="R" yChannelSelector="G" />
           </filter>
         </svg>
       )}
@@ -319,6 +320,7 @@ function LiquidLens({ index, tabs, avatarSrc, timerActive }) {
       >
         {/* Copy of the icon row, counter-shifted so it lines up with the real icons */}
         <div
+          className="lgn-lens"
           style={{
             position: "absolute",
             top: 0,
@@ -326,7 +328,7 @@ function LiquidLens({ index, tabs, avatarSrc, timerActive }) {
             left: `${-index * 100}%`,
             width: `${tabs.length * 100}%`,
             display: "flex",
-            transform: "scale(1.06)",
+            transform: "scale(1.04)",
             transition: `left 520ms ${EASE_OUT}`,
           }}
         >
@@ -1048,9 +1050,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
                 width: "100%",
                 height: "100%",
                 borderRadius: 999,
-                background: "rgba(44,44,48,0.55)",
-                backdropFilter: "blur(10px) saturate(170%)",
-                WebkitBackdropFilter: "blur(10px) saturate(170%)",
+                background: "linear-gradient(180deg, rgba(86,86,92,0.96), rgba(60,60,66,0.96))",
                 transform: "translateZ(0)",
               }}
             />
