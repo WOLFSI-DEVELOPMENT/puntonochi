@@ -239,7 +239,7 @@ const Avatar = ({ src, alt, timerActive = false }) => {
 
 /* ---------- Dark liquid glass tokens ---------- */
 const BLUR = "blur(6px) saturate(190%) brightness(1.06)";
-const FROSTED_BLUR = "blur(12px) saturate(180%) brightness(1.04)"; // navbar only: a touch more frosted
+const FROSTED_BLUR = "blur(20px) saturate(180%) brightness(1.08)"; // navbar glass
 
 const darkGlass = (tint) => ({
   background: supportsBlur
@@ -879,7 +879,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
           role="tablist"
           aria-hidden={searching}
           style={{
-            ...(experimentalNav ? { background: 'transparent', backdropFilter: 'none', WebkitBackdropFilter: 'none', boxShadow: 'none', isolation: 'auto', transform: 'none' } : { ...darkGlass("rgba(58,50,46,0.30)"), backdropFilter: FROSTED_BLUR, WebkitBackdropFilter: FROSTED_BLUR }),
+            ...(experimentalNav ? { background: 'transparent', backdropFilter: 'none', WebkitBackdropFilter: 'none', boxShadow: 'none', isolation: 'auto', transform: 'none' } : { ...darkGlass("rgba(30,30,34,0.28)"), background: "radial-gradient(140% 120% at 30% 0%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 100%), rgba(30,30,34,0.28)", backdropFilter: FROSTED_BLUR, WebkitBackdropFilter: FROSTED_BLUR }),
             position: "absolute",
             left: 0,
             top: 0,
