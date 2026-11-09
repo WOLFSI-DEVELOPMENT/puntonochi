@@ -78,7 +78,6 @@ const CSS_TEXT = `
 .lgn-tab:active .lgn-ico { transform: scale(0.88); transition-duration: 120ms; }
 .lgn-s-ico .lgn-ico,
 .lgn-item .lgn-ico { opacity: 1; }
-.lgn-lens .lgn-ico { opacity: 1; }
 .lgn-item {
   -webkit-appearance: none;
   appearance: none;
@@ -238,122 +237,6 @@ const Avatar = ({ src, alt, timerActive = false }) => {
   );
 };
 
-/* ---------- Liquid glass lens (SVG feDisplacementMap, Safari-safe) ----------
-   The selection pill is a real lens: it refracts a copy of the tab icons that
-   sits exactly under it. Red = horizontal bend, green = vertical bend, 128 = none.
-   The map is regenerated only when the pill size changes, and every new map gets
-   a fresh filter id because Safari caches filter output by id. */
-let lensSeq = 0;
-function makeLensMap(w, h) {
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  const img = ctx.createImageData(w, h);
-  const r = Math.min(w, h) / 2;
-  const cx = w / 2, cy = h / 2;
-  const band = Math.min(w, h) * 0.42; // refraction band along the rim
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const px = x + 0.5 - cx, py = y + 0.5 - cy;
-      const qx = Math.abs(px) - (w / 2 - r), qy = Math.abs(py) - (h / 2 - r);
-      const ox = Math.max(qx, 0), oy = Math.max(qy, 0);
-      const sdf = Math.hypot(ox, oy) + Math.min(Math.max(qx, qy), 0) - r;
-      let dx = 0, dy = 0;
-      if (sdf < 0) {
-        const t = Math.min(1, Math.max(0, 1 + sdf / band)); // 1 at the rim, 0 deep inside
-        const s = t * t * (3 - 2 * t);
-        let nx, ny;
-        if (ox > 0 || oy > 0) { const l = Math.hypot(ox, oy) || 1; nx = Math.sign(px) * ox / l; ny = Math.sign(py) * oy / l; }
-        else if (qx > qy) { nx = Math.sign(px); ny = 0; } else { nx = 0; ny = Math.sign(py); }
-        dx = -nx * s; dy = -ny * s; // pull rim pixels inward: magnifying lens edge
-      }
-      const i = (y * w + x) * 4;
-      img.data[i] = Math.round(128 + dx * 127);
-      img.data[i + 1] = Math.round(128 + dy * 127);
-      img.data[i + 2] = 128;
-      img.data[i + 3] = 255;
-    }
-  }
-  ctx.putImageData(img, 0, 0);
-  return canvas.toDataURL("image/png");
-}
-
-function LiquidLens({ index, tabs, avatarSrc, timerActive }) {
-  const ref = useRef(null);
-  const [lens, setLens] = useState(null); // { id, url, w, h }
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return undefined;
-    let last = "";
-    const build = () => {
-      const w = Math.round(el.clientWidth), h = Math.round(el.clientHeight);
-      if (!w || !h || `${w}x${h}` === last) return;
-      last = `${w}x${h}`;
-      lensSeq += 1;
-      setLens({ id: `pn-lens-${lensSeq}`, url: makeLensMap(w, h), w, h });
-    };
-    build();
-    const ro = new ResizeObserver(build);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  return (
-    <div ref={ref} style={{ position: "absolute", inset: 0, borderRadius: 999, overflow: "hidden" }}>
-      {lens && (
-        <svg width="0" height="0" aria-hidden="true" style={{ position: "absolute" }}>
-          <filter id={lens.id} x="0" y="0" width="100%" height="100%" filterUnits="objectBoundingBox" colorInterpolationFilters="sRGB">
-            <feImage href={lens.url} xlinkHref={lens.url} x="0" y="0" width={lens.w} height={lens.h} preserveAspectRatio="none" result="map" />
-            <feDisplacementMap in="SourceGraphic" in2="map" scale="14" xChannelSelector="R" yChannelSelector="G" />
-          </filter>
-        </svg>
-      )}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          borderRadius: 999,
-          overflow: "hidden",
-          filter: lens ? `url(#${lens.id})` : undefined,
-          WebkitFilter: lens ? `url(#${lens.id})` : undefined,
-        }}
-      >
-        {/* Copy of the icon row, counter-shifted so it lines up with the real icons */}
-        <div
-          className="lgn-lens"
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: `${-index * 100}%`,
-            width: `${tabs.length * 100}%`,
-            display: "flex",
-            transform: "scale(1.04)",
-            transition: `left 520ms ${EASE_OUT}`,
-          }}
-        >
-          {tabs.map(({ id, icon, avatar }) => (
-            <span key={id} style={{ flex: 1, display: "grid", placeItems: "center", color: "#fff" }}>
-              {avatar ? <Avatar src={avatarSrc} alt="" timerActive={timerActive} /> : <Icon name={icon} />}
-            </span>
-          ))}
-        </div>
-      </div>
-      {/* Rim light + specular highlight */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          borderRadius: 999,
-          pointerEvents: "none",
-          boxShadow: "inset 0 1px 1px rgba(255,255,255,0.55), inset 0 -1px 1px rgba(255,255,255,0.18), inset 0 0 10px rgba(255,255,255,0.10)",
-          background: "linear-gradient(160deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 38%)",
-        }}
-      />
-    </div>
-  );
-}
-
 /* ---------- Dark liquid glass tokens ---------- */
 const BLUR = "blur(6px) saturate(190%) brightness(1.06)";
 const FROSTED_BLUR = "blur(12px) saturate(180%) brightness(1.04)"; // navbar only: a touch more frosted
@@ -364,12 +247,7 @@ const darkGlass = (tint) => ({
     : "rgba(70,62,56,0.82)",
   backdropFilter: BLUR,
   WebkitBackdropFilter: BLUR,
-  boxShadow: [
-    "inset 0 10px 16px -10px rgba(255,255,255,0.22)",
-    "inset 0 -10px 16px -12px rgba(255,255,255,0.10)",
-    "inset 0 0 22px rgba(255,255,255,0.07)",
-    "0 8px 24px rgba(0,0,0,0.14)",
-  ].join(", "),
+  boxShadow: "none", // no outlines or shadows
   isolation: "isolate",
   transform: "translateZ(0)", // fixes Safari's rounded-corner backdrop bug
 });
@@ -1039,9 +917,11 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
               display: experimentalNav ? 'none' : undefined,
               transition: `opacity 180ms ease, transform 520ms ${EASE_OUT}`,
               pointerEvents: "none",
-              zIndex: 2,
             }}
           >
+            {/* Cross-browser liquid glass (Chrome, Safari, Firefox): translucent fill,
+                backdrop blur + saturation and a specular sheen. Sits under the icons so
+                they stay crisp. No outlines or shadows. */}
             <div
               key={moves}
               className={`lgn-blob${moves ? " is-moving" : ""}`}
@@ -1050,11 +930,15 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
                 width: "100%",
                 height: "100%",
                 borderRadius: 999,
-                background: "linear-gradient(180deg, rgba(86,86,92,0.96), rgba(60,60,66,0.96))",
+                background:
+                  "radial-gradient(120% 90% at 30% 0%, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.10) 45%, rgba(255,255,255,0.06) 100%)",
+                backdropFilter: "blur(14px) saturate(180%) brightness(1.12)",
+                WebkitBackdropFilter: "blur(14px) saturate(180%) brightness(1.12)",
+                border: "none",
+                boxShadow: "none",
                 transform: "translateZ(0)",
               }}
             />
-            <LiquidLens index={index} tabs={visibleTabs} avatarSrc={avatarSrc} timerActive={timerActive} />
           </div>
 
           {visibleTabs.map(({ id, label, icon, avatar, menu, disabled }) => (

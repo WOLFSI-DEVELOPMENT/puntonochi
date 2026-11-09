@@ -11,9 +11,12 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    optimizeDeps: {
+      entries: ['index.html', 'src/**/*.{ts,tsx}'],
+      // Bundle the core deps in one pass so dev never ends up with two copies of React.
+      include: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'react-router-dom', 'motion/react', 'lucide-react'],
+    },
     server: {
-      // Pre-transform the entry files so the first localhost load isn't blank for seconds.
-      warmup: { clientFiles: ['./src/main.tsx', './src/App.tsx', './src/components/BottomNav.tsx'] },
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
       proxy: {
