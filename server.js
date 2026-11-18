@@ -26,7 +26,15 @@ app.use(cors());
 app.use(express.json({ limit: '100mb' }));
 
 const sql = createSql();
-const storageSettings = {
+// Uploads go to Supabase Storage (S3-compatible, bucket "uploads") when its S3 keys
+// are set; otherwise the previous Neon/AWS object storage is used.
+const useSupabaseStorage = Boolean(process.env.SUPABASE_S3_ACCESS_KEY_ID && process.env.SUPABASE_S3_SECRET_ACCESS_KEY);
+const storageSettings = useSupabaseStorage ? {
+  endpoint: process.env.SUPABASE_S3_ENDPOINT || 'https://pjabzqlracuklpzwhhei.storage.supabase.co/storage/v1/s3',
+  accessKeyId: process.env.SUPABASE_S3_ACCESS_KEY_ID,
+  secretAccessKey: process.env.SUPABASE_S3_SECRET_ACCESS_KEY,
+  region: process.env.SUPABASE_S3_REGION || 'us-west-1',
+} : {
   endpoint: process.env.NEON_STORAGE_ENDPOINT || process.env.AWS_ENDPOINT_URL_S3,
   accessKeyId: process.env.NEON_STORAGE_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID,
   secretAccessKey: process.env.NEON_STORAGE_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY,
