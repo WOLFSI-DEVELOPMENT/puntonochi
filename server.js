@@ -2362,13 +2362,19 @@ app.post('/api/shorts/publish', requireNeon, requireAccount, async (req, res) =>
     if (!base64 || !mimeType.startsWith('video/')) return res.status(400).json({ error: 'Agrega un video válido.' });
     const bytes = Buffer.from(base64, 'base64');
     if (!bytes.length || bytes.length > 70 * 1024 * 1024) return res.status(413).json({ error: 'El video debe pesar 70 MB o menos.' });
-    const form = new FormData();
-    form.append('reqtype', 'fileupload');
-    form.append('fileToUpload', new Blob([bytes], { type: mimeType }), 'puntonochi-short.webm');
-    const upload = await fetch('https://catbox.moe/user/api.php', { method: 'POST', body: form });
-    const videoUrl = (await upload.text()).trim();
-    if (!upload.ok || !/^https:\/\/files\.catbox\.moe\//.test(videoUrl)) return res.status(502).json({ error: 'Catbox no pudo alojar el video.' });
+    if (!s3 || !useSupabaseStorage) return res.status(503).json({ error: 'El almacenamiento de videos no está configurado.' });
     const id = randomUUID();
+    // Reels live in Supabase Storage's public "shorts" bucket and stream from its CDN.
+    const extension = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('quicktime') ? 'mov' : 'webm';
+    const objectKey = `${req.account.id}/${id}.${extension}`;
+    try {
+      await s3.send(new PutObjectCommand({ Bucket: 'shorts', Key: objectKey, Body: bytes, ContentType: mimeType, CacheControl: 'public, max-age=31536000, immutable' }));
+    } catch (storageError) {
+      console.error('Could not store PuntoShort video:', storageError);
+      return res.status(502).json({ error: 'No se pudo subir el video. Intenta de nuevo.' });
+    }
+    const supabaseUrl = process.env.SUPABASE_URL || 'https://pjabzqlracuklpzwhhei.supabase.co';
+    const videoUrl = `${supabaseUrl}/storage/v1/object/public/shorts/${objectKey}`;
     const title = typeof req.body?.title === 'string' && req.body.title.trim() ? req.body.title.trim().slice(0, 140) : 'Un momento de Nochistlán';
     const description = typeof req.body?.description === 'string' ? req.body.description.trim().slice(0, 500) : 'Un video compartido en PuntoNochi.';
     const [video] = await sql`INSERT INTO short_videos (id, video_url, title, description, author_google_sub) VALUES (${id}, ${videoUrl}, ${title}, ${description}, ${req.account.id}) RETURNING id, video_url AS "videoUrl", title, description, author_google_sub AS "profileId"`;
