@@ -1,7 +1,6 @@
 export const PROFILE_ACTIVITY_KEY = 'puntonochi-profile-activity-v1';
 export const BOOKMARKS_KEY = 'puntonochi-bookmarks-v1';
 export const ARTICLE_BOOKMARKS_KEY = 'puntonochi-article-bookmarks-v1';
-export const NAV_DESIGN_KEY = 'puntonochi-nav-design-v1';
 export const HOME_THEME_KEY = 'puntonochi-home-theme-v1';
 export type NavDesign = 'dynamic' | 'simple' | 'experimental';
 export type HomeTheme = 'dark' | 'light';
@@ -21,10 +20,6 @@ export function setHomeTheme(theme: HomeTheme) {
 // The navbar is locked to the Dinámica design; there is no switching.
 export function getNavDesign(): NavDesign {
   return 'dynamic';
-}
-
-export function setNavDesign(_design: NavDesign) {
-  // No-op: the navbar design is locked.
 }
 
 export type ProfileActivity = { activeSecondsByDay: Record<string, number> };

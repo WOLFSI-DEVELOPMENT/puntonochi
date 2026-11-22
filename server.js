@@ -3376,8 +3376,11 @@ app.get('/api/places/:id/overview', requireNeon, async (req, res) => {
     const [place] = await sql`SELECT id, name, category, subtitle, location, address, phone, good_to_know AS "goodToKnow", hours, weekly_hours AS "weeklyHours", rating, review_count AS "reviewCount" FROM places WHERE id = ${req.params.id}`;
     if (!place) return res.status(404).json({ error: 'No encontramos este negocio.' });
 
-    const source = JSON.stringify(place);
-    const sourceHash = createHash('sha256').update(`overview-v2:${source}`).digest('hex');
+    // Only stable facts feed the summary, so it is generated once and saved. Ratings and review
+    // counts change constantly and are left out; the summary is regenerated only if the business itself changes.
+    const { rating: _rating, reviewCount: _reviewCount, weeklyHours: _weeklyHours, ...stablePlace } = place;
+    const source = JSON.stringify(stablePlace);
+    const sourceHash = createHash('sha256').update(`overview-v3:${source}`).digest('hex');
     const [cached] = await sql`SELECT overview, source_hash AS "sourceHash", generation_status AS "generationStatus" FROM place_ai_overviews WHERE place_id = ${place.id}`;
     if (cached?.sourceHash === sourceHash && cached.generationStatus === 'ready' && cached.overview) {
       res.set('Cache-Control', 'private, max-age=86400');
@@ -3414,7 +3417,7 @@ app.get('/api/places/:id/overview', requireNeon, async (req, res) => {
       const client = new GoogleGenAI({ apiKey });
       const response = await client.models.generateContent({
         model: 'gemini-3.1-flash-lite',
-        contents: `Escribe exactamente 2 o 3 frases breves en español para presentar este negocio. Basa cada afirmación únicamente en los datos proporcionados: no inventes servicios, precios, calidad, horarios ni recomendaciones. Incluye detalles concretos disponibles, como giro, ubicación, horario, contacto o calificación. Si faltan datos para una segunda frase, di de forma neutral que la ficha no incluye más información. No reveles razonamiento ni agregues listas o introducciones; devuelve solo el resumen (máximo 65 palabras).\n\nDatos del negocio:\n${source}`,
+        contents: `Escribe exactamente 2 o 3 frases breves en español para presentar este negocio. Basa cada afirmación únicamente en los datos proporcionados: no inventes servicios, precios, calidad, horarios ni recomendaciones. Incluye detalles concretos disponibles, como giro, ubicación, horario o contacto; no menciones calificaciones. Si faltan datos para una segunda frase, di de forma neutral que la ficha no incluye más información. No reveles razonamiento ni agregues listas o introducciones; devuelve solo el resumen (máximo 65 palabras).\n\nDatos del negocio:\n${source}`,
         config: { maxOutputTokens: 180, thinkingConfig: { thinkingLevel: 'low', includeThoughts: false } },
       });
       const overview = response.text?.trim();

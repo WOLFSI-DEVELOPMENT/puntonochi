@@ -9,6 +9,7 @@ import { CommunityActionsSheet } from './CommunityActionsSheet';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 import { VerifiedBusinessName } from './VerifiedBusinessName';
 import { AdSenseUnit } from './AdSenseUnit';
+import { AiSummary } from './AiSummary';
 import { canHypePlaceToday, getTotalHypes, HYPES_UPDATED_EVENT, hypePlace } from '../hypes';
 
 const BusinessLocationMap = lazy(() => import('./BusinessLocationMap').then((module) => ({ default: module.BusinessLocationMap })));
@@ -484,6 +485,8 @@ export function BusinessDetailSheet({ place, onClose, onSelectBusiness }: { plac
               <span className="text-white/45">· {place.reviewCount || 0} {(place.reviewCount || 0) === 1 ? 'reseña' : 'reseñas'}</span>
             </div>
             <p className="mt-1 text-[13px]" aria-label={place.isOpen ? 'Abierto ahora' : 'Cerrado ahora'}><span className={place.isOpen ? 'font-semibold text-emerald-400' : 'font-semibold text-white/60'}>{place.isOpen ? 'Abierto ahora' : 'Cerrado ahora'}</span>{place.isOpen && closingTime && <span className="text-white/55"> hasta las {formatTime(closingTime)}</span>}</p>
+
+            <AiSummary placeId={place.id} />
 
             {/* Action Buttons */}
             <div className="flex items-start gap-2 overflow-x-auto scrollbar-hide py-5 snap-x">
