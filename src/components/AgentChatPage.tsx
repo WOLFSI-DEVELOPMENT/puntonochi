@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { ArrowUp, CheckCircle2, Lock, Sparkles, X } from 'lucide-react';
 
@@ -11,12 +11,66 @@ const SUGGESTIONS = ['Quiero agregar mi negocio', 'Quiero editar mi negocio'];
 
 const newId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
-// Tiny, safe formatter: **bold** and line breaks only.
-function RichText({ text }: { text: string }) {
-  return <>{text.split('\n').map((line, index) => <Fragment key={index}>
-    {index > 0 && <br />}
-    {line.split(/(\*\*[^*]+\*\*)/g).map((part, i) => part.startsWith('**') && part.endsWith('**') ? <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong> : <Fragment key={i}>{part}</Fragment>)}
-  </Fragment>)}</>;
+// Small, safe Markdown renderer (no raw HTML): headings, bold, italic, code, links, lists, quotes.
+function renderInline(text: string, keyPrefix: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const pattern = /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*\s][^*]*\*)|(_[^_\s][^_]*_)|(\[[^\]]+\]\(https?:\/\/[^)\s]+\))/g;
+  let last = 0; let index = 0; let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text))) {
+    if (match.index > last) nodes.push(text.slice(last, match.index));
+    const token = match[0]; const key = `${keyPrefix}-${index++}`;
+    if (match[1]) nodes.push(<code key={key} className="rounded-md bg-white/10 px-1.5 py-0.5 text-[13px]">{token.slice(1, -1)}</code>);
+    else if (match[2] || match[3]) nodes.push(<strong key={key} className="font-semibold text-white">{renderInline(token.slice(2, -2), key)}</strong>);
+    else if (match[4] || match[5]) nodes.push(<em key={key}>{renderInline(token.slice(1, -1), key)}</em>);
+    else { const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/); if (link) nodes.push(<a key={key} href={link[2]} target="_blank" rel="noopener noreferrer" className="text-sky-300 underline underline-offset-2">{link[1]}</a>); }
+    last = match.index + token.length;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes;
+}
+
+function Markdown({ text }: { text: string }) {
+  const lines = text.replace(/\r/g, '').split('\n');
+  const blocks: ReactNode[] = [];
+  const isBullet = (line: string) => /^\s*[-*•]\s+/.test(line);
+  const isNumbered = (line: string) => /^\s*\d+[.)]\s+/.test(line);
+  const startsBlock = (line: string) => !line.trim() || /^(#{1,4})\s/.test(line) || isBullet(line) || isNumbered(line) || /^>\s?/.test(line) || line.trim().startsWith('```') || /^-{3,}$/.test(line.trim());
+  let i = 0; let n = 0;
+  while (i < lines.length) {
+    const line = lines[i]; const key = `b${n++}`;
+    if (!line.trim()) { i += 1; continue; }
+    if (line.trim().startsWith('```')) {
+      const code: string[] = []; i += 1;
+      while (i < lines.length && !lines[i].trim().startsWith('```')) { code.push(lines[i]); i += 1; }
+      i += 1;
+      blocks.push(<pre key={key} className="overflow-x-auto rounded-xl bg-black/40 p-3 text-[13px] leading-relaxed"><code>{code.join('\n')}</code></pre>);
+      continue;
+    }
+    const heading = line.match(/^(#{1,4})\s+(.*)$/);
+    if (heading) {
+      const level = heading[1].length;
+      blocks.push(<p key={key} className={level <= 2 ? 'pt-1 text-[17px] font-bold text-white' : 'pt-0.5 text-[15px] font-semibold text-white'}>{renderInline(heading[2], key)}</p>);
+      i += 1; continue;
+    }
+    if (/^-{3,}$/.test(line.trim())) { blocks.push(<hr key={key} className="border-white/10" />); i += 1; continue; }
+    if (isBullet(line) || isNumbered(line)) {
+      const ordered = isNumbered(line); const items: string[] = [];
+      while (i < lines.length && (ordered ? isNumbered(lines[i]) : isBullet(lines[i]))) { items.push(lines[i].replace(ordered ? /^\s*\d+[.)]\s+/ : /^\s*[-*•]\s+/, '')); i += 1; }
+      const Tag = ordered ? 'ol' : 'ul';
+      blocks.push(<Tag key={key} className={`space-y-1 pl-5 ${ordered ? 'list-decimal' : 'list-disc'} marker:text-white/40`}>{items.map((item, itemIndex) => <li key={itemIndex}>{renderInline(item, `${key}-${itemIndex}`)}</li>)}</Tag>);
+      continue;
+    }
+    if (/^>\s?/.test(line)) {
+      const quote: string[] = [];
+      while (i < lines.length && /^>\s?/.test(lines[i])) { quote.push(lines[i].replace(/^>\s?/, '')); i += 1; }
+      blocks.push(<blockquote key={key} className="border-l-2 border-white/20 pl-3 text-white/70">{renderInline(quote.join(' '), key)}</blockquote>);
+      continue;
+    }
+    const paragraph: string[] = [];
+    while (i < lines.length && (paragraph.length === 0 || !startsBlock(lines[i]))) { paragraph.push(lines[i]); i += 1; }
+    blocks.push(<p key={key}>{paragraph.map((part, partIndex) => <Fragment key={partIndex}>{partIndex > 0 && <br />}{renderInline(part, `${key}-${partIndex}`)}</Fragment>)}</p>);
+  }
+  return <div className="space-y-2.5">{blocks}</div>;
 }
 
 function SecureForm({ ui, done, onSubmit }: { ui: FormUi; done?: boolean; onSubmit: (values: Record<string, string>) => Promise<string | null> }) {
@@ -93,14 +147,13 @@ export function AgentChatPage({ onClose, onRequireAuth }: { onClose: () => void;
       <div className="mx-auto w-full max-w-[640px] space-y-5 pt-2">
         {messages.map((message) => message.role === 'user'
           ? <div key={message.id} className="flex justify-end"><p className="max-w-[85%] whitespace-pre-wrap break-words rounded-[22px] rounded-br-md bg-[#2f3136] px-4 py-2.5 text-[15px] leading-snug">{message.text}</p></div>
-          : <div key={message.id} className="flex gap-3">
-              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[.08]"><Sparkles className="h-3.5 w-3.5 text-sky-300" /></span>
-              <div className="min-w-0 flex-1 text-[15px] leading-relaxed text-white/90"><RichText text={message.text} />
+          : <div key={message.id}>
+              <div className="min-w-0 text-[15px] leading-relaxed text-white/90"><Markdown text={message.text} />
                 {message.ui && <SecureForm ui={message.ui} done={message.formDone} onSubmit={submitPrivate(message.id, message.ui)} />}
               </div>
             </div>)}
-        {messages.length === 1 && <div className="flex flex-wrap gap-2 pl-10">{SUGGESTIONS.map((suggestion) => <button key={suggestion} type="button" onClick={() => void send(suggestion)} className="rounded-full bg-white/[.08] px-4 py-2 text-sm font-medium text-white/85 transition active:scale-[.97]">{suggestion}</button>)}</div>}
-        {busy && <div className="flex gap-3" role="status" aria-label="El asistente está escribiendo"><span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[.08]"><Sparkles className="h-3.5 w-3.5 text-sky-300" /></span><span className="flex items-center gap-1 pt-2">{[0, 1, 2].map((dot) => <span key={dot} className="h-2 w-2 animate-pulse rounded-full bg-white/50" style={{ animationDelay: `${dot * 160}ms` }} />)}</span></div>}
+        {messages.length === 1 && <div className="flex flex-wrap gap-2">{SUGGESTIONS.map((suggestion) => <button key={suggestion} type="button" onClick={() => void send(suggestion)} className="rounded-full bg-white/[.08] px-4 py-2 text-sm font-medium text-white/85 transition active:scale-[.97]">{suggestion}</button>)}</div>}
+        {busy && <div role="status" aria-label="El asistente está escribiendo"><span className="flex items-center gap-1 pt-1">{[0, 1, 2].map((dot) => <span key={dot} className="h-2 w-2 animate-pulse rounded-full bg-white/50" style={{ animationDelay: `${dot * 160}ms` }} />)}</span></div>}
         <div ref={endRef} />
       </div>
     </div>

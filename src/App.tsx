@@ -1329,7 +1329,7 @@ export default function App() {
             }}/>
           </React.Suspense>
         )}
-        {showCreateSheet && <CreateSheet onClose={() => setShowCreateSheet(false)} onReel={() => setShowReelCreator(true)} />}
+        {showCreateSheet && <CreateSheet onClose={() => setShowCreateSheet(false)} onReel={() => setShowReelCreator(true)} onBusiness={() => setShowBusinessSubmission(true)} />}
         {showReelCreator && <React.Suspense fallback={<div className="fixed inset-0 z-[110] bg-black"/>}><ReelCreatorPage onClose={() => setShowReelCreator(false)} /></React.Suspense>}
         {activeTab === 'noticias' && (
           <motion.div key="news-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<PageLoadingSkeleton page="news"/>}><NewsPage key="noticias" onOpenEvents={() => setActiveTab('eventos')} /></React.Suspense></motion.div>

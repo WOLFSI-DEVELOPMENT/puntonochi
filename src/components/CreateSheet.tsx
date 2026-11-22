@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Camera, ChevronRight, ImagePlus, Video, X } from 'lucide-react';
+import { ArrowLeft, Camera, ChevronRight, ImagePlus, Store, Video, X } from 'lucide-react';
 import { SheetDragHandle, useSheetDrag } from './SheetDragHandle';
 
 const MAX_SIDE = 1600;
@@ -36,7 +36,7 @@ async function prepareImage(file: File): Promise<{ base64: string; mimeType: str
   return { base64, mimeType: blob.type, previewUrl: URL.createObjectURL(blob) };
 }
 
-export function CreateSheet({ onClose, onReel }: { onClose: () => void; onReel: () => void }) {
+export function CreateSheet({ onClose, onReel, onBusiness }: { onClose: () => void; onReel: () => void; onBusiness: () => void }) {
   const sheetDrag = useSheetDrag(onClose);
   const [step, setStep] = useState<'choose' | 'photo'>('choose');
   const [image, setImage] = useState<{ base64: string; mimeType: string; previewUrl: string } | null>(null);
@@ -88,6 +88,11 @@ export function CreateSheet({ onClose, onReel }: { onClose: () => void; onReel: 
           <button type="button" onClick={() => { onClose(); onReel(); }} className="flex w-full items-center gap-4 rounded-[24px] bg-white/[.07] p-4 text-left backdrop-blur-xl">
             <span className="rounded-2xl bg-rose-400/15 p-3 text-rose-200"><Video className="h-5 w-5" /></span>
             <span className="flex-1"><span className="block font-bold">Subir reel</span><span className="mt-1 block text-xs text-white/50">Comparte un video corto de Nochistlán</span></span>
+            <ChevronRight className="h-5 w-5 text-white/35" />
+          </button>
+          <button type="button" onClick={() => { onClose(); onBusiness(); }} className="flex w-full items-center gap-4 rounded-[24px] bg-white/[.07] p-4 text-left backdrop-blur-xl">
+            <span className="rounded-2xl bg-emerald-300/15 p-3 text-emerald-200"><Store className="h-5 w-5" /></span>
+            <span className="flex-1"><span className="block font-bold">Agregar mi negocio</span><span className="mt-1 block text-xs text-white/50">Chatea con la IA y publícalo al instante</span></span>
             <ChevronRight className="h-5 w-5 text-white/35" />
           </button>
           <button type="button" onClick={() => setStep('photo')} className="flex w-full items-center gap-4 rounded-[24px] bg-white/[.07] p-4 text-left backdrop-blur-xl">
