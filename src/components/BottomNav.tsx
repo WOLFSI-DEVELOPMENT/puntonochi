@@ -103,6 +103,7 @@ const CSS_TEXT = `
 }
 .lgn-item { position: relative; z-index: 1; transition: background 160ms ease; }
 .lgn-item:focus-visible { outline: none; }
+.lgn-tab, .lgn-tab:focus, .lgn-tab:focus-visible { outline: none; box-shadow: none; }
 .lgn-item:active { background: rgba(255,255,255,0.07); }
 .lgn-open:active + .lgn-s-ico .lgn-ico { transform: scale(0.88); transition-duration: 120ms; }
 .lgn-close:active { transform: translateY(-50%) scale(0.9) !important; }
@@ -246,14 +247,17 @@ const SUPPORTS_REFRACTION = typeof navigator !== "undefined"
   && /Chrome\//.test(navigator.userAgent)
   && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(navigator.userAgent);
 let rimSeq = 0;
-function makeRimMap(w, h) {
+function makeRimMap(cssW, cssH) {
+  // Drawn at 2x so the bend is smooth on high-density phone screens.
+  const k = 2;
+  const w = cssW * k, h = cssH * k;
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d");
   const img = ctx.createImageData(w, h);
   const r = h / 2;
-  const band = h * 0.62; // refraction depth measured in from the rim
+  const band = h * 0.45; // narrow bezel: only the very edge bends
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const px = x + 0.5 - w / 2, py = y + 0.5 - h / 2;
@@ -302,7 +306,7 @@ function useRefractiveGlass(ref, enabled) {
 
 /* ---------- Dark liquid glass tokens ---------- */
 const BLUR = "blur(6px) saturate(190%) brightness(1.06)";
-const FROSTED_BLUR = "blur(20px) saturate(180%) brightness(1.08)"; // navbar glass
+const FROSTED_BLUR = "blur(18px) saturate(180%) brightness(1.15)"; // Safari and Firefox glass (they cannot refract); -webkit- prefixed copy is always set alongside
 
 const darkGlass = (tint) => ({
   background: supportsBlur
@@ -928,15 +932,8 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
         <svg width="0" height="0" aria-hidden="true" style={{ position: "absolute" }}>
           <filter id={liquid.id} x="0" y="0" width={liquid.w} height={liquid.h} filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" colorInterpolationFilters="sRGB">
             <feImage href={liquid.url} x="0" y="0" width={liquid.w} height={liquid.h} preserveAspectRatio="none" result="map" />
-            {/* Three slightly different bends = a faint chromatic fringe like real glass */}
-            <feDisplacementMap in="SourceGraphic" in2="map" scale="46" xChannelSelector="R" yChannelSelector="G" result="dr" />
-            <feColorMatrix in="dr" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="r" />
-            <feDisplacementMap in="SourceGraphic" in2="map" scale="40" xChannelSelector="R" yChannelSelector="G" result="dg" />
-            <feColorMatrix in="dg" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="g" />
-            <feDisplacementMap in="SourceGraphic" in2="map" scale="34" xChannelSelector="R" yChannelSelector="G" result="db" />
-            <feColorMatrix in="db" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="b" />
-            <feBlend in="r" in2="g" mode="screen" result="rg" />
-            <feBlend in="rg" in2="b" mode="screen" />
+            {/* One gentle bend: a bar this thin streaks if it pulls from too far away */}
+            <feDisplacementMap in="SourceGraphic" in2="map" scale="24" xChannelSelector="R" yChannelSelector="G" />
           </filter>
         </svg>
       )}
@@ -961,12 +958,13 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
           role="tablist"
           aria-hidden={searching}
           style={{
-            ...(experimentalNav ? { background: 'transparent', backdropFilter: 'none', WebkitBackdropFilter: 'none', boxShadow: 'none', isolation: 'auto', transform: 'none' } : { ...darkGlass("rgba(30,30,34,0.28)"), background: "radial-gradient(140% 120% at 30% 0%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 100%), rgba(30,30,34,0.28)", backdropFilter: FROSTED_BLUR, WebkitBackdropFilter: FROSTED_BLUR }),
+            ...(experimentalNav ? { background: 'transparent', backdropFilter: 'none', WebkitBackdropFilter: 'none', boxShadow: 'none', isolation: 'auto', transform: 'none' } : { ...darkGlass("rgba(30,30,34,0.28)"), background: "linear-gradient(180deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.07) 42%, rgba(255,255,255,0.12) 100%)", backdropFilter: FROSTED_BLUR, WebkitBackdropFilter: FROSTED_BLUR, boxShadow: "none", border: "none", outline: "none" }),
             // Chromium: refract the live page behind the bar (real liquid glass).
             ...(liquid && !experimentalNav ? {
-              background: "linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.04) 55%, rgba(255,255,255,0.08) 100%)",
-              backdropFilter: `blur(1.5px) url(#${liquid.id}) saturate(190%) brightness(1.12)`,
-              WebkitBackdropFilter: `blur(1.5px) url(#${liquid.id}) saturate(190%) brightness(1.12)`,
+              background: "linear-gradient(180deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.07) 42%, rgba(255,255,255,0.12) 100%)",
+              backdropFilter: `blur(4px) url(#${liquid.id}) saturate(140%) brightness(1.15)`,
+              WebkitBackdropFilter: `blur(4px) url(#${liquid.id}) saturate(140%) brightness(1.15)`,
+              boxShadow: "none",
             } : null),
             position: "absolute",
             left: 0,
@@ -1018,10 +1016,9 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
                 width: "100%",
                 height: "100%",
                 borderRadius: 999,
-                background:
-                  "radial-gradient(120% 90% at 30% 0%, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.10) 45%, rgba(255,255,255,0.06) 100%)",
-                backdropFilter: "blur(14px) saturate(180%) brightness(1.12)",
-                WebkitBackdropFilter: "blur(14px) saturate(180%) brightness(1.12)",
+                background: "rgba(255,255,255,0.16)",
+                backdropFilter: "blur(14px)",
+                WebkitBackdropFilter: "blur(14px)",
                 border: "none",
                 boxShadow: "none",
                 transform: "translateZ(0)",
