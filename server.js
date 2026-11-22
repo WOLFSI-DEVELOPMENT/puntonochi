@@ -3103,6 +3103,185 @@ app.get('/api/places/popular-week', requireNeon, async (req, res) => {
   }
 });
 
+// ───────────── Business agent (Gemini): onboard and edit businesses by chat ─────────────
+// The model never sees confidential details. It asks for them with request_private_details,
+// the phone shows a secure form, and the values go straight to /api/agent/private.
+let agentSchemaReady;
+const ensureAgentSchema = () => {
+  if (!agentSchemaReady) agentSchemaReady = (async () => {
+    await ensureDirectorySchema();
+    await ensureAccountSchema();
+    await sql`ALTER TABLE places ADD COLUMN IF NOT EXISTS owner_google_sub TEXT`;
+    await sql`ALTER TABLE places ADD COLUMN IF NOT EXISTS contact_email TEXT`;
+    await sql`CREATE INDEX IF NOT EXISTS places_owner_idx ON places (owner_google_sub)`;
+    await sql`CREATE TABLE IF NOT EXISTS agent_private_drafts (
+      draft_id TEXT NOT NULL, account_sub TEXT NOT NULL, data JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (draft_id, account_sub)
+    )`;
+  })().catch((error) => { agentSchemaReady = undefined; throw error; });
+  return agentSchemaReady;
+};
+
+const AGENT_PRIVATE_FIELDS = {
+  phone: { label: 'Teléfono del negocio', type: 'tel', column: 'phone' },
+  alternate_phone: { label: 'Teléfono alterno (opcional)', type: 'tel', column: 'alternate_phone', optional: true },
+  contact_email: { label: 'Correo de contacto', type: 'email', column: 'contact_email', optional: true },
+};
+const AGENT_EDITABLE = { name: 'name', category: 'category', description: 'subtitle', address: 'address', location: 'location', hours: 'hours', cost: 'cost', website_url: 'website_url', instagram_url: 'instagram_url' };
+const AGENT_MAX_BUSINESSES = 5;
+
+const cleanAgentPrivate = (values) => {
+  const out = {};
+  for (const [key, spec] of Object.entries(AGENT_PRIVATE_FIELDS)) {
+    const raw = typeof values?.[key] === 'string' ? values[key].trim() : '';
+    if (!raw) continue;
+    if (spec.type === 'tel') { if ((raw.match(/\d/g) || []).length < 7 || !/^[\d+\-() ]{7,24}$/.test(raw)) continue; }
+    if (spec.type === 'email' && !/^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(raw)) continue;
+    out[key] = raw.slice(0, 190);
+  }
+  return out;
+};
+
+const agentTools = [{ functionDeclarations: [
+  { name: 'list_my_businesses', description: 'Lista los negocios que este usuario ya registró (solo los suyos).', parameters: { type: 'OBJECT', properties: {} } },
+  { name: 'request_private_details', description: 'Muestra al usuario un formulario seguro dentro del chat para datos confidenciales (teléfono, correo). SIEMPRE úsalo para esos datos; nunca los pidas por texto. Pasa businessId si es para editar un negocio existente.', parameters: { type: 'OBJECT', properties: { fields: { type: 'ARRAY', items: { type: 'STRING', enum: Object.keys(AGENT_PRIVATE_FIELDS) }, description: 'Campos a pedir.' }, reason: { type: 'STRING', description: 'Frase corta que explica por qué se piden.' }, businessId: { type: 'STRING', description: 'ID del negocio si se está editando.' } }, required: ['fields'] } },
+  { name: 'create_business', description: 'Publica un negocio nuevo de inmediato (no requiere aprobación). Requiere que el usuario ya haya enviado el teléfono por el formulario seguro.', parameters: { type: 'OBJECT', properties: { name: { type: 'STRING' }, category: { type: 'STRING', description: 'Debe ser una de las categorías disponibles.' }, description: { type: 'STRING', description: 'Descripción corta, 1-2 frases.' }, address: { type: 'STRING' }, location: { type: 'STRING', description: 'Colonia o zona, p. ej. Centro.' }, hours: { type: 'STRING', description: 'Horario en texto, p. ej. Lun-Sáb 9:00-18:00.' }, cost: { type: 'NUMBER', description: 'Nivel de precio de 1 (económico) a 4 (caro).' }, website_url: { type: 'STRING' }, instagram_url: { type: 'STRING' } }, required: ['name', 'category', 'description', 'address', 'location', 'hours'] } },
+  { name: 'update_business', description: 'Edita campos públicos de un negocio del usuario. El teléfono y el correo NO se editan aquí: usa request_private_details con businessId.', parameters: { type: 'OBJECT', properties: { businessId: { type: 'STRING' }, name: { type: 'STRING' }, category: { type: 'STRING' }, description: { type: 'STRING' }, address: { type: 'STRING' }, location: { type: 'STRING' }, hours: { type: 'STRING' }, cost: { type: 'NUMBER' }, website_url: { type: 'STRING' }, instagram_url: { type: 'STRING' } }, required: ['businessId'] } },
+] }];
+
+app.post('/api/agent/private', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    await ensureAgentSchema();
+    const draftId = typeof req.body?.draftId === 'string' ? req.body.draftId : '';
+    if (!/^[A-Za-z0-9_-]{8,64}$/.test(draftId)) return res.status(400).json({ error: 'Sesión no válida.' });
+    const values = cleanAgentPrivate(req.body?.values);
+    if (!Object.keys(values).length) return res.status(400).json({ error: 'Revisa los datos: el teléfono o el correo no parecen válidos.' });
+    const businessId = typeof req.body?.businessId === 'string' ? req.body.businessId.slice(0, 160) : '';
+    if (businessId) {
+      const [owned] = await sql`SELECT id FROM places WHERE id = ${businessId} AND owner_google_sub = ${req.account.id}`;
+      if (!owned) return res.status(403).json({ error: 'Solo puedes editar tus propios negocios.' });
+      for (const [key, value] of Object.entries(values)) await sql.query(`UPDATE places SET ${AGENT_PRIVATE_FIELDS[key].column} = $1 WHERE id = $2 AND owner_google_sub = $3`, [value, businessId, req.account.id]);
+      return res.json({ ok: true, applied: true });
+    }
+    await sql`INSERT INTO agent_private_drafts (draft_id, account_sub, data) VALUES (${draftId}, ${req.account.id}, ${JSON.stringify(values)}::jsonb)
+      ON CONFLICT (draft_id, account_sub) DO UPDATE SET data = agent_private_drafts.data || EXCLUDED.data, updated_at = NOW()`;
+    res.json({ ok: true, applied: false });
+  } catch (error) {
+    console.error('Agent private details failed:', error);
+    res.status(500).json({ error: 'No se pudieron guardar los datos.' });
+  }
+});
+
+app.post('/api/agent/chat', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'El asistente todavía no está configurado (falta GEMINI_API_KEY).' });
+  try {
+    await ensureAgentSchema();
+    const draftId = typeof req.body?.draftId === 'string' ? req.body.draftId : '';
+    if (!/^[A-Za-z0-9_-]{8,64}$/.test(draftId)) return res.status(400).json({ error: 'Sesión no válida.' });
+    const contents = (Array.isArray(req.body?.messages) ? req.body.messages.slice(-30) : [])
+      .map((item) => ({ role: item?.role === 'assistant' ? 'model' : 'user', parts: [{ text: String(item?.text || '').slice(0, 2000) }] }))
+      .filter((item) => item.parts[0].text);
+    while (contents.length && contents[0].role !== 'user') contents.shift();
+    if (!contents.length || contents[contents.length - 1].role !== 'user') return res.status(400).json({ error: 'Escribe un mensaje.' });
+
+    const categoryNames = (await sql`SELECT name FROM categories ORDER BY name`).map((row) => row.name);
+    const findCategory = (value) => categoryNames.find((name) => name.toLocaleLowerCase('es') === String(value || '').trim().toLocaleLowerCase('es'));
+    let ui = null, created = null, updated = null;
+
+    const runTool = async (name, args) => {
+      if (name === 'list_my_businesses') {
+        const rows = await sql`SELECT id, name, category, subtitle AS description, address, location, hours, cost, website_url, instagram_url FROM places WHERE owner_google_sub = ${req.account.id} ORDER BY created_at DESC NULLS LAST LIMIT 20`;
+        return { businesses: rows };
+      }
+      if (name === 'request_private_details') {
+        const fields = (Array.isArray(args?.fields) ? args.fields : []).filter((key) => AGENT_PRIVATE_FIELDS[key]);
+        if (!fields.length) return { error: 'Indica qué campos pedir.' };
+        let businessId = typeof args?.businessId === 'string' ? args.businessId : '';
+        if (businessId) { const [owned] = await sql`SELECT id FROM places WHERE id = ${businessId} AND owner_google_sub = ${req.account.id}`; if (!owned) return { error: 'Ese negocio no es del usuario.' }; }
+        ui = { type: 'form', title: 'Datos privados', reason: String(args?.reason || 'Estos datos se envían de forma segura y la IA no los ve.').slice(0, 200), businessId: businessId || null, fields: fields.map((key) => ({ key, label: AGENT_PRIVATE_FIELDS[key].label, type: AGENT_PRIVATE_FIELDS[key].type, optional: Boolean(AGENT_PRIVATE_FIELDS[key].optional) })) };
+        return { shown: true, note: 'Se mostró un formulario seguro. Espera a que el usuario lo envíe. No pidas esos datos por chat.' };
+      }
+      if (name === 'create_business') {
+        const category = findCategory(args?.category);
+        if (!category) return { error: `Categoría no válida. Opciones: ${categoryNames.join(', ')}` };
+        const clean = (value, max) => String(value || '').trim().slice(0, max);
+        const fieldsOk = ['name', 'description', 'address', 'location', 'hours'].every((key) => clean(args?.[key], 300));
+        if (!fieldsOk) return { error: 'Faltan datos obligatorios (nombre, descripción, dirección, zona y horario).' };
+        const [{ n }] = await sql`SELECT COUNT(*)::int AS n FROM places WHERE owner_google_sub = ${req.account.id}`;
+        if (n >= AGENT_MAX_BUSINESSES) return { error: `Límite de ${AGENT_MAX_BUSINESSES} negocios por cuenta.` };
+        const [draft] = await sql`SELECT data FROM agent_private_drafts WHERE draft_id = ${draftId} AND account_sub = ${req.account.id}`;
+        const priv = draft?.data || {};
+        if (!priv.phone) return { error: 'Falta el teléfono. Llama primero a request_private_details con fields ["phone","contact_email"].' };
+        const slug = clean(args.name, 60).toLocaleLowerCase('es').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'negocio';
+        const id = `${slug}-${randomUUID().slice(0, 6)}`;
+        const cost = Math.min(4, Math.max(1, Math.round(Number(args?.cost) || 2)));
+        const url = (value) => { const v = clean(value, 300); return /^https?:\/\//i.test(v) ? v : v ? `https://${v}` : null; };
+        await sql`INSERT INTO places (id, name, category, subtitle, location, address, images, rating, review_count, is_open, cost, good_to_know, hours, phone, alternate_phone, contact_email, website_url, instagram_url, sort_order, created_at, owner_google_sub)
+          VALUES (${id}, ${clean(args.name, 120)}, ${category}, ${clean(args.description, 400)}, ${clean(args.location, 120)}, ${clean(args.address, 240)}, '[]'::jsonb, NULL, 0, FALSE, ${cost}, '[]'::jsonb,
+            ${clean(args.hours, 240)}, ${priv.phone}, ${priv.alternate_phone || null}, ${priv.contact_email || null}, ${url(args.website_url)}, ${url(args.instagram_url)},
+            (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM places), NOW(), ${req.account.id})`;
+        await sql`DELETE FROM agent_private_drafts WHERE draft_id = ${draftId} AND account_sub = ${req.account.id}`;
+        created = { id, name: clean(args.name, 120) };
+        return { ok: true, id, name: created.name, published: true };
+      }
+      if (name === 'update_business') {
+        const businessId = String(args?.businessId || '');
+        const [owned] = await sql`SELECT id FROM places WHERE id = ${businessId} AND owner_google_sub = ${req.account.id}`;
+        if (!owned) return { error: 'Solo puedes editar negocios que registraste tú.' };
+        const applied = [];
+        for (const [key, column] of Object.entries(AGENT_EDITABLE)) {
+          if (args?.[key] == null || args[key] === '') continue;
+          let value = key === 'cost' ? Math.min(4, Math.max(1, Math.round(Number(args[key]) || 2))) : String(args[key]).trim().slice(0, 400);
+          if (key === 'category') { value = findCategory(value); if (!value) return { error: `Categoría no válida. Opciones: ${categoryNames.join(', ')}` }; }
+          if ((key === 'website_url' || key === 'instagram_url') && !/^https?:\/\//i.test(String(value))) value = `https://${value}`;
+          await sql.query(`UPDATE places SET ${column} = $1 WHERE id = $2 AND owner_google_sub = $3`, [value, businessId, req.account.id]);
+          applied.push(key);
+        }
+        if (!applied.length) return { error: 'No indicaste ningún cambio.' };
+        updated = { id: businessId, fields: applied };
+        return { ok: true, updated: applied };
+      }
+      return { error: 'Herramienta desconocida.' };
+    };
+
+    const systemInstruction = `Eres el asistente de PuntoNochi, el directorio local de Nochistlán de Mejía, Zacatecas. Ayudas a dueños a registrar su negocio y a editar los negocios que ya registraron. Habla en español, con tono cálido, claro y breve (como un chat). Haz una o dos preguntas a la vez, nunca un cuestionario enorme.
+Para CREAR un negocio, averigua conversando: nombre, categoría (elige entre: ${categoryNames.join(', ')}), descripción corta, dirección, colonia o zona, horario y, opcionalmente, sitio web, Instagram y nivel de precio. Cuando tengas lo básico, pide el teléfono y correo con request_private_details (formulario seguro) y, una vez enviado, llama a create_business. No se necesita aprobación: el negocio se publica al instante; dile al usuario que ya está publicado.
+Para EDITAR: llama a list_my_businesses, confirma cuál negocio y aplica el cambio con update_business. Solo puedes editar negocios que el usuario registró contigo; si pide editar uno que no es suyo, explica que por seguridad debe contactar al equipo de PuntoNochi.
+DATOS CONFIDENCIALES (teléfono, correo, contraseñas, identificaciones): nunca los pidas ni los repitas por chat; usa siempre request_private_details. No inventes datos del negocio. No prometas cosas que no puedes hacer.`;
+
+    const client = new GoogleGenAI({ apiKey });
+    let reply = '';
+    for (let step = 0; step < 6; step += 1) {
+      const response = await client.models.generateContent({
+        model: 'gemini-3.1-flash-lite',
+        contents,
+        config: { systemInstruction, tools: agentTools, maxOutputTokens: 700, thinkingConfig: { thinkingLevel: 'low', includeThoughts: false } },
+      });
+      const calls = response.functionCalls || [];
+      if (!calls.length) { reply = response.text?.trim() || ''; break; }
+      const modelContent = response.candidates?.[0]?.content;
+      if (modelContent) contents.push(modelContent);
+      const results = [];
+      for (const call of calls) {
+        let result;
+        try { result = await runTool(call.name, call.args || {}); }
+        catch (toolError) { console.error('Agent tool failed:', call.name, toolError); result = { error: 'Algo falló al ejecutar la acción.' }; }
+        results.push({ functionResponse: { name: call.name, response: result } });
+      }
+      contents.push({ role: 'user', parts: results });
+    }
+    if (!reply) reply = ui ? 'Te abrí un formulario seguro para tus datos privados.' : created ? '¡Listo! Tu negocio ya está publicado.' : 'No pude completar eso. ¿Me lo puedes decir de otra forma?';
+    res.set('Cache-Control', 'no-store');
+    res.json({ reply, ui, created, updated });
+  } catch (error) {
+    console.error('Business agent failed:', error);
+    res.status(502).json({ error: 'El asistente no pudo responder. Inténtalo de nuevo.' });
+  }
+});
+
 app.post('/api/ask-nochi', requireNeon, async (req, res) => {
   if (!ensureSameOrigin(req, res)) return;
   const apiKey = process.env.GEMINI_API_KEY;

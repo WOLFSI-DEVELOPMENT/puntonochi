@@ -24,7 +24,7 @@ const EventsPage = React.lazy(() => import('./components/EventsPage').then((modu
 const SearchPage = React.lazy(() => import('./components/SearchPage').then((module) => ({ default: module.SearchPage })));
 const AskNochiPage = React.lazy(() => import('./components/SearchPage').then((module) => ({ default: module.AskNochiPage })));
 const BusinessPromotionSheet = React.lazy(() => import('./components/BusinessPromotionSheet').then((module) => ({ default: module.BusinessPromotionSheet })));
-const BusinessSubmissionSheet = React.lazy(() => import('./components/BusinessSubmissionSheet').then((module) => ({ default: module.BusinessSubmissionSheet })));
+const AgentChatPage = React.lazy(() => import('./components/AgentChatPage').then((module) => ({ default: module.AgentChatPage })));
 const AdminPage = React.lazy(() => import('./components/AdminPage').then((module) => ({ default: module.AdminPage })));
 const SmartOnboarding = React.lazy(() => import('./components/SmartOnboarding').then((module) => ({ default: module.SmartOnboarding })));
 import CornerKit from '@cornerkit/core';
@@ -1285,7 +1285,7 @@ export default function App() {
               <h2 className="text-2xl font-bold tracking-tight">Agrega tu negocio</h2>
               <p className="mt-1 text-[15px] font-medium text-neutral-500">Comparte tu negocio con la comunidad de Nochistlán.</p>
             </div>
-            <button type="button" onClick={() => setShowBusinessSubmission(true)} style={{ backgroundColor: '#ffffff', color: '#111111' }} className="w-full rounded-full !bg-white px-6 py-3.5 text-sm font-bold !text-black transition-transform active:scale-[0.99]">Agrega tu negocio</button>
+            <button type="button" onClick={() => { if (signedInAccount) setShowBusinessSubmission(true); else setShowAccountAuth(true); }} style={{ backgroundColor: '#ffffff', color: '#111111' }} className="w-full rounded-full !bg-white px-6 py-3.5 text-sm font-bold !text-black transition-transform active:scale-[0.99]">Agrega tu negocio</button>
           </motion.section>
           </div>
           <footer aria-label="Información y navegación de PuntoNochi" className="home-footer relative left-1/2 mt-12 min-h-[250px] w-screen -translate-x-1/2 overflow-hidden rounded-t-[48px] bg-white px-6 pb-[calc(env(safe-area-inset-bottom,0px)+92px)] pt-9 text-[#202124]">
@@ -1363,7 +1363,7 @@ export default function App() {
         {activeTab === 'ask-nochi' && <React.Suspense fallback={null}><AskNochiPage key="ask-nochi" onSelectBusiness={(place) => { setActiveTab('inicio'); setSelectedBusiness(place); }} /></React.Suspense>}
         {showAdminPage && <React.Suspense fallback={null}><AdminPage key="admin-page" onClose={() => setShowAdminPage(false)} /></React.Suspense>}
         {showBusinessPromotion && <React.Suspense fallback={null}><BusinessPromotionSheet key="business-promotion" onClose={() => setShowBusinessPromotion(false)} /></React.Suspense>}
-        {showBusinessSubmission && <React.Suspense fallback={null}><BusinessSubmissionSheet key="business-submission" onClose={() => setShowBusinessSubmission(false)} /></React.Suspense>}
+        {showBusinessSubmission && <React.Suspense fallback={null}><AgentChatPage key="business-agent" onClose={() => setShowBusinessSubmission(false)} onRequireAuth={() => { setShowBusinessSubmission(false); setShowAccountAuth(true); }} /></React.Suspense>}
         {showSearch && (
           <React.Suspense fallback={<div className="fixed inset-x-0 bottom-0 z-[45] mx-auto h-[min(86dvh,760px)] max-w-2xl rounded-t-[30px] bg-[#202124]"/>}>
           <SearchPage
