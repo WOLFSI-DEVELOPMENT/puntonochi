@@ -45,6 +45,7 @@ const LegalPage = React.lazy(() => import('./components/LegalPage').then((module
 import type { LegalDocument } from './components/LegalPage';
 import { PageLoadingSkeleton } from './components/PageLoadingSkeleton';
 import { WhatsNewOverlay } from './components/WhatsNewOverlay';
+import { CreateSheet } from './components/CreateSheet';
 import { Analytics, track } from '@vercel/analytics/react';
 import { getTotalHypes, HYPES_UPDATED_EVENT } from './hypes';
 import { getDailyDropChoices, getDailyDropQuestion } from './dailyDrop';
@@ -304,6 +305,7 @@ export default function App() {
   useEffect(() => { if (activeTab !== 'turismo' && activeTab !== 'guias') setTourismStarted(false); }, [activeTab]);
   const [openEventCreatorOnPage, setOpenEventCreatorOnPage] = useState(false);
   const [showReelCreator, setShowReelCreator] = useState(false);
+  const [showCreateSheet, setShowCreateSheet] = useState(false);
   useEffect(() => {
     if (!('IntersectionObserver' in window)) { setShortsNearView(true); return undefined; }
     const observers = [
@@ -1327,6 +1329,7 @@ export default function App() {
             }}/>
           </React.Suspense>
         )}
+        {showCreateSheet && <CreateSheet onClose={() => setShowCreateSheet(false)} onReel={() => setShowReelCreator(true)} />}
         {showReelCreator && <React.Suspense fallback={<div className="fixed inset-0 z-[110] bg-black"/>}><ReelCreatorPage onClose={() => setShowReelCreator(false)} /></React.Suspense>}
         {activeTab === 'noticias' && (
           <motion.div key="news-page" onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * 28, scale: .99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: tabDirection * -22, scale: .99 }} transition={reduceMotion ? { duration: .12 } : { type: 'spring', stiffness: 330, damping: 34, mass: .72 }}><React.Suspense fallback={<PageLoadingSkeleton page="news"/>}><NewsPage key="noticias" onOpenEvents={() => setActiveTab('eventos')} /></React.Suspense></motion.div>
@@ -1352,7 +1355,7 @@ export default function App() {
 
       {/* Bottom Navigation & Search */}
       {activeTab !== 'ask-nochi' && activeTab !== 'guias' && !showAdminPage && !legalDocument && (
-        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onCreateReel={async () => { const response = await fetch('/api/account/session', { cache: 'no-store', credentials: 'same-origin' }); const session = await response.json().catch(() => ({})); if (session.authenticated) setShowReelCreator(true); else setShowAccountAuth(true); }} onOpenSearch={() => { setSearchCategory(null); setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => { setSearchQuery(''); setShowSearch(false); }} onOpenProfile={() => { if (signedInAccount) setPublicProfileId(signedInAccount.id); else setShowAccountAuth(true); }} onSelectBusiness={(place) => setSelectedBusiness(place)} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} profileEmail={signedInAccount?.email} timerEndAt={timerEndAt} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onStopTimer={stopTimer} onTimerComplete={completeTimer} searchQuery={searchQuery} searchOpen={showSearch} />
+        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} onCreateReel={async () => { const response = await fetch('/api/account/session', { cache: 'no-store', credentials: 'same-origin' }); const session = await response.json().catch(() => ({})); if (session.authenticated) setShowCreateSheet(true); else setShowAccountAuth(true); }} onOpenSearch={() => { setSearchCategory(null); setSearchQuery(''); setShowSearch(true); }} onCloseSearch={() => { setSearchQuery(''); setShowSearch(false); }} onOpenProfile={() => { if (signedInAccount) setPublicProfileId(signedInAccount.id); else setShowAccountAuth(true); }} onSelectBusiness={(place) => setSelectedBusiness(place)} profilePicture={signedInAccount?.picture} profileName={signedInAccount?.name} profileEmail={signedInAccount?.email} timerEndAt={timerEndAt} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onStopTimer={stopTimer} onTimerComplete={completeTimer} searchQuery={searchQuery} searchOpen={showSearch} />
       )}
 
       {/* Pages & Overlays */}

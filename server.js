@@ -2266,6 +2266,40 @@ app.get('/api/events/:id', requireNeon, async (req, res) => {
   }
 });
 
+// Signed-in users publish a photo (optionally tagged to a business). The phone resizes it
+// to WebP first, so it fits in a normal request; it is stored in the "uploads" bucket.
+app.post('/api/community-posts', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    if (!s3) return res.status(503).json({ error: storageUnavailableMessage() });
+    await ensureSubmissionSchema();
+    const mimeType = typeof req.body?.mimeType === 'string' ? req.body.mimeType : '';
+    const base64 = typeof req.body?.base64 === 'string' ? req.body.base64 : '';
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType) || !base64) return res.status(400).json({ error: 'Elige una imagen válida (JPG, PNG o WebP).' });
+    const bytes = Buffer.from(base64, 'base64');
+    if (!bytes.length || bytes.length > 3 * 1024 * 1024) return res.status(413).json({ error: 'La imagen debe pesar 3 MB o menos.' });
+    const caption = typeof req.body?.caption === 'string' ? req.body.caption.trim().slice(0, 500) : '';
+    const placeId = typeof req.body?.placeId === 'string' ? req.body.placeId.trim().slice(0, 120) : '';
+    let place = null;
+    if (placeId) [place] = await sql`SELECT id, name FROM places WHERE id = ${placeId}`;
+    const id = randomUUID();
+    const extension = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+    const imageKey = `community/${req.account.id}/${id}.${extension}`;
+    await s3.send(new PutObjectCommand({ Bucket: 'uploads', Key: imageKey, Body: bytes, ContentType: mimeType }));
+    try {
+      await sql`INSERT INTO community_posts (id, place_id, place_name, post_type, caption, image_key, image_mime_type, status, author_google_sub)
+        VALUES (${id}, ${place?.id || null}, ${place?.name || null}, ${place ? 'business' : 'day'}, ${caption}, ${imageKey}, ${mimeType}, 'published', ${req.account.id})`;
+    } catch (insertError) {
+      await s3.send(new DeleteObjectCommand({ Bucket: 'uploads', Key: imageKey })).catch(() => undefined);
+      throw insertError;
+    }
+    res.status(201).json({ id, postType: place ? 'business' : 'day', placeId: place?.id || null, placeName: place?.name || null, caption, imageUrl: `${req.protocol}://${req.get('host')}/api/community-posts/${id}/image`, profileId: req.account.id, authorName: req.account.name, authorPicture: req.account.picture });
+  } catch (error) {
+    console.error('Could not publish community photo:', error);
+    res.status(500).json({ error: 'No se pudo publicar la foto. Intenta de nuevo.' });
+  }
+});
+
 app.get('/api/community-posts/feed', requireNeon, async (req, res) => {
   try {
     await ensureSubmissionSchema();

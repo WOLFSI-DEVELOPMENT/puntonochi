@@ -64,6 +64,7 @@
     { "source": "/api/guides/format", "destination": "/api/content-dispatch?__contentPath=guides/format" },
     { "source": "/api/guides/:id/image", "destination": "/api/content-dispatch?__contentPath=guides/:id/image" },
     { "source": "/api/guides", "destination": "/api/content-dispatch?__contentPath=guides" },
+    { "source": "/api/community-posts", "destination": "/api/content-dispatch?__contentPath=community-posts" },
     { "source": "/api/community-posts/feed", "destination": "/api/content-dispatch?__contentPath=community-posts/feed" },
     { "source": "/api/community-posts/day", "destination": "/api/content-dispatch?__contentPath=community-posts/day" },
     { "source": "/api/community-posts/:id/image", "destination": "/api/content-dispatch?__contentPath=community-posts/:id/image" },
