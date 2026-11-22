@@ -13,7 +13,8 @@ import { createSql } from './db.js';
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse } from '@simplewebauthn/server';
 import { OAuth2Client } from 'google-auth-library';
 import { GoogleGenAI } from '@google/genai';
-import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import webpush from 'web-push';
 
 dotenv.config({ path: '.env.notifications' });
@@ -2353,25 +2354,53 @@ app.get('/api/shorts', requireNeon, async (req, res) => {
   }
 });
 
+app.post('/api/shorts/upload-url', requireNeon, requireAccount, async (req, res) => {
+  if (!ensureSameOrigin(req, res)) return;
+  try {
+    if (!s3 || !useSupabaseStorage) return res.status(503).json({ error: 'El almacenamiento de videos no está configurado.' });
+    const mimeType = typeof req.body?.mimeType === 'string' ? req.body.mimeType : 'video/webm';
+    if (!mimeType.startsWith('video/')) return res.status(400).json({ error: 'Agrega un video válido.' });
+    const extension = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('quicktime') ? 'mov' : 'webm';
+    const objectKey = `${req.account.id}/${randomUUID()}.${extension}`;
+    const uploadUrl = await getSignedUrl(s3, new PutObjectCommand({ Bucket: 'shorts', Key: objectKey, ContentType: mimeType, CacheControl: 'public, max-age=31536000, immutable' }), { expiresIn: 600 });
+    res.json({ uploadUrl, objectKey });
+  } catch (error) {
+    console.error('Could not create PuntoShort upload URL:', error);
+    res.status(500).json({ error: 'No se pudo preparar la subida.' });
+  }
+});
+
 app.post('/api/shorts/publish', requireNeon, requireAccount, async (req, res) => {
   if (!ensureSameOrigin(req, res)) return;
   try {
     await ensureShortsSchema();
+    if (!s3 || !useSupabaseStorage) return res.status(503).json({ error: 'El almacenamiento de videos no está configurado.' });
     const base64 = typeof req.body?.base64 === 'string' ? req.body.base64 : '';
     const mimeType = typeof req.body?.mimeType === 'string' ? req.body.mimeType : 'video/webm';
-    if (!base64 || !mimeType.startsWith('video/')) return res.status(400).json({ error: 'Agrega un video válido.' });
-    const bytes = Buffer.from(base64, 'base64');
-    if (!bytes.length || bytes.length > 70 * 1024 * 1024) return res.status(413).json({ error: 'El video debe pesar 70 MB o menos.' });
-    if (!s3 || !useSupabaseStorage) return res.status(503).json({ error: 'El almacenamiento de videos no está configurado.' });
-    const id = randomUUID();
-    // Reels live in Supabase Storage's public "shorts" bucket and stream from its CDN.
-    const extension = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('quicktime') ? 'mov' : 'webm';
-    const objectKey = `${req.account.id}/${id}.${extension}`;
-    try {
-      await s3.send(new PutObjectCommand({ Bucket: 'shorts', Key: objectKey, Body: bytes, ContentType: mimeType, CacheControl: 'public, max-age=31536000, immutable' }));
-    } catch (storageError) {
-      console.error('Could not store PuntoShort video:', storageError);
-      return res.status(502).json({ error: 'No se pudo subir el video. Intenta de nuevo.' });
+    const uploadedKey = typeof req.body?.objectKey === 'string' ? req.body.objectKey : '';
+    let id = randomUUID();
+    let objectKey;
+    if (uploadedKey) {
+      // The phone already uploaded straight to Supabase; only accept keys inside the user's own folder.
+      const match = uploadedKey.match(/^([^/]+)\/([0-9a-f-]{36})\.(webm|mp4|mov)$/);
+      if (!match || match[1] !== req.account.id) return res.status(400).json({ error: 'Video no válido.' });
+      try { await s3.send(new HeadObjectCommand({ Bucket: 'shorts', Key: uploadedKey })); }
+      catch { return res.status(400).json({ error: 'No se encontró el video subido. Intenta de nuevo.' }); }
+      id = match[2];
+      objectKey = uploadedKey;
+    } else {
+      if (!base64 || !mimeType.startsWith('video/')) return res.status(400).json({ error: 'Agrega un video válido.' });
+      const bytes = Buffer.from(base64, 'base64');
+      if (!bytes.length || bytes.length > 70 * 1024 * 1024) return res.status(413).json({ error: 'El video debe pesar 70 MB o menos.' });
+      // Reels live in Supabase Storage's public "shorts" bucket and stream from its CDN.
+      const extension = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('quicktime') ? 'mov' : 'webm';
+      objectKey = `${req.account.id}/${id}.${extension}`;
+      try {
+        await s3.send(new PutObjectCommand({ Bucket: 'shorts', Key: objectKey, Body: bytes, ContentType: mimeType, CacheControl: 'public, max-age=31536000, immutable' }));
+      } catch (storageError) {
+        console.error('Could not store PuntoShort video:', storageError);
+        return res.status(502).json({ error: 'No se pudo subir el video. Intenta de nuevo.' });
+      }
     }
     const supabaseUrl = process.env.SUPABASE_URL || 'https://pjabzqlracuklpzwhhei.supabase.co';
     const videoUrl = `${supabaseUrl}/storage/v1/object/public/shorts/${objectKey}`;

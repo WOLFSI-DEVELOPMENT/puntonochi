@@ -68,6 +68,7 @@
     { "source": "/api/community-posts/day", "destination": "/api/content-dispatch?__contentPath=community-posts/day" },
     { "source": "/api/community-posts/:id/image", "destination": "/api/content-dispatch?__contentPath=community-posts/:id/image" },
     { "source": "/api/community-posts/:id/cover", "destination": "/api/content-dispatch?__contentPath=community-posts/:id/cover" },
+    { "source": "/api/shorts/upload-url", "destination": "/api/shorts-dispatch?__shortPath=upload-url" },
     { "source": "/api/shorts/publish", "destination": "/api/shorts-dispatch?__shortPath=publish" },
     { "source": "/api/shorts/:id/comments", "destination": "/api/shorts-dispatch?__shortPath=:id/comments" },
     { "source": "/api/shorts/:id/reactions", "destination": "/api/shorts-dispatch?__shortPath=:id/reactions" },

@@ -77,10 +77,22 @@ export function ReelCreatorPage({ onClose }: { onClose: () => void }) {
     setPublishing(true); setPostMessage('Subiendo video…');
     try {
       const blob = await (await fetch(recordedUrl)).blob();
-      const base64 = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(',')[1] || ''); reader.onerror = () => reject(new Error('No se pudo preparar el video.')); reader.readAsDataURL(blob); });
+      const mimeType = blob.type || 'video/webm';
+      // Preferred path: upload straight from the phone to Supabase Storage (no 4.5 MB request limit).
+      let objectKey = '';
+      try {
+        const urlResponse = await fetch('/api/shorts/upload-url', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mimeType }) });
+        if (urlResponse.status === 401) { setPostMessage('Inicia sesión para publicar tu PuntoShort.'); return; }
+        const urlResult = await urlResponse.json().catch(() => ({}));
+        if (urlResponse.ok && urlResult.uploadUrl) {
+          const put = await fetch(urlResult.uploadUrl, { method: 'PUT', headers: { 'Content-Type': mimeType, 'Cache-Control': 'public, max-age=31536000, immutable' }, body: blob });
+          if (put.ok) objectKey = urlResult.objectKey;
+        }
+      } catch { /* fall back to the in-request upload below */ }
+      const base64 = objectKey ? '' : await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(',')[1] || ''); reader.onerror = () => reject(new Error('No se pudo preparar el video.')); reader.readAsDataURL(blob); });
       const title = textDraft.trim().split('\n')[0].slice(0, 90) || 'Un momento de Nochistlán';
       const description = captions.trim() || 'Un video compartido en PuntoNochi.';
-      const response = await fetch('/api/shorts/publish', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ base64, mimeType: blob.type || 'video/webm', title, description }) });
+      const response = await fetch('/api/shorts/publish', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ base64, objectKey, mimeType, title, description }) });
       const result = await response.json().catch(() => ({}));
       if (response.status === 401) { setPostMessage('Inicia sesión para publicar tu PuntoShort.'); return; }
       if (!response.ok) throw new Error(result.error || 'No se pudo publicar el video.');

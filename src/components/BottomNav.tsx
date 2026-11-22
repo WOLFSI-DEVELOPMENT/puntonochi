@@ -237,6 +237,69 @@ const Avatar = ({ src, alt, timerActive = false }) => {
   );
 };
 
+/* ---------- Real liquid glass (Chromium only) ----------
+   backdrop-filter: url(#svg) lets the bar refract the live page behind it, which only
+   Chromium supports (Chrome, Edge, Brave, Android Chrome). Safari/Firefox/iOS keep the
+   CSS glass below. The displacement map is rebuilt only when the bar size changes, and
+   every map gets a fresh filter id. */
+const SUPPORTS_REFRACTION = typeof navigator !== "undefined"
+  && /Chrome\//.test(navigator.userAgent)
+  && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(navigator.userAgent);
+let rimSeq = 0;
+function makeRimMap(w, h) {
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  const img = ctx.createImageData(w, h);
+  const r = h / 2;
+  const band = h * 0.62; // refraction depth measured in from the rim
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const px = x + 0.5 - w / 2, py = y + 0.5 - h / 2;
+      const qx = Math.abs(px) - (w / 2 - r), qy = Math.abs(py);
+      const ox = Math.max(qx, 0);
+      const dist = Math.hypot(ox, qy) - r; // < 0 inside the pill
+      let dx = 0, dy = 0;
+      if (dist < 0) {
+        const t = Math.min(1, Math.max(0, 1 + dist / band));
+        const s = t * t * (3 - 2 * t);
+        const l = Math.hypot(ox, qy) || 1;
+        const nx = Math.sign(px) * ox / l, ny = py / l;
+        dx = -nx * s; dy = -ny * s;
+      }
+      const i = (y * w + x) * 4;
+      img.data[i] = Math.round(128 + dx * 127);
+      img.data[i + 1] = Math.round(128 + dy * 127);
+      img.data[i + 2] = 128;
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return canvas.toDataURL("image/png");
+}
+
+function useRefractiveGlass(ref, enabled) {
+  const [lens, setLens] = useState(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!enabled || !SUPPORTS_REFRACTION || !el || typeof ResizeObserver === "undefined") return undefined;
+    let last = "";
+    const build = () => {
+      const w = Math.round(el.clientWidth), h = Math.round(el.clientHeight);
+      if (w < 40 || h < 20 || `${w}x${h}` === last) return;
+      last = `${w}x${h}`;
+      rimSeq += 1;
+      setLens({ id: `pn-rim-${rimSeq}`, url: makeRimMap(w, h), w, h });
+    };
+    build();
+    const ro = new ResizeObserver(build);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref, enabled]);
+  return lens;
+}
+
 /* ---------- Dark liquid glass tokens ---------- */
 const BLUR = "blur(6px) saturate(190%) brightness(1.06)";
 const FROSTED_BLUR = "blur(20px) saturate(180%) brightness(1.08)"; // navbar glass
@@ -554,6 +617,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
   const inputRef = useRef(null);
   const menuRef = useRef(null);
   const browseRef = useRef(null);
+  const barRef = useRef(null);
 
   const [active, setActive] = useState(appTab);
   const [navDesign, setCurrentNavDesign] = useState<NavDesign>(getNavDesign);
@@ -565,6 +629,7 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const liquid = useRefractiveGlass(barRef, !experimentalNav);
   const [timerPickerOpen, setTimerPickerOpen] = useState(false);
   const [timerNow, setTimerNow] = useState(Date.now());
   const [pickedMinutes, setPickedMinutes] = useState(15);
@@ -859,6 +924,22 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
           </linearGradient>
         </defs>
       </svg>
+      {liquid && (
+        <svg width="0" height="0" aria-hidden="true" style={{ position: "absolute" }}>
+          <filter id={liquid.id} x="0" y="0" width={liquid.w} height={liquid.h} filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" colorInterpolationFilters="sRGB">
+            <feImage href={liquid.url} x="0" y="0" width={liquid.w} height={liquid.h} preserveAspectRatio="none" result="map" />
+            {/* Three slightly different bends = a faint chromatic fringe like real glass */}
+            <feDisplacementMap in="SourceGraphic" in2="map" scale="46" xChannelSelector="R" yChannelSelector="G" result="dr" />
+            <feColorMatrix in="dr" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="r" />
+            <feDisplacementMap in="SourceGraphic" in2="map" scale="40" xChannelSelector="R" yChannelSelector="G" result="dg" />
+            <feColorMatrix in="dg" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="g" />
+            <feDisplacementMap in="SourceGraphic" in2="map" scale="34" xChannelSelector="R" yChannelSelector="G" result="db" />
+            <feColorMatrix in="db" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="b" />
+            <feBlend in="r" in2="g" mode="screen" result="rg" />
+            <feBlend in="rg" in2="b" mode="screen" />
+          </filter>
+        </svg>
+      )}
 
       {/* Row: grows from the center when search opens */}
       <div
@@ -876,10 +957,17 @@ export function BottomNav({ activeTab, onChangeTab, onOpenSearch, onCloseSearch,
         {/* Tab bar */}
         <div
           className="lgn-tabbar"
+          ref={barRef}
           role="tablist"
           aria-hidden={searching}
           style={{
             ...(experimentalNav ? { background: 'transparent', backdropFilter: 'none', WebkitBackdropFilter: 'none', boxShadow: 'none', isolation: 'auto', transform: 'none' } : { ...darkGlass("rgba(30,30,34,0.28)"), background: "radial-gradient(140% 120% at 30% 0%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 100%), rgba(30,30,34,0.28)", backdropFilter: FROSTED_BLUR, WebkitBackdropFilter: FROSTED_BLUR }),
+            // Chromium: refract the live page behind the bar (real liquid glass).
+            ...(liquid && !experimentalNav ? {
+              background: "linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.04) 55%, rgba(255,255,255,0.08) 100%)",
+              backdropFilter: `blur(1.5px) url(#${liquid.id}) saturate(190%) brightness(1.12)`,
+              WebkitBackdropFilter: `blur(1.5px) url(#${liquid.id}) saturate(190%) brightness(1.12)`,
+            } : null),
             position: "absolute",
             left: 0,
             top: 0,
